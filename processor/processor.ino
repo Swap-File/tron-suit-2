@@ -1,90 +1,154 @@
 
 #include <Audio.h>
-#include <i2c_t3.h>
+#include <Wire.h>
 #include <SPI.h>
 #include <SD.h>
 
+
 #include <OneWire.h>
-#include <PacketSerial.h>
+#include <cobs.h>
+#include <SerialEvent.h>
+#include <OctoWS2811.h>
+
+const int ledsPerStrip = 128;
+
+DMAMEM int displayMemory[ledsPerStrip * 6];
+int drawingMemory[ledsPerStrip * 6];
+
+const int config = WS2811_GRB | WS2811_800kHz;
+
+
+#define INCOMING_BUFFER_SIZE 128
+uint8_t incoming1_raw_buffer[INCOMING_BUFFER_SIZE];
+uint8_t incoming1_index = 0;
+uint8_t incoming1_decoded_buffer[INCOMING_BUFFER_SIZE];
 
 
 // Function prototypes
 void receiveEvent(size_t len);
 void requestEvent(void);
 
-AudioInputAnalog         adc1(A0);         
-AudioAnalyzeFFT256       fft256_1;     
+AudioInputAnalog         adc1(A4);
+AudioAnalyzeFFT256       fft256_1;
 AudioConnection          patchCord1(adc1, fft256_1);
+
+OctoWS2811 leds(ledsPerStrip, displayMemory, drawingMemory, config);
 
 #define TESTING
 
-volatile boolean reseti2c = false;
-
-
-PacketSerial serial1;
 
 
 unsigned long fps_time = 0;
 
 
 void setup() {
-  // wait for ready
-  Serial.begin(115200);
+	// wait for ready
+	Serial.begin(115200);
+	Serial1.begin(115200);
+
+	pinMode(A4, INPUT);
+
+	AudioMemory(12);
+	fft256_1.windowFunction(AudioWindowHanning256);
+	fft256_1.averageTogether(4);
 
 
-  pinMode(A0,INPUT);
-  pinMode(2,INPUT_PULLUP);
-  AudioMemory(4);
-  fft256_1.windowFunction(AudioWindowHanning256);
-  fft256_1.averageTogether(4);
-
-  pinMode(A0,INPUT);
-
-  serial1.setPacketHandler(&onPacket1);
-  serial1.begin(115200,1);
-  //delay(10000);
-  
-
+	leds.begin();
+	leds.show();
 }
-
-
+int ledmodifier = 1;
+int indexled;
 void loop() {
 
-  if (micros() - fps_time > 1000000){
-    //cpu_usage = 100 - (idle_microseconds / 10000);
-    //local_packets_out_per_second_1 = local_packets_out_counter_1;
-   //local_packets_in_per_second_1 = local_packets_in_counter_1;
-    //idle_microseconds = 0;
-   // local_packets_out_counter_1 = 0;
-   // local_packets_in_counter_1 = 0;
-   // Serial.print(i2cpackets);
-     byte buffer[10];
-  buffer[0] = 0x00;
-  buffer[1] = 0x00;
-  buffer[2] = 0xff;
-  buffer[3] = 0x00;
-  buffer[4] = 0x00;
-  buffer[5] = 0xFF;
-  buffer[6] = 0x00;
-  buffer[7] = 0x00;
-  buffer[8] = OneWire::crc8(buffer, 7);
-  serial1.send(buffer,9);
-  
-    Serial.println(" bong");
-  //  i2cpackets = 0;
-    fps_time = micros();
-  }
+	if (micros() - fps_time > 1000000){
+
+		leds.setPixel(indexled, 0xff0000);
+		indexled = ledmodifier + indexled;
+		if (indexled > 127 || indexled < 0){
+			ledmodifier = ledmodifier* -1;
+			indexled = ledmodifier + indexled;
+		}
+
+		leds.show();
+
+		//cpu_usage = 100 - (idle_microseconds / 10000);
+		//local_packets_out_per_second_1 = local_packets_out_counter_1;
+		//local_packets_in_per_second_1 = local_packets_in_counter_1;
+		//idle_microseconds = 0;
+		// local_packets_out_counter_1 = 0;
+		// local_packets_in_counter_1 = 0;
+		// Serial.print(i2cpackets);
+
+		uint8_t raw_buffer[9];
+
+		raw_buffer[0] = 0x00;
+		raw_buffer[1] = 0x00;
+		raw_buffer[2] = 0xff;
+		raw_buffer[3] = 0x00;
+		raw_buffer[4] = 0x00;
+		raw_buffer[5] = 0xFF;
+		raw_buffer[6] = 0x00;
+		raw_buffer[7] = 0x00;
+		raw_buffer[8] = OneWire::crc8(raw_buffer, 7);
+
+		uint8_t encoded_buffer[9];
+		uint8_t encoded_size = COBSencode(raw_buffer, 9, encoded_buffer);
+		Serial1.write(encoded_buffer, encoded_size);
+		Serial1.write(0x00);
+
+		 
+		Serial.println(" bong");
+		//  i2cpackets = 0;
+		fps_time = micros();
+	}
 
 
 
-  uint16_t n;
-  int i;
+	float n;
+	int i;
 
-  if (fft256_1.available()) {
+	if (fft256_1.available()) {
+		// each time new FFT data is available
+		// print it all to the Arduino Serial Monitor
+		Serial.print("FFT: ");
+		for (i = 0; i < 40; i++) {
+			n = fft256_1.read(i);
+			if (n >= 0.01) {
+				Serial.print(n);
+				Serial.print(" ");
+			}
+			else {
+				Serial.print("  -  "); // don't print "0.00"
+			}
+		}
+		Serial.println();
+	}
 
-  }
+	while (Serial1.available()){
 
-  serial1.update(); 
+		//read in a byte
+		incoming1_raw_buffer[incoming1_index] = Serial1.read();
+
+		//check for end of packet
+		if (incoming1_raw_buffer[incoming1_index] == 0x00){
+
+			//try to decode
+			uint8_t decoded_length = COBSdecode(incoming1_raw_buffer, incoming1_index, incoming1_decoded_buffer);
+
+			//check length of decoded data (cleans up a series of 0x00 bytes)
+			if (decoded_length > 0){
+				onPacket1(incoming1_decoded_buffer, decoded_length);
+			}
+
+			//reset index
+			incoming1_index = 0;
+		}
+		else{
+			//read data in until we hit overflow, then hold at last position
+			if (incoming1_index < INCOMING_BUFFER_SIZE)
+				incoming1_index++;
+		}
+	}
 }
 
 
@@ -95,29 +159,29 @@ void loop() {
 
 void onPacket1(const uint8_t* buffer, size_t size)
 {
- // if (local_packets_in_counter_1 < 255){
- //   local_packets_in_counter_1++;
- // }
+	// if (local_packets_in_counter_1 < 255){
+	//   local_packets_in_counter_1++;
+	// }
 
-  if (size == 35){
-    byte crc = OneWire::crc8(buffer, size-2);
-    if (crc != buffer[size-1]){
-      //local_crc_error_1++;
-    }
-    else{
+	if (size == 35){
+		byte crc = OneWire::crc8(buffer, size - 2);
+		if (crc != buffer[size - 1]){
+			//local_crc_error_1++;
+		}
+		else{
 
-      Serial.print(buffer[33]);
-Serial.print(" ");
- Serial.print(buffer[31]);
-Serial.print(" ");
- Serial.println(buffer[32]);
+			Serial.print(buffer[33]);
+			Serial.print(" ");
+			Serial.print(buffer[31]);
+			Serial.print(" ");
+			Serial.println(buffer[32]);
 
 
-     // if (local_packets_out_counter_1 < 255){
-      //  local_packets_out_counter_1++;
-     // }
+			// if (local_packets_out_counter_1 < 255){
+			//  local_packets_out_counter_1++;
+			// }
 
-    }
-  }
+		}
+	}
 }
 
