@@ -10,15 +10,12 @@
 //Just using it for CRC8!
 #include <OneWire.h>
 
-//Excellent library for packet framing
-#include <PacketSerial.h>
-
 //#define TESTING
 
 #include "Adafruit_TCS34725.h"
 
 // Which pin on the Arduino is connected to the NeoPixels?
-#define NEOPIXELS_PIN            10
+#define NEOPIXELS_PIN    9
 
 // How many NeoPixels are attached to the Arduino?
 #define NUMPIXELS      1
@@ -45,7 +42,7 @@ byte gammatable[256];
 MPU6050 mpu;
 //MPU6050 mpu(0x69); // <-- use for AD0 high
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NUMPIXELS, NEOPIXELS_PIN, NEO_GRB + NEO_KHZ800);
-PacketSerial serial;
+
 
 
 Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_50MS, TCS34725_GAIN_4X);
@@ -72,6 +69,12 @@ VectorFloat gravity;    // [x, y, z]            gravity vector
 float euler[3];         // [psi, theta, phi]    Euler angle container
 float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
 
+uint8_t gloveid = 0xff;  //nonsense value to prevent sending
+
+#define INCOMING_BUFFER_SIZE 128
+uint8_t incoming_raw_buffer[INCOMING_BUFFER_SIZE];
+uint8_t incoming_index = 0;
+uint8_t incoming_decoded_buffer[INCOMING_BUFFER_SIZE];
 
 
 uint16_t  rgb_sample[4];  //color data from sensor
@@ -93,7 +96,7 @@ uint8_t cpu_usage = 0;
 
 volatile bool mpuInterrupt = false;     // indicates whether MPU interrupt pin has gone high
 void dmpDataReady() {
-  mpuInterrupt = true;
+	mpuInterrupt = true;
 }
 
 
@@ -104,124 +107,131 @@ void dmpDataReady() {
 
 void setup() {
 
-  pixels.begin(); // This initializes the NeoPixel library.
-  pixels.setPixelColor(0, pixels.Color(127,0,0)); // Moderately bright red color.
-  pixels.show(); // This sends the updated pixel color to the hardware.
+	pixels.begin(); // This initializes the NeoPixel library.
+	pixels.setPixelColor(0, pixels.Color(127, 0, 0)); // Moderately bright red color.
+	pixels.show(); // This sends the updated pixel color to the hardware.
 
 
 
-  //start the color sensor
-  Serial.println(F("Initializing TC230 Color Sensor..."));
+	//start the color sensor
+	//Serial.println(F("Initializing TC230 Color Sensor..."));
 
-  if (tcs.begin()) {
-    Serial.println(F("Initializing TCS34725 Color Sensor..."));
-  } 
-  else {
-    Serial.println(F("No TCS34725 Color Sensor Found..."));
-    while (1); // halt!
-  }
+	if (tcs.begin()) {
+		//Serial.println(F("Initializing TCS34725 Color Sensor..."));
+	}
+	else {
+		pixels.setPixelColor(0, pixels.Color(0, 127, 0)); // Moderately bright red color.
+		//Serial.println(F("No TCS34725 Color Sensor Found..."));
+		while (1); // halt!
+	}
 
 
 
-  Serial.println(F("Joining I2C Bus..."));
-  // join I2C bus (I2Cdev library doesn't do this automatically)
+	//Serial.println(F("Joining I2C Bus..."));
+	// join I2C bus (I2Cdev library doesn't do this automatically)
 #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
-  Wire.begin();
-  TWBR = 24; // 400kHz I2C clock (200kHz if CPU is 8MHz)
+	Wire.begin();
+	TWBR = 24; // 400kHz I2C clock (200kHz if CPU is 8MHz)
 #elif I2CDEV_IMPLEMENTATION == I2CDEV_BUILTIN_FASTWIRE
-  Fastwire::setup(400, true);
+	Fastwire::setup(400, true);
 #endif
 
-  Serial.println(F("Initializing Serial Port..."));
-  //COBS framing serial packet handler 
-  serial.setPacketHandler(&onPacket);
-  serial.begin(115200);
+	//Serial.println(F("Initializing Serial Port..."));
+	//COBS framing serial packet handler 
+	//serial.setPacketHandler(&onPacket);
+	//serial.begin(115200);
 
-  // initialize device
-  Serial.println(F("Initializing MPU6050 devices..."));
-  mpu.initialize();
+	Serial.begin(115200);
 
-
-  // thanks PhilB for this gamma table!
-  // it helps convert RGB colors to what humans see
-  for (int i=0; i<256; i++) {
-    float x = i;
-    x /= 255;
-    x = pow(x, 2.5);
-    x *= 255;
-
-    if (commonAnode) {
-      gammatable[i] = 255 - x;
-    } 
-    else {
-      gammatable[i] = x;      
-    }
-    //Serial.println(gammatable[i]);
-  }
-
-  tcs.setInterrupt(true);      
+	// initialize device
+	//Serial.println(F("Initializing MPU6050 devices..."));
+	mpu.initialize();
 
 
-  // verify connection
-  Serial.println(F("Testing MPU6050 connection..."));
-  Serial.println(mpu.testConnection() ? F("MPU6050 connection successful") : F("MPU6050 connection failed"));
+	// thanks PhilB for this gamma table!
+	// it helps convert RGB colors to what humans see
+	for (int i = 0; i < 256; i++) {
+		float x = i;
+		x /= 255;
+		x = pow(x, 2.5);
+		x *= 255;
 
-  // wait for ready
-  //Serial.println(F("\nSend any character to begin DMP programming and demo: "));
-  // while (Serial.available() && Serial.read()); // empty buffer
-  // while (!Serial.available());                 // wait for data
-  // while (Serial.available() && Serial.read()); // empty buffer again
+		if (commonAnode) {
+			gammatable[i] = 255 - x;
+		}
+		else {
+			gammatable[i] = x;
+		}
+		//Serial.println(gammatable[i]);
+	}
 
-  // load and configure the DMP
-  Serial.println(F("Initializing DMP..."));
-  devStatus = mpu.dmpInitialize();
+	tcs.setInterrupt(true);
 
-  // supply your own gyro offsets here, scaled for min sensitivity
-  mpu.setXGyroOffset(220);
-  mpu.setYGyroOffset(76);
-  mpu.setZGyroOffset(-85);
-  mpu.setZAccelOffset(1788); // 1688 factory default for my test chip
+	// verify connection
+	//Serial.println(F("Testing MPU6050 connection..."));
+	//Serial.println(mpu.testConnection() ? F("MPU6050 connection successful") : F("MPU6050 connection failed"));
 
-  // make sure it worked (returns 0 if so)
-  if (devStatus == 0) {
-    // turn on the DMP, now that it's ready
-    Serial.println(F("Enabling DMP..."));
-    mpu.setDMPEnabled(true);
+	// wait for ready
+	//Serial.println(F("\nSend any character to begin DMP programming and demo: "));
+	// while (Serial.available() && Serial.read()); // empty buffer
+	// while (!Serial.available());                 // wait for data
+	// while (Serial.available() && Serial.read()); // empty buffer again
 
-    //Not using Interrupts for IMU, let the FIFO buffer handle it and poll
-    //Color sensor interrupts are more important.
-    // enable Arduino interrupt detection
-    Serial.println(F("Enabling interrupt detection (Arduino external interrupt 0)..."));
-    attachInterrupt(0, dmpDataReady, RISING);
+	// load and configure the DMP
+	//Serial.println(F("Initializing DMP..."));
+	devStatus = mpu.dmpInitialize();
 
-    mpuIntStatus = mpu.getIntStatus();
+	// supply your own gyro offsets here, scaled for min sensitivity
+	mpu.setXGyroOffset(220);
+	mpu.setYGyroOffset(76);
+	mpu.setZGyroOffset(-85);
+	mpu.setZAccelOffset(1788); // 1688 factory default for my test chip
 
-    // set our DMP Ready flag so the main loop() function knows it's okay to use it
-    Serial.println(F("DMP ready! Waiting for first interrupt..."));
-    dmpReady = true;
+	// make sure it worked (returns 0 if so)
+	if (devStatus == 0) {
+		// turn on the DMP, now that it's ready
+		//Serial.println(F("Enabling DMP..."));
+		mpu.setDMPEnabled(true);
 
-    // get expected DMP packet size for later comparison
-    packetSize = mpu.dmpGetFIFOPacketSize();
-  } 
-  else {
-    // ERROR!
-    // 1 = initial memory load failed
-    // 2 = DMP configuration updates failed
-    // (if it's going to break, usually the code will be 1)
-    Serial.print(F("DMP Initialization failed (code "));
-    Serial.print(devStatus);
-    Serial.println(F(")"));
-  }
+		//Not using Interrupts for IMU, let the FIFO buffer handle it and poll
+		//Color sensor interrupts are more important.
+		// enable Arduino interrupt detection
+		//Serial.println(F("Enabling interrupt detection (Arduino external interrupt 0)..."));
+		attachInterrupt(0, dmpDataReady, RISING);
 
-  pixels.setPixelColor(0, pixels.Color(0,0,0)); // 
-  pixels.show(); 
+		mpuIntStatus = mpu.getIntStatus();
 
-  // configure LED for output
+		// set our DMP Ready flag so the main loop() function knows it's okay to use it
+		//Serial.println(F("DMP ready! Waiting for first interrupt..."));
+		dmpReady = true;
 
-  pinMode(LED_PIN, OUTPUT);  //indiator LED, onboard yellow
+		// get expected DMP packet size for later comparison
+		packetSize = mpu.dmpGetFIFOPacketSize();
+	}
+	else {
+		// ERROR!
+		// 1 = initial memory load failed
+		// 2 = DMP configuration updates failed
+		// (if it's going to break, usually the code will be 1)
+		//Serial.print(F("DMP Initialization failed (code "));
+		//Serial.print(devStatus);
+		//Serial.println(F(")"));
+	}
 
+	pixels.setPixelColor(0, pixels.Color(0, 0, 0)); // 
+	pixels.show();
 
-  GetTempPrep();
+	// configure LED for output
+
+	pinMode(LED_PIN, OUTPUT);  //indiator LED, onboard yellow
+	pinMode(10, INPUT_PULLUP);  //glovemode
+	if (digitalRead(10)){
+		gloveid = 0;
+	}
+	else{
+		gloveid = 1;
+	}
+	GetTempPrep();
 
 
 }
@@ -233,257 +243,368 @@ void setup() {
 // ================================================================
 
 void loop() {
-  // if programming failed, don't try to do anything
-  if (!dmpReady) return;
+	// if programming failed, don't try to do anything
+	if (!dmpReady) return;
 
-  byte fingers = 0x00; //reset each loop
+	byte fingers = 0x00; //reset each loop
 
-  long int idle_start_timer = 0;
+	long int idle_start_timer = 0;
 
-  // wait for MPU interrupt or extra packet(s) available
-  while (!mpuInterrupt && fifoCount < packetSize) {
-
-
-    // other program behavior stuff here
-
-      if (micros() - fps_time > 1000000){
-      cpu_usage = 100 - (idle_microseconds / 10000);
-      packets_in_per_second = packets_in_counter;
-      packets_out_per_second = packets_out_counter;
-      idle_microseconds = 0;
-      packets_in_counter = 0;
-      packets_out_counter = 0;
-      fps_time = micros();
-    }
+	// wait for MPU interrupt or extra packet(s) available
+	while (!mpuInterrupt && fifoCount < packetSize) {
 
 
-    serial.update(); 
-
-    if (idle_start_timer == 0){//dont count first cycle, its not idle time, its required
-      idle_start_timer = micros();
-    }
-  }
-
-  idle_microseconds = idle_microseconds +  (micros() - idle_start_timer);
-
-
-  GetTempPrep();
-
-  // reset interrupt flag and get INT_STATUS byte
-  mpuInterrupt = false;
-  mpuIntStatus = mpu.getIntStatus();
-
-  // get current FIFO count
-  fifoCount = mpu.getFIFOCount();
-
-  // check for overflow (this should never happen unless our code is too inefficient)
-  if ((mpuIntStatus & 0x10) || fifoCount == 1024) {
-    // reset so we can continue cleanly
-    mpu.resetFIFO();
-    Serial.println(F("FIFO overflow!"));
-
-    // otherwise, check for DMP data ready interrupt (this should happen frequently)
-  } 
-  else if (mpuIntStatus & 0x02) {
-    // wait for correct available data length, should be a VERY short wait
-    while (fifoCount < packetSize) fifoCount = mpu.getFIFOCount();
-
-    // read a packet from FIFO
-    mpu.getFIFOBytes(fifoBuffer, packetSize);
-
-    // track FIFO count here in case there is > 1 packet available
-    // (this lets us immediately read more without waiting for an interrupt)
-    fifoCount -= packetSize;
+		// other program behavior stuff here
+		if (micros() - fps_time > 1000000){
+			cpu_usage = 100 - (idle_microseconds / 10000);
+			packets_in_per_second = packets_in_counter;
+			packets_out_per_second = packets_out_counter;
+			idle_microseconds = 0;
+			packets_in_counter = 0;
+			packets_out_counter = 0;
+			fps_time = micros();
+		}
 
 
-    mpu.dmpGetQuaternion(&q, fifoBuffer);
-    mpu.dmpGetGravity(&gravity, &q);
-    mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
-    mpu.dmpGetAccel(&aa, fifoBuffer);
-    mpu.dmpGetLinearAccel(&aaReal, &aa, &gravity);
-    mpu.dmpGetLinearAccelInWorld(&aaWorld, &aaReal, &q);
+		//serial.update();
+
+		while (Serial.available()){
+
+			//read in a byte
+			incoming_raw_buffer[incoming_index] = Serial.read();
+
+			//check for end of packet
+			if (incoming_raw_buffer[incoming_index] == 0x00){
+
+				//try to decode
+				uint8_t decoded_length = COBSdecode(incoming_raw_buffer, incoming_index, incoming_decoded_buffer);
+
+				//check length of decoded data (cleans up a series of 0x00 bytes)
+				if (decoded_length > 0){
+					onPacket(incoming_decoded_buffer, decoded_length);
+				}
+
+				//reset index
+				incoming_index = 0;
+			}
+			else{
+				//read data in until we hit overflow, then hold at last position
+				if (incoming_index < INCOMING_BUFFER_SIZE)
+					incoming_index++;
+			}
+		}
+
+		//dont count first cycle, its not idle time, its required
+		if (idle_start_timer == 0){
+			idle_start_timer = micros();
+		}
+	}
+
+	idle_microseconds = idle_microseconds + (micros() - idle_start_timer);
+
+
+	GetTempPrep();
+
+	// reset interrupt flag and get INT_STATUS byte
+	mpuInterrupt = false;
+	mpuIntStatus = mpu.getIntStatus();
+
+	// get current FIFO count
+	fifoCount = mpu.getFIFOCount();
+
+	// check for overflow (this should never happen unless our code is too inefficient)
+	if ((mpuIntStatus & 0x10) || fifoCount == 1024) {
+		// reset so we can continue cleanly
+		mpu.resetFIFO();
+		//Serial.println(F("FIFO overflow!"));
+
+		// otherwise, check for DMP data ready interrupt (this should happen frequently)
+	}
+	else if (mpuIntStatus & 0x02) {
+		// wait for correct available data length, should be a VERY short wait
+		while (fifoCount < packetSize) fifoCount = mpu.getFIFOCount();
+
+		// read a packet from FIFO
+		mpu.getFIFOBytes(fifoBuffer, packetSize);
+
+		// track FIFO count here in case there is > 1 packet available
+		// (this lets us immediately read more without waiting for an interrupt)
+		fifoCount -= packetSize;
+
+
+		mpu.dmpGetQuaternion(&q, fifoBuffer);
+		mpu.dmpGetGravity(&gravity, &q);
+		mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
+		mpu.dmpGetAccel(&aa, fifoBuffer);
+		mpu.dmpGetLinearAccel(&aaReal, &aa, &gravity);
+		mpu.dmpGetLinearAccelInWorld(&aaWorld, &aaReal, &q);
 
 
 
 #ifdef TESTING
-    Serial.print("ypr\t");
-    Serial.print(ypr[0] * 180/M_PI);
-    Serial.print("\t");
-    Serial.print(ypr[1] * 180/M_PI);
-    Serial.print("\t");
-    Serial.println(ypr[2] * 180/M_PI);
+		Serial.print("ypr\t");
+		Serial.print(ypr[0] * 180 / M_PI);
+		Serial.print("\t");
+		Serial.print(ypr[1] * 180 / M_PI);
+		Serial.print("\t");
+		Serial.println(ypr[2] * 180 / M_PI);
 
 
-    Serial.print("areal\t");
-    Serial.print(aaReal.x);
-    Serial.print("\t");
-    Serial.print(aaReal.y);
-    Serial.print("\t");
-    Serial.println(aaReal.z);
+		Serial.print("areal\t");
+		Serial.print(aaReal.x);
+		Serial.print("\t");
+		Serial.print(aaReal.y);
+		Serial.print("\t");
+		Serial.println(aaReal.z);
 
 
-    Serial.print("aworld\t");
-    Serial.print(aaWorld.x);
-    Serial.print("\t");
-    Serial.print(aaWorld.y);
-    Serial.print("\t");
-    Serial.println(aaWorld.z);
+		Serial.print("aworld\t");
+		Serial.print(aaWorld.x);
+		Serial.print("\t");
+		Serial.print(aaWorld.y);
+		Serial.print("\t");
+		Serial.println(aaWorld.z);
 
 
-    Serial.print("Temp: ");
-    Serial.println(GetTemp(),1);
-    Serial.println(sizeof(GetTemp()));
+		Serial.print("Temp: ");
+		Serial.println(GetTemp(), 1);
+		Serial.println(sizeof(GetTemp()));
 
 #endif
 
 
-    byte full_buffer[40];
+		byte raw_buffer[35];
 
-    full_buffer[0] = ((((int16_t)(ypr[0]*18000/M_PI)) >> 8) & 0xff);
-    full_buffer[1] = ((((int16_t)(ypr[0]*18000/M_PI)) >> 0) & 0xff);
-    full_buffer[2] = ((((int16_t)(ypr[1]*18000/M_PI)) >> 8) & 0xff);
-    full_buffer[3] = ((((int16_t)(ypr[1]*18000/M_PI)) >> 0) & 0xff);
-    full_buffer[4] = ((((int16_t)(ypr[2]*18000/M_PI)) >> 8) & 0xff);
-    full_buffer[5] = ((((int16_t)(ypr[2]*18000/M_PI)) >> 0) & 0xff);
+		raw_buffer[0] = ((((int16_t)(ypr[0] * 18000 / M_PI)) >> 8) & 0xff);
+		raw_buffer[1] = ((((int16_t)(ypr[0] * 18000 / M_PI)) >> 0) & 0xff);
+		raw_buffer[2] = ((((int16_t)(ypr[1] * 18000 / M_PI)) >> 8) & 0xff);
+		raw_buffer[3] = ((((int16_t)(ypr[1] * 18000 / M_PI)) >> 0) & 0xff);
+		raw_buffer[4] = ((((int16_t)(ypr[2] * 18000 / M_PI)) >> 8) & 0xff);
+		raw_buffer[5] = ((((int16_t)(ypr[2] * 18000 / M_PI)) >> 0) & 0xff);
 
-    full_buffer[6] = ((aaReal.x >> 8) & 0xff);
-    full_buffer[7] = ((aaReal.x >> 0) & 0xff);
-    full_buffer[8] = ((aaReal.y >> 8) & 0xff);
-    full_buffer[9] = ((aaReal.y >> 0) & 0xff);
-    full_buffer[10] = ((aaReal.z >> 8) & 0xff);
-    full_buffer[11] = ((aaReal.z >> 0) & 0xff);
+		raw_buffer[6] = ((aaReal.x >> 8) & 0xff);
+		raw_buffer[7] = ((aaReal.x >> 0) & 0xff);
+		raw_buffer[8] = ((aaReal.y >> 8) & 0xff);
+		raw_buffer[9] = ((aaReal.y >> 0) & 0xff);
+		raw_buffer[10] = ((aaReal.z >> 8) & 0xff);
+		raw_buffer[11] = ((aaReal.z >> 0) & 0xff);
 
-    full_buffer[12] = ((aaWorld.x >> 8) & 0xff);
-    full_buffer[13] = ((aaWorld.x >> 0) & 0xff);
-    full_buffer[14] = ((aaWorld.y >> 8) & 0xff);
-    full_buffer[15] = ((aaWorld.y >> 0) & 0xff);
-    full_buffer[16] = ((aaWorld.z >> 8) & 0xff);
-    full_buffer[17] = ((aaWorld.z >> 0) & 0xff);
+		raw_buffer[12] = ((aaWorld.x >> 8) & 0xff);
+		raw_buffer[13] = ((aaWorld.x >> 0) & 0xff);
+		raw_buffer[14] = ((aaWorld.y >> 8) & 0xff);
+		raw_buffer[15] = ((aaWorld.y >> 0) & 0xff);
+		raw_buffer[16] = ((aaWorld.z >> 8) & 0xff);
+		raw_buffer[17] = ((aaWorld.z >> 0) & 0xff);
 
 
-    tcs.getRawData(&rgb_sample[0], &rgb_sample[1], &rgb_sample[2], &rgb_sample[3]);  //rgbclear
+		tcs.getRawData(&rgb_sample[0], &rgb_sample[1], &rgb_sample[2], &rgb_sample[3]);  //rgbclear
 
-    full_buffer[18] = ((rgb_sample[0] >> 8) & 0xff);
-    full_buffer[19] = ((rgb_sample[0] >> 0) & 0xff);
-    full_buffer[20] = ((rgb_sample[1] >> 8) & 0xff);
-    full_buffer[21] = ((rgb_sample[1] >> 0) & 0xff);
-    full_buffer[22] = ((rgb_sample[2] >> 8) & 0xff);
-    full_buffer[23] = ((rgb_sample[2] >> 0) & 0xff);
-    full_buffer[24] = ((rgb_sample[3] >> 8) & 0xff);
-    full_buffer[25] = ((rgb_sample[3] >> 0) & 0xff);
-    
-    
-    //TODO read in digital fingers data
-    full_buffer[26] = fingers; 
+		raw_buffer[18] = ((rgb_sample[0] >> 8) & 0xff);
+		raw_buffer[19] = ((rgb_sample[0] >> 0) & 0xff);
+		raw_buffer[20] = ((rgb_sample[1] >> 8) & 0xff);
+		raw_buffer[21] = ((rgb_sample[1] >> 0) & 0xff);
+		raw_buffer[22] = ((rgb_sample[2] >> 8) & 0xff);
+		raw_buffer[23] = ((rgb_sample[2] >> 0) & 0xff);
+		raw_buffer[24] = ((rgb_sample[3] >> 8) & 0xff);
+		raw_buffer[25] = ((rgb_sample[3] >> 0) & 0xff);
 
-    full_buffer[27] = packets_in_per_second;
-    full_buffer[28] = packets_out_per_second;
 
-    full_buffer[29] = framing_error;
-    full_buffer[30] = crc_error;
+		//TODO read in digital fingers data
+		raw_buffer[26] = fingers;
 
-    full_buffer[31] = cpu_usage;
+		raw_buffer[27] = packets_in_per_second;
+		raw_buffer[28] = packets_out_per_second;
 
-    full_buffer[32] = ((((int16_t)(temperature)) >> 0) & 0xff);
+		raw_buffer[29] = framing_error;
+		raw_buffer[30] = crc_error;
 
-    full_buffer[33] = OneWire::crc8(full_buffer, 32);
+		raw_buffer[31] = cpu_usage;
 
-    serial.send(full_buffer, 34);
+		raw_buffer[32] = ((((int16_t)(temperature)) >> 0) & 0xff);
 
-    // blink LED to indicate activity
-    blinkState = !blinkState;
-    digitalWrite(LED_PIN, blinkState);
+		raw_buffer[33] = gloveid;
 
-    if (packets_out_counter < 255){
-      packets_out_counter++;
-    }
+		raw_buffer[34] = OneWire::crc8(raw_buffer, 33);
 
-    //do temp calculation last, give it as much time as possible to settle
 
-    temperature = temperature * .95 + .05 * GetTemp();
-  }
+		uint8_t encoded_buffer[35];
+		uint8_t encoded_size = COBSencode(raw_buffer, 35, encoded_buffer);
+		Serial.write(encoded_buffer, encoded_size);
+		Serial.write(0x00);
+
+		// blink LED to indicate activity
+		blinkState = !blinkState;
+		digitalWrite(LED_PIN, blinkState);
+
+		if (packets_out_counter < 255){
+			packets_out_counter++;
+		}
+
+		//do temp calculation last, give it as much time as possible to settle
+
+		temperature = temperature * .95 + .05 * GetTemp();
+	}
 }
 
 void onPacket(const uint8_t* buffer, size_t size)
 {
+	//format of packet is
+	//R-0 G-0 B-0 COLOR-0 R-1 G-1 B-1 COLOR-1 CRC
 
-  if (size != 5){
-    framing_error++;
-  }
-  else{
+	//check for framing errors
+	if (size != 9 && size != 35){
+		framing_error++;
+	}
+	else{
+		//check for crc errors
+		byte crc = OneWire::crc8(buffer, size - 2);
+		if (crc != buffer[size - 1]){
+			crc_error++;
+		}
+		else{
 
-    byte crc = OneWire::crc8(buffer, size-2);
-    if (crc != buffer[size-1]){
-      crc_error++;
-    }
-    else{
+			if (size == 9){
+				//increment packet stats counter
+				if (packets_in_counter < 255){
+					packets_in_counter++;
+				}
 
+				//detect which glove we are
+				uint8_t offset = 0;
+				if (gloveid == 0){
+					Serial.write(incoming_raw_buffer, incoming_index);
+					Serial.write(0x00);
+				}
+				else{
+					offset = 4;
+				}
 
+				pixels.setPixelColor(0, pixels.Color(gammatable[(int)buffer[0 + offset]], gammatable[(int)buffer[1 + offset]], gammatable[(int)buffer[2 + offset]]));
+				pixels.show();
 
-      pixels.setPixelColor(0, pixels.Color(gammatable[(int)buffer[0]],gammatable[(int)buffer[1]],gammatable[(int)buffer[2]])); 
-      pixels.show();
-      //white sensor light
-
-      if (buffer[3] == 0x00){
-        tcs.setInterrupt(true);    //LED OFF
-      }
-      else{
-        tcs.setInterrupt(false);    //LED ON
-      }
-
-    }
-  }
-
-  if (packets_in_counter < 255){
-    packets_in_counter++;
-  }
+				//set white sensor light
+				if (buffer[3 + offset] == 0x00){
+					tcs.setInterrupt(true);    //LED OFF
+				}
+				else{
+					tcs.setInterrupt(false);    //LED ON
+				}
+			}
+			//pass buffer on if we get sent one
+			else if (size == 35){
+				Serial.write(incoming_raw_buffer, incoming_index);
+				Serial.write(0x00);
+			}
+		}
+	}
 }
 
 
 void GetTempPrep(void)
 {
 
-  // Set the internal reference and mux.
-  ADMUX = (_BV(REFS1) | _BV(REFS0) | _BV(MUX3));
-  ADCSRA |= _BV(ADEN);  // enable the ADC
+	// Set the internal reference and mux.
+	ADMUX = (_BV(REFS1) | _BV(REFS0) | _BV(MUX3));
+	ADCSRA |= _BV(ADEN);  // enable the ADC
 
-  //dont have time to wait.  gotta go fast.
-  //delay(20);            // wait for voltages to become stable.
-  //put this prep function before code that will take a while
-  //the IMU Stuff takes about 4.5ms, not quite 20, but it seems to work well enough
+	//dont have time to wait.  gotta go fast.
+	//delay(20);            // wait for voltages to become stable.
+	//put this prep function before code that will take a while
+	//the IMU Stuff takes about 4.5ms, not quite 20, but it seems to work well enough
 }
 
 double GetTemp(void)
 {
-  unsigned int wADC;
-  double t;
+	unsigned int wADC;
+	double t;
 
-  // The internal temperature has to be used
-  // with the internal reference of 1.1V.
-  // Channel 8 can not be selected with
-  // the analogRead function yet.
+	// The internal temperature has to be used
+	// with the internal reference of 1.1V.
+	// Channel 8 can not be selected with
+	// the analogRead function yet.
 
 
-  ADCSRA |= _BV(ADSC);  // Start the ADC
+	ADCSRA |= _BV(ADSC);  // Start the ADC
 
-    // Detect end-of-conversion
-  while (bit_is_set(ADCSRA,ADSC));
+	// Detect end-of-conversion
+	while (bit_is_set(ADCSRA, ADSC));
 
-  // Reading register "ADCW" takes care of how to read ADCL and ADCH.
-  wADC = ADCW;
+	// Reading register "ADCW" takes care of how to read ADCL and ADCH.
+	wADC = ADCW;
 
-  // The offset of 324.31 could be wrong. It is just an indication.
-  t = (wADC - 324.31 ) / 1.22;
+	// The offset of 324.31 could be wrong. It is just an indication.
+	t = (wADC - 324.31) / 1.22;
 
-  // The returned temperature is in degrees Celcius.
-  return (t);
+	// The returned temperature is in degrees Celcius.
+	return (t);
 }
 
 
+//ripped this out of PacketSerial.h so that I can use it directly...
+uint8_t COBSencode(const uint8_t* source, uint8_t size, uint8_t* destination)
+{
+	uint8_t read_index = 0;
+	uint8_t write_index = 1;
+	uint8_t code_index = 0;
+	uint8_t code = 1;
 
+	while (read_index < size)
+	{
+		if (source[read_index] == 0)
+		{
+			destination[code_index] = code;
+			code = 1;
+			code_index = write_index++;
+			read_index++;
+		}
+		else
+		{
+			destination[write_index++] = source[read_index++];
+			code++;
 
+			if (code == 0xFF)
+			{
+				destination[code_index] = code;
+				code = 1;
+				code_index = write_index++;
+			}
+		}
+	}
 
+	destination[code_index] = code;
 
+	return write_index;
+}
 
+//ripped this out of PacketSerial.h so that I can use it directly...
+uint8_t COBSdecode(const uint8_t* source, uint8_t size, uint8_t* destination)
+{
+	uint8_t read_index = 0;
+	uint8_t write_index = 0;
+	uint8_t code;
+	uint8_t i;
 
+	while (read_index < size)
+	{
+		code = source[read_index];
 
+		if (read_index + code > size && code != 1)
+		{
+			return 0;
+		}
+
+		read_index++;
+
+		for (i = 1; i < code; i++)
+		{
+			destination[write_index++] = source[read_index++];
+		}
+
+		if (code != 0xFF && read_index != size)
+		{
+			destination[write_index++] = '\0';
+		}
+	}
+
+	return write_index;
+}
