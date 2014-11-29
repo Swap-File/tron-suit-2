@@ -33,27 +33,39 @@ OctoWS2811 leds(ledsPerStrip, displayMemory, drawingMemory, config);
 unsigned long fps_time = 0;
 
 void setup() {
-	// wait for ready
-	Serial.begin(115200);
-	Serial1.begin(115200);  //gloves	
+	//must go first so Serial.begin can override pins
+	leds.begin();
 
+	Serial.begin(115200);
+	Serial1.begin(115200);  //Gloves	
+	Serial2.begin(115200);  //Bluetooth	
+	Serial3.begin(115200);  //Xbee	
 
 	//audio input
 	pinMode(A4, INPUT);
 
-	AudioMemory(12);
+	AudioMemory(5);
 	fft256_1.windowFunction(AudioWindowHanning256);
 	fft256_1.averageTogether(4);
 
-
-	leds.begin();
 	leds.show();
 }
 
+long int magictime = 0;
 int ledmodifier = 1;
 int indexled = 0;
 
 void loop() {
+
+	if (Serial2.available()){
+		Serial2.write(Serial2.read());
+		indexled = 0;
+	}
+
+	if (Serial3.available()){
+		Serial3.write(Serial3.read());
+		indexled = 0;
+	}
 
 	if (micros() - fps_time > 1000000){
 
@@ -88,16 +100,16 @@ void loop() {
 
 		uint8_t encoded_buffer[9];
 		uint8_t encoded_size = COBSencode(raw_buffer, 9, encoded_buffer);
+
+	
 		Serial1.write(encoded_buffer, encoded_size);
 		Serial1.write(0x00);
 
 
-		Serial.println(" bong");
+		
 		//  i2cpackets = 0;
 		fps_time = micros();
 	}
-
-
 
 	float n;
 	int i;
@@ -119,21 +131,18 @@ void loop() {
 	//	Serial.println();
 	}
 
-
-
 	SerialUpdate();
 }
 
 void SerialUpdate(void){
+
 	while (Serial1.available()){
 
 		//read in a byte
 		incoming1_raw_buffer[incoming1_index] = Serial1.read();
-		
+
 		//check for end of packet
 		if (incoming1_raw_buffer[incoming1_index] == 0x00){
-
-		
 			//try to decode
 			uint8_t decoded_length = COBSdecode(incoming1_raw_buffer, incoming1_index, incoming1_decoded_buffer);
 
@@ -151,8 +160,6 @@ void SerialUpdate(void){
 				incoming1_index++;
 		}
 	}
-
-
 }
 
 void onPacket1(const uint8_t* buffer, size_t size)
@@ -168,18 +175,18 @@ void onPacket1(const uint8_t* buffer, size_t size)
 		}
 		else{
 
-			Serial.print(buffer[33]);
-			Serial.print(" ");
-			Serial.print(buffer[31]);
-			Serial.print(" ");
-			Serial.println(buffer[32]);
-
+			//Serial.print(buffer[33]);
+			//Serial.print(" ");
+			//Serial.print(buffer[31]);
+			//Serial.print(" ");
+			//Serial.println(buffer[32]);
 
 			// if (local_packets_out_counter_1 < 255){
 			//  local_packets_out_counter_1++;
 			// }
 
 		}
+	
 	}
 }
 
