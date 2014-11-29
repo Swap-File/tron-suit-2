@@ -5,10 +5,9 @@
 #include <SD.h>
 
 
-#include <OneWire.h>
-#include <cobs.h>
-#include <SerialEvent.h>
-#include <OctoWS2811.h>
+#include <OneWire.h> //crc8 
+#include <cobs.h> //cobs encoder and decoder 
+#include <OctoWS2811.h> //DMA strip output
 
 const int ledsPerStrip = 128;
 
@@ -17,16 +16,11 @@ int drawingMemory[ledsPerStrip * 6];
 
 const int config = WS2811_GRB | WS2811_800kHz;
 
-
-#define INCOMING_BUFFER_SIZE 128
-uint8_t incoming1_raw_buffer[INCOMING_BUFFER_SIZE];
+//crank up hardwareserial.cpp to 128 to match!
+#define INCOMING1_BUFFER_SIZE 128
+uint8_t incoming1_raw_buffer[INCOMING1_BUFFER_SIZE];
 uint8_t incoming1_index = 0;
-uint8_t incoming1_decoded_buffer[INCOMING_BUFFER_SIZE];
-
-
-// Function prototypes
-void receiveEvent(size_t len);
-void requestEvent(void);
+uint8_t incoming1_decoded_buffer[INCOMING1_BUFFER_SIZE];
 
 AudioInputAnalog         adc1(A4);
 AudioAnalyzeFFT256       fft256_1;
@@ -36,16 +30,15 @@ OctoWS2811 leds(ledsPerStrip, displayMemory, drawingMemory, config);
 
 #define TESTING
 
-
-
 unsigned long fps_time = 0;
-
 
 void setup() {
 	// wait for ready
 	Serial.begin(115200);
-	Serial1.begin(115200);
+	Serial1.begin(115200);  //gloves	
 
+
+	//audio input
 	pinMode(A4, INPUT);
 
 	AudioMemory(12);
@@ -56,8 +49,10 @@ void setup() {
 	leds.begin();
 	leds.show();
 }
+
 int ledmodifier = 1;
-int indexled;
+int indexled = 0;
+
 void loop() {
 
 	if (micros() - fps_time > 1000000){
@@ -96,7 +91,7 @@ void loop() {
 		Serial1.write(encoded_buffer, encoded_size);
 		Serial1.write(0x00);
 
-		 
+
 		Serial.println(" bong");
 		//  i2cpackets = 0;
 		fps_time = micros();
@@ -124,6 +119,12 @@ void loop() {
 		Serial.println();
 	}
 
+
+
+	SerialUpdate();
+}
+
+void SerialUpdate(void){
 	while (Serial1.available()){
 
 		//read in a byte
@@ -145,17 +146,13 @@ void loop() {
 		}
 		else{
 			//read data in until we hit overflow, then hold at last position
-			if (incoming1_index < INCOMING_BUFFER_SIZE)
+			if (incoming1_index < INCOMING1_BUFFER_SIZE)
 				incoming1_index++;
 		}
 	}
+
+
 }
-
-
-
-
-
-
 
 void onPacket1(const uint8_t* buffer, size_t size)
 {
@@ -164,7 +161,7 @@ void onPacket1(const uint8_t* buffer, size_t size)
 	// }
 
 	if (size == 35){
-		byte crc = OneWire::crc8(buffer, size - 2);
+		uint8_t crc = OneWire::crc8(buffer, size - 2);
 		if (crc != buffer[size - 1]){
 			//local_crc_error_1++;
 		}
