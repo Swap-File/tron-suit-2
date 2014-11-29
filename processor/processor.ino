@@ -105,18 +105,18 @@ void loop() {
 	if (fft256_1.available()) {
 		// each time new FFT data is available
 		// print it all to the Arduino Serial Monitor
-		Serial.print("FFT: ");
-		for (i = 0; i < 40; i++) {
-			n = fft256_1.read(i);
-			if (n >= 0.01) {
-				Serial.print(n);
-				Serial.print(" ");
-			}
-			else {
-				Serial.print("  -  "); // don't print "0.00"
-			}
-		}
-		Serial.println();
+		//Serial.print("FFT: ");
+		//for (i = 0; i < 40; i++) {
+			//n = fft256_1.read(i);
+			//if (n >= 0.01) {
+			//	Serial.print(n);
+			//	Serial.print(" ");
+		//	}
+		//	else {
+		//		Serial.print("  -  "); // don't print "0.00"
+		//	}
+	//	}
+	//	Serial.println();
 	}
 
 
@@ -129,10 +129,11 @@ void SerialUpdate(void){
 
 		//read in a byte
 		incoming1_raw_buffer[incoming1_index] = Serial1.read();
-
+		
 		//check for end of packet
 		if (incoming1_raw_buffer[incoming1_index] == 0x00){
 
+		
 			//try to decode
 			uint8_t decoded_length = COBSdecode(incoming1_raw_buffer, incoming1_index, incoming1_decoded_buffer);
 
