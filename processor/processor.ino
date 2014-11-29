@@ -4,10 +4,46 @@
 #include <SPI.h>
 #include <SD.h>
 
-
 #include <OneWire.h> //crc8 
 #include <cobs.h> //cobs encoder and decoder 
 #include <OctoWS2811.h> //DMA strip output
+
+typedef struct {
+	boolean fresh;
+
+	int16_t yaw;  //yaw pitch and roll in degrees * 1000
+	int16_t pitch;
+	int16_t roll;
+
+	int16_t aaRealX; // gravity-free accel sensor measurements
+	int16_t aaRealY;
+	int16_t aaRealZ;
+
+	int16_t aaWorldX; // world-frame accel sensor measurements
+	int16_t aaWorldY;
+	int16_t aaWorldZ;
+
+	int16_t red; // world-frame accel sensor measurements
+	int16_t green;
+	int16_t blue;
+	int16_t clear;
+
+	boolean finger1;
+	boolean finger2;
+	boolean finger3;
+	boolean finger4;
+
+	uint8_t packets_in_per_second;
+	uint8_t packets_out_per_second;
+
+	uint8_t framing_errors;
+	uint8_t crc_errors;
+
+	uint8_t cpu_usage;
+	uint8_t cpu_temp;
+
+} GLOVE;
+
 
 const int ledsPerStrip = 128;
 
@@ -32,17 +68,25 @@ OctoWS2811 leds(ledsPerStrip, displayMemory, drawingMemory, config);
 
 unsigned long fps_time = 0;
 
+GLOVE glove0;
+GLOVE glove1;
+
 void setup() {
-	//must go first so Serial.begin can override pins
+
+
+	glove0.fresh = false;
+	glove1.fresh = false;
+
+	//must go first so Serial.begin can override pins!!!
 	leds.begin();
 
-	Serial.begin(115200);
+	//bump hardwareserial.cpp to 255
+	Serial.begin(115200);   //USB Debug
 	Serial1.begin(115200);  //Gloves	
 	Serial2.begin(115200);  //Bluetooth	
 	Serial3.begin(115200);  //Xbee	
 
-	//audio input
-	pinMode(A4, INPUT);
+	pinMode(A4, INPUT); //audio input
 
 	AudioMemory(5);
 	fft256_1.windowFunction(AudioWindowHanning256);
@@ -101,12 +145,12 @@ void loop() {
 		uint8_t encoded_buffer[9];
 		uint8_t encoded_size = COBSencode(raw_buffer, 9, encoded_buffer);
 
-	
+
 		Serial1.write(encoded_buffer, encoded_size);
 		Serial1.write(0x00);
 
 
-		
+
 		//  i2cpackets = 0;
 		fps_time = micros();
 	}
@@ -119,16 +163,16 @@ void loop() {
 		// print it all to the Arduino Serial Monitor
 		//Serial.print("FFT: ");
 		//for (i = 0; i < 40; i++) {
-			//n = fft256_1.read(i);
-			//if (n >= 0.01) {
-			//	Serial.print(n);
-			//	Serial.print(" ");
+		//n = fft256_1.read(i);
+		//if (n >= 0.01) {
+		//	Serial.print(n);
+		//	Serial.print(" ");
 		//	}
 		//	else {
 		//		Serial.print("  -  "); // don't print "0.00"
 		//	}
-	//	}
-	//	Serial.println();
+		//	}
+		//	Serial.println();
 	}
 
 	SerialUpdate();
@@ -175,18 +219,54 @@ void onPacket1(const uint8_t* buffer, size_t size)
 		}
 		else{
 
-			//Serial.print(buffer[33]);
-			//Serial.print(" ");
-			//Serial.print(buffer[31]);
-			//Serial.print(" ");
-			//Serial.println(buffer[32]);
+			GLOVE * current_glove;
+			if (buffer[33] == 0){
+				current_glove = &glove0;
+			}
+			else if (buffer[33] == 1)
+			{
+				current_glove = &glove1;
+			}
+
+			current_glove->fresh = true;
+
+			current_glove->yaw = buffer[0] << 8 | buffer[1];
+			current_glove->pitch = buffer[2] << 8 | buffer[3];
+			current_glove->roll = buffer[4] << 8 | buffer[5];
+
+			current_glove->aaRealX = buffer[6] << 8 | buffer[7];
+			current_glove->aaRealY = buffer[8] << 8 | buffer[9];
+			current_glove->aaRealZ = buffer[10] << 8 | buffer[11];
+
+			current_glove->aaWorldX = buffer[12] << 8 | buffer[13];
+			current_glove->aaWorldY = buffer[14] << 8 | buffer[15];
+			current_glove->aaWorldZ = buffer[16] << 8 | buffer[17];
+
+			current_glove->red = buffer[18] << 8 | buffer[19];
+			current_glove->green = buffer[20] << 8 | buffer[21];
+			current_glove->blue = buffer[22] << 8 | buffer[23];
+			current_glove->clear = buffer[24] << 8 | buffer[25];
+
+			current_glove->finger1 = bitRead(buffer[26], 0);
+			current_glove->finger2 = bitRead(buffer[26], 1);
+			current_glove->finger3 = bitRead(buffer[26], 2);
+			current_glove->finger4 = bitRead(buffer[26], 3);
+
+			current_glove->packets_in_per_second = buffer[27];
+			current_glove->packets_out_per_second = buffer[28];
+
+			current_glove->framing_errors = buffer[29];
+			current_glove->crc_errors = buffer[30];
+
+			current_glove->cpu_usage = buffer[31];
+			current_glove->cpu_temp = buffer[32];
 
 			// if (local_packets_out_counter_1 < 255){
 			//  local_packets_out_counter_1++;
 			// }
 
 		}
-	
+
 	}
 }
 

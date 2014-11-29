@@ -102,13 +102,13 @@ void dmpDataReady() {
 }
 
 
-
 // ================================================================
 // ===                      INITIAL SETUP                       ===
 // ================================================================
 
 void setup() {
-
+     
+        
 	pixels.begin(); // This initializes the NeoPixel library.
 	pixels.setPixelColor(0, pixels.Color(127, 0, 0)); // Moderately bright red color.
 	pixels.show(); // This sends the updated pixel color to the hardware.
@@ -139,16 +139,10 @@ void setup() {
 #endif
 
 	//Serial.println(F("Initializing Serial Port..."));
-	//COBS framing serial packet handler 
-	//serial.setPacketHandler(&onPacket);
-	//serial.begin(115200);
-
 	Serial.begin(115200);
 
-	// initialize device
 	//Serial.println(F("Initializing MPU6050 devices..."));
 	mpu.initialize();
-
 
 	// thanks PhilB for this gamma table!
 	// it helps convert RGB colors to what humans see
