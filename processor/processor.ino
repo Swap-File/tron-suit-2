@@ -7,13 +7,22 @@
 #include <OneWire.h> //crc8 
 #include <cobs.h> //cobs encoder and decoder 
 #include <OctoWS2811.h> //DMA strip output
+#include <Metro.h> //timers
 
 typedef struct {
 	boolean fresh;
 
-	int16_t yaw;  //yaw pitch and roll in degrees * 1000
-	int16_t pitch;
-	int16_t roll;
+	int16_t yaw_raw;  //yaw pitch and roll in degrees * 1000
+	int16_t pitch_raw;
+	int16_t roll_raw;
+
+	int16_t yaw_offset;  //yaw pitch and roll in degrees * 1000
+	int16_t pitch_offset;
+	int16_t roll_offset;
+
+	int16_t yaw_compensated;  //yaw pitch and roll in degrees * 1000
+	int16_t pitch_compensated;
+	int16_t roll_compensated;
 
 	int16_t aaRealX; // gravity-free accel sensor measurements
 	int16_t aaRealY;
@@ -44,6 +53,14 @@ typedef struct {
 
 } GLOVE;
 
+typedef struct {
+	uint8_t packets_in_per_second;
+	uint8_t packets_out_per_second;
+
+	uint8_t framing_errors;
+	uint8_t crc_errors;
+
+} SERIALSTATS;
 
 const int ledsPerStrip = 128;
 
@@ -70,12 +87,23 @@ unsigned long fps_time = 0;
 
 GLOVE glove0;
 GLOVE glove1;
+SERIALSTATS serial1stats;
+
+Metro FPSdisplay = Metro(1000);
+
+Metro YPRdisplay = Metro(100);
 
 void setup() {
 
 
 	glove0.fresh = false;
 	glove1.fresh = false;
+	glove1.yaw_offset = 0;
+	glove1.pitch_offset = 0;
+	glove1.roll_offset = 0;
+	glove0.yaw_offset = 0;
+	glove0.pitch_offset = 0;
+	glove0.roll_offset = 0;
 
 	//must go first so Serial.begin can override pins!!!
 	leds.begin();
@@ -111,8 +139,35 @@ void loop() {
 		indexled = 0;
 	}
 
-	if (micros() - fps_time > 1000000){
+	if (glove1.finger1==0){
+		glove1.yaw_offset = glove1.yaw_raw;
+		glove1.pitch_offset = glove1.pitch_raw;
+		glove1.roll_offset = glove1.roll_raw;
 
+		glove0.yaw_offset = glove0.yaw_raw;
+		glove0.pitch_offset = glove0.pitch_raw;
+		glove0.roll_offset = glove0.roll_raw;
+	}
+
+	if (YPRdisplay.check()){
+		Serial.print("ypr\t");
+		Serial.print(glove1.finger1);
+		Serial.print("\t");
+		Serial.print(glove1.yaw_compensated);
+		Serial.print("\t");
+		Serial.print(glove1.pitch_compensated);
+		Serial.print("\t");
+		Serial.print(glove1.roll_compensated);
+		Serial.print("\t");
+		Serial.print(glove0.yaw_compensated);
+		Serial.print("\t");
+		Serial.print(glove0.pitch_compensated);
+		Serial.print("\t");
+		Serial.println(glove0.roll_compensated);
+	}
+
+	if (FPSdisplay.check()){
+	
 		leds.setPixel(indexled, 0xff0000);
 		indexled = ledmodifier + indexled;
 		if (indexled > 127 || indexled < 0){
@@ -149,10 +204,10 @@ void loop() {
 		Serial1.write(encoded_buffer, encoded_size);
 		Serial1.write(0x00);
 
+		if (serial1stats.packets_out_per_second < 255){
+			serial1stats.packets_out_per_second++;
+		}
 
-
-		//  i2cpackets = 0;
-		fps_time = micros();
 	}
 
 	float n;
@@ -208,16 +263,20 @@ void SerialUpdate(void){
 
 void onPacket1(const uint8_t* buffer, size_t size)
 {
-	// if (local_packets_in_counter_1 < 255){
-	//   local_packets_in_counter_1++;
-	// }
 
-	if (size == 35){
+	if (size != 35){
+		serial1stats.framing_errors++;
+	}
+	else{
 		uint8_t crc = OneWire::crc8(buffer, size - 2);
 		if (crc != buffer[size - 1]){
-			//local_crc_error_1++;
+			serial1stats.crc_errors++;
 		}
 		else{
+
+			if (serial1stats.packets_in_per_second < 255){
+				serial1stats.packets_in_per_second++;
+			}
 
 			GLOVE * current_glove;
 			if (buffer[33] == 0){
@@ -230,9 +289,13 @@ void onPacket1(const uint8_t* buffer, size_t size)
 
 			current_glove->fresh = true;
 
-			current_glove->yaw = buffer[0] << 8 | buffer[1];
-			current_glove->pitch = buffer[2] << 8 | buffer[3];
-			current_glove->roll = buffer[4] << 8 | buffer[5];
+			current_glove->yaw_raw =  buffer[0] << 8 | buffer[1];
+			current_glove->pitch_raw = buffer[2] << 8 | buffer[3];
+			current_glove->roll_raw = buffer[4] << 8 | buffer[5];
+
+			current_glove->yaw_compensated = current_glove->yaw_offset - current_glove->yaw_raw;
+			current_glove->pitch_compensated = current_glove->pitch_offset - current_glove->pitch_raw;
+			current_glove->roll_compensated = current_glove->roll_offset - current_glove->roll_raw;
 
 			current_glove->aaRealX = buffer[6] << 8 | buffer[7];
 			current_glove->aaRealY = buffer[8] << 8 | buffer[9];
@@ -261,12 +324,11 @@ void onPacket1(const uint8_t* buffer, size_t size)
 			current_glove->cpu_usage = buffer[31];
 			current_glove->cpu_temp = buffer[32];
 
-			// if (local_packets_out_counter_1 < 255){
-			//  local_packets_out_counter_1++;
-			// }
+
+			
+	
 
 		}
-
 	}
 }
 
