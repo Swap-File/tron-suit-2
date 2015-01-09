@@ -22,7 +22,11 @@ typedef struct {
 
 typedef struct {
 	boolean fresh;
-	boolean in_progress;
+	boolean finger1_in_progress;
+	boolean finger2_in_progress;
+	boolean finger3_in_progress;
+	boolean finger4_in_progress;
+
 	int16_t yaw_raw;  //yaw pitch and roll in degrees * 100
 	int16_t pitch_raw;
 	int16_t roll_raw;
@@ -86,6 +90,9 @@ typedef struct {
 byte gammatable[256];
 
 
+
+int menu_mode = 0;
+
 const int ledsPerStrip = 128;
 
 DMAMEM int displayMemory[ledsPerStrip * 6];
@@ -93,9 +100,9 @@ int drawingMemory[ledsPerStrip * 6];
 
 const int config = WS2811_GRB | WS2811_800kHz;
 
-uint8_t helmet_LED_R = 0xff;
-uint8_t helmet_LED_G =0;
-uint8_t helmet_LED_B =0;
+byte helmet_LED_R = 0xff;
+byte helmet_LED_G = 0;
+byte helmet_LED_B = 0;
 
 #define GLOVE_DEADZONE 3000  //30 degrees
 #define GLOVE_MAXIMUM 30000 //90 degrees
@@ -106,6 +113,8 @@ uint8_t helmet_LED_B =0;
 #define OLED_RESET  19
 Adafruit_SSD1306 display(OLED_DC, OLED_RESET, OLED_CS);
 
+int scroll_count = 0;
+int scroll_pos = 0;
 
 //crank up hardwareserial.cpp to 128 to match!
 #define INCOMING1_BUFFER_SIZE 128
@@ -127,12 +136,12 @@ GLOVE glove0;
 GLOVE glove1;
 SERIALSTATS serial1stats;
 
-boolean gloveindicator[16][8];
+byte gloveindicator[16][8];
 
 Metro FPSdisplay = Metro(1000);
-
+Metro glovedisplayfade = Metro(10);
 Metro YPRdisplay = Metro(100);
-
+Metro ScrollSpeed = Metro(30);
 Metro GloveSend = Metro(10);
 
 void setup() {
@@ -154,11 +163,11 @@ void setup() {
 
 
 	display.begin(SSD1306_SWITCHCAPVCC);
-	
+
 	display.display();
 
-	glove1.in_progress = false;
-	glove0.in_progress = false;
+	glove1.finger1_in_progress = false;
+	glove0.finger1_in_progress = false;
 	glove0.fresh = false;
 	glove1.fresh = false;
 	glove1.yaw_offset = 0;
@@ -222,7 +231,7 @@ void loop() {
 	}
 	else{
 
-		
+
 		glove0.color_sensor_LED = 0x00;
 		glove0.LED_R = 0;
 		glove0.LED_G = 0;
@@ -243,57 +252,122 @@ void loop() {
 	}
 
 
-
-	for (int x = 0; x < 16; x++) {
-		for (int y = 0; y < 8; y++) {
-			gloveindicator[x][y] = false;
-		}
-	}
-
-	gloveindicator[8 + glove0.gloveX][glove0.gloveY] = true;
-	gloveindicator[glove1.gloveX][glove1.gloveY] = true;
-
-
-
-	display.clearDisplay();
-	for (int x = 0; x < 16; x++) {
-		for (int y = 0; y < 8; y++) {
-			if (gloveindicator[x][y] == true){
-				display.drawPixel(x, y, WHITE);
+	if (glovedisplayfade.check()){
+		for (int x = 0; x < 16; x++) {
+			for (int y = 0; y < 8; y++) {
+				if (gloveindicator[x][y] > 0){
+					gloveindicator[x][y] = gloveindicator[x][y] - 1;
+				}
 			}
 		}
 	}
 
+	if (glove1.finger1 == 0){
+		gloveindicator[8 + glove0.gloveX][7-glove0.gloveY] = 100;// flip Y for helmet external display by subtracting from 7
+		gloveindicator[glove1.gloveX][7-glove1.gloveY] = 100;// flip Y for helmet external display by subtracting from 7
+	}
+
+
+
+
+
+
+
+
+	//HUD!
+
+	display.clearDisplay();
+
+
+	//crosshair 
+
+	display.drawRect(0, 0, 19, 10, WHITE);
+
+	for (int x = 0; x < 16; x++) {
+		for (int y = 0; y < 8; y++) {
+			if (gloveindicator[x][y] > 100){
+				display.drawPixel(x + 1, y, WHITE);
+			}
+		}
+	}
+
+	display.setTextSize(1);
+	display.setTextColor(WHITE);
+	display.setCursor(0, 11);
+	display.setTextWrap(false);
+
+
+
+	display.print(menu_mode);
+
 	display.display();
+
+
+
 
 	//erase array
 	for (int i = 0; i < leds.numPixels(); i++) {
 		leds.setPixel(i, 0x00000000);
 	}
 
-	uint32_t tempcolor = (uint32_t)gammatable[helmet_LED_R] << 16 | (uint32_t)gammatable[helmet_LED_G] << 8 | (uint32_t)gammatable[helmet_LED_B];
+	//uint32_t tempcolor = (uint32_t)gammatable[helmet_LED_R] << 16 | (uint32_t)gammatable[helmet_LED_G] << 8 | (uint32_t)gammatable[helmet_LED_B];
+
 	int index_led = 0;
-	for (int y = 0; y < 8; y++) {
+	for (int16_t y = 0; y < 8; y++) {
 		if (y % 2){ // for odd rows scan from right side
-			for (int x = 15; x > -1; x--) {
-				if (gloveindicator[x][y] == true){
-					leds.setPixel(index_led + 15-x, tempcolor);
+
+			for (int16_t x = 15; x > -1; x--) {
+				uint32_t tempcolor = 0;
+				uint32_t tempcolor2 = 0;
+				if (scroll_count > 0){
+
+					if (display.readPixel(scroll_pos + x, 7 - y + 11) == true){  // flip Y for helmet external display by subtracting from 7
+						tempcolor2 = (uint32_t)gammatable[255] << 16 | (uint32_t)gammatable[255] << 8 | (uint32_t)gammatable[255];
+					}
 				}
+
+				if (gloveindicator[x][7-y] > 0){ // flip Y for helmet external display by subtracting from 7
+					tempcolor = (uint32_t)gammatable[gloveindicator[x][7-y]] << 16 | (uint32_t)gammatable[gloveindicator[x][7-y]] << 8 | (uint32_t)gammatable[gloveindicator[x][7-y]];
+				}
+
+				leds.setPixel(index_led + 15 - x, tempcolor | tempcolor2);
 			}
 			index_led = index_led + 16;
 		}
 		else{  // for even rows scan from left side
-			for (int x = 0; x < 16; x++) {
-				if (gloveindicator[x][y] == true){
-					leds.setPixel(index_led, tempcolor);
+			for (int16_t x = 0; x < 16; x++) {
+
+				uint32_t tempcolor = 0;
+				uint32_t tempcolor2 = 0;
+
+				if (scroll_count > 0){
+					if (display.readPixel(scroll_pos + x, 7 - y + 11) == true){ // flip Y for helmet external display by subtracting from 7
+						tempcolor2 = (uint32_t)gammatable[255] << 16 | (uint32_t)gammatable[255] << 8 | (uint32_t)gammatable[255];
+					}	
 				}
+
+				if (gloveindicator[x][7-y] > 0){ // flip Y for helmet external display by subtracting from 7
+					tempcolor = (uint32_t)gammatable[gloveindicator[x][7-y]] << 16 | (uint32_t)gammatable[gloveindicator[x][7-y]] << 8 | (uint32_t)gammatable[gloveindicator[x][7-y]];
+				}
+
+				leds.setPixel(index_led, tempcolor | tempcolor2);
 				index_led++;
 			}
 
 		}
 	}
+
+
+	//advance scrolling if timer reached or stop
+	if (ScrollSpeed.check()){
+		scroll_pos++;
+		if (scroll_pos > 16){
+			scroll_count = 0;
+		}
+	}
+
 	leds.show();
-	
+
 
 	if (GloveSend.check()){
 
@@ -323,37 +397,50 @@ void loop() {
 
 	}
 
-	if (YPRdisplay.check() ){
+	if (YPRdisplay.check()){
 		long int start = micros();
 
 		display.reinit();
-	
-		
 
-		Serial.print("ypr\t");
-		Serial.print(sin(glove1.roll_raw * PI / 18000));
-		Serial.print("ypr\t");
-		Serial.print(glove1.finger1);
-		Serial.print("\t");
-		Serial.print(glove1.yaw_compensated);
-		Serial.print("\t");
-		Serial.print(glove1.pitch_compensated);
-		Serial.print("\t");
-		Serial.print(glove1.roll_compensated);
-		Serial.print("\t");
-		Serial.print(glove1.yaw_raw);
-		Serial.print("\t");
-		Serial.print(glove1.pitch_raw);
-		Serial.print("\t");
-		Serial.print(glove1.roll_raw);
-		Serial.print("\t");
-		Serial.print(glove1.yaw_offset);
-		Serial.print("\t");
-		Serial.print(glove1.pitch_offset);
-		Serial.print("\t");
-		Serial.println(glove1.roll_offset);
+		Serial.println("");
+		for (int16_t y = 11; y < 18; y++) {
+			for (int16_t x = 0; x < 16; x++) {
+				if (display.readPixel(x, y) == true){
+					Serial.print("*");
+
+				}
+				else{
+					Serial.print(" ");
+				}
+			}
+			Serial.println("");
+		}
+		Serial.println("");
+		if (0){
+			Serial.print("ypr\t");
+			Serial.print(sin(glove1.roll_raw * PI / 18000));
+			Serial.print("ypr\t");
+			Serial.print(glove1.finger1);
+			Serial.print("\t");
+			Serial.print(glove1.yaw_compensated);
+			Serial.print("\t");
+			Serial.print(glove1.pitch_compensated);
+			Serial.print("\t");
+			Serial.print(glove1.roll_compensated);
+			Serial.print("\t");
+			Serial.print(glove1.yaw_raw);
+			Serial.print("\t");
+			Serial.print(glove1.pitch_raw);
+			Serial.print("\t");
+			Serial.print(glove1.roll_raw);
+			Serial.print("\t");
+			Serial.print(glove1.yaw_offset);
+			Serial.print("\t");
+			Serial.print(glove1.pitch_offset);
+			Serial.print("\t");
+			Serial.println(glove1.roll_offset);
+		}
 	}
-
 
 
 	if (FPSdisplay.check()){
@@ -366,30 +453,30 @@ void loop() {
 		//idle_microseconds = 0;
 		// local_packets_out_counter_1 = 0;
 		// local_packets_in_counter_1 = 0;
-	
 
-		
+
+
 
 	}
 
 	float n;
 	int i;
 
-	if (fft256_1.available() &&0) {
+	if (fft256_1.available() && 0) {
 		// each time new FFT data is available
 		// print it all to the Arduino Serial Monitor
 		Serial.print("FFT: ");
 		for (i = 0; i < 40; i++) {
-		n = fft256_1.read(i);
-		if (n >= 0.01) {
-			Serial.print(n);
-			Serial.print(" ");
+			n = fft256_1.read(i);
+			if (n >= 0.01) {
+				Serial.print(n);
+				Serial.print(" ");
 			}
 			else {
 				Serial.print("  -  "); // don't print "0.00"
 			}
-			}
-			Serial.println();
+		}
+		Serial.println();
 	}
 
 	SerialUpdate();
@@ -402,32 +489,182 @@ void readglove(void * temp){
 
 
 	GLOVE * current_glove = (GLOVE *)temp;
-	if (current_glove->finger1 == 1 && current_glove->in_progress == true){
+	if (current_glove->finger1 == 1 && current_glove->finger1_in_progress == true){
 
 		if (current_glove->gloveY <= 0){
-				Serial.println(" down!");
+			Serial.println(" down!");
+			scroll_count = 1;
+			scroll_pos = -16;
+			if (current_glove == &glove1){
+				gloveindicator[0][4] = 100;
+				gloveindicator[1][5] = 100;
+				gloveindicator[2][6] = 100;
+				gloveindicator[3][7] = 100;
+				gloveindicator[4][7] = 100;
+				gloveindicator[5][6] = 100;
+				gloveindicator[6][5] = 100;
+				gloveindicator[7][4] = 100;
+			}
+			//root menus
+			if (menu_mode == 3){
+				menu_mode = 2;
+			}
+			else if (menu_mode == 2){
+				menu_mode = 1;
+			}
+			else if (menu_mode == 1){
+				menu_mode = 3;
+			}
+
+
+			//10s menus
+			if (menu_mode >= 10 && menu_mode <= 19){
+				menu_mode--;
+
+				//rollaround
+				if (menu_mode == 9){
+					menu_mode = 13;
+				}
+			}
+
 		}
 		else
 		{
 			if (current_glove->gloveY >= 7){
 				Serial.println(" up!");
+				scroll_count = 1;
+				scroll_pos = -16;
+
+				if (current_glove == &glove1){
+					gloveindicator[0][3] = 100;
+					gloveindicator[1][2] = 100;
+					gloveindicator[2][1] = 100;
+					gloveindicator[3][0] = 100;
+					gloveindicator[4][0] = 100;
+					gloveindicator[5][1] = 100;
+					gloveindicator[6][2] = 100;
+					gloveindicator[7][3] = 100;
+
+
+				
+				}
+
+				//root menus
+				if (menu_mode == 1){
+					menu_mode = 2;
+				}
+				else if (menu_mode == 2){
+					menu_mode = 3;
+				}
+				else if (menu_mode == 3){
+					menu_mode = 1;
+				}
+
+				//10s menus
+				if (menu_mode >= 10 && menu_mode <= 19){
+					menu_mode++;
+
+					//rollaround
+					if (menu_mode == 14){
+						menu_mode = 10;
+					}
+				}
+
+
+
 			}
 
 			else{
 				if (current_glove->gloveX <= 0){
 					Serial.println(" right!");
+
+					scroll_count = 1;
+					scroll_pos = -16;
+
+					if (current_glove == &glove1){
+						gloveindicator[3][0] = 100;
+						gloveindicator[2][1] = 100;
+						gloveindicator[1][2] = 100;
+						gloveindicator[0][3] = 100;
+						gloveindicator[0][4] = 100;
+						gloveindicator[1][5] = 100;
+						gloveindicator[2][6] = 100;
+						gloveindicator[3][7] = 100;
+					}
+
+
+					//jump into first layer menu
+					if (menu_mode < 10){
+						menu_mode = menu_mode * 10;
+					}
+
+
 				}
 
 				if (current_glove->gloveX >= 7){
 					Serial.println(" left!");
+					scroll_count = 1;
+					scroll_pos = -16;
+					if (current_glove == &glove1){
+						gloveindicator[4][0] = 100;
+						gloveindicator[5][1] = 100;
+						gloveindicator[6][2] = 100;
+						gloveindicator[7][3] = 100;
+						gloveindicator[7][4] = 100;
+						gloveindicator[6][5] = 100;
+						gloveindicator[5][6] = 100;
+						gloveindicator[4][7] = 100;
+					}
+
+					//back out of 10s menu
+					if (menu_mode <= 19 && menu_mode >= 10){
+						menu_mode = 1;
+					}
+
+					//back out of 20s menu
+					if (menu_mode <= 29 && menu_mode >= 20){
+						menu_mode = 2;
+					}
+
+					//back out of 30s menu
+					if (menu_mode <= 39 && menu_mode >= 30){
+						menu_mode = 3;
+					}
+
+					//back out of 40s menu
+					if (menu_mode <= 49 && menu_mode >= 40){
+						menu_mode = 4;
+					}
+
 				}
 			}
 		}
 	}
 
+	if (current_glove->finger4 == 0){
+		if (current_glove->finger4_in_progress == false){
+			current_glove->finger4_in_progress = true;
+
+			if (menu_mode == 0){
+				menu_mode = 1;
+
+			}
+			else{
+				menu_mode = 0;
+
+			}
+
+		}
+	}
+	else{
+		current_glove->finger4_in_progress = false;
+
+
+	}
+
 	if (current_glove->finger1 == 0){
-		if (current_glove->in_progress == false){
-			current_glove->in_progress = true;
+		if (current_glove->finger1_in_progress == false){
+			current_glove->finger1_in_progress = true;
 			current_glove->yaw_offset = current_glove->yaw_raw;
 			current_glove->pitch_offset = current_glove->pitch_raw;
 			current_glove->roll_offset = current_glove->roll_raw;
@@ -440,7 +677,7 @@ void readglove(void * temp){
 		}
 	}
 	else{
-		current_glove->in_progress = false;
+		current_glove->finger1_in_progress = false;
 	}
 }
 
@@ -510,7 +747,7 @@ void onPacket1(const uint8_t* buffer, size_t size)
 			current_glove->roll_compensated = current_glove->roll_offset - current_glove->roll_raw;
 
 			//center data on 18000, meaning 180.00 degrees
-			current_glove->yaw_compensated = (current_glove->yaw_compensated + 2*36000 +18000 ) % 36000;
+			current_glove->yaw_compensated = (current_glove->yaw_compensated + 2 * 36000 + 18000) % 36000;
 			current_glove->pitch_compensated = (current_glove->pitch_compensated + 2 * 36000 + 18000) % 36000;
 			current_glove->roll_compensated = (current_glove->roll_compensated + 2 * 36000 + 18000) % 36000;
 
@@ -541,7 +778,7 @@ void onPacket1(const uint8_t* buffer, size_t size)
 			current_glove->cpu_usage = buffer[31];
 			current_glove->cpu_temp = buffer[32];
 
-			
+
 
 			//update the gesture grid (8x8 grid + overlap 
 
@@ -556,7 +793,7 @@ void onPacket1(const uint8_t* buffer, size_t size)
 			}
 
 			int temp_gloveY = map((current_glove->pitch_compensated), 18000 - GLOVE_DEADZONE, 18000 + GLOVE_DEADZONE, 0, 8);
-			
+
 			temp_gloveY = constrain(temp_gloveY, 0, 7);
 
 			if (current_glove == &glove0){
@@ -568,14 +805,14 @@ void onPacket1(const uint8_t* buffer, size_t size)
 			}
 
 			if (current_glove == &glove1){
-				temp_gloveX = constrain(temp_gloveX, 0,15);
+				temp_gloveX = constrain(temp_gloveX, 0, 15);
 
 				//only update position if not at the edge
 				if (temp_gloveX > 0 && temp_gloveX < 15){
 					glove1.gloveY = temp_gloveY;
 				}
 			}
-					
+
 			if (temp_gloveY>0 && temp_gloveY < 7){
 				current_glove->gloveX = temp_gloveX;
 			}
