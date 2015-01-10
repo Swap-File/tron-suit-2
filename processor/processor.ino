@@ -263,14 +263,9 @@ void loop() {
 	}
 
 	if (glove1.finger1 == 0){
-		gloveindicator[8 + glove0.gloveX][7-glove0.gloveY] = 100;// flip Y for helmet external display by subtracting from 7
-		gloveindicator[glove1.gloveX][7-glove1.gloveY] = 100;// flip Y for helmet external display by subtracting from 7
+		gloveindicator[8 + glove0.gloveX][7 - glove0.gloveY] = 100;// flip Y for helmet external display by subtracting from 7
+		gloveindicator[glove1.gloveX][7 - glove1.gloveY] = 100;// flip Y for helmet external display by subtracting from 7
 	}
-
-
-
-
-
 
 
 
@@ -294,77 +289,64 @@ void loop() {
 	display.setTextSize(1);
 	display.setTextColor(WHITE);
 	display.setCursor(0, 11);
+
 	display.setTextWrap(false);
 
-
-
 	display.print(menu_mode);
+	uint8_t menu_text_length = display.getCursorX();
 
 	display.display();
 
 
+	for (uint8_t y = 0; y < 8; y++) {
+		for (uint8_t x = 0; x < 16; x++) {
 
+			uint32_t background_array = 0;
+			uint32_t menu_name = 0;
+			uint32_t final_color = 0;
 
-	//erase array
-	for (int i = 0; i < leds.numPixels(); i++) {
-		leds.setPixel(i, 0x00000000);
-	}
-
-	//uint32_t tempcolor = (uint32_t)gammatable[helmet_LED_R] << 16 | (uint32_t)gammatable[helmet_LED_G] << 8 | (uint32_t)gammatable[helmet_LED_B];
-
-	int index_led = 0;
-	for (int16_t y = 0; y < 8; y++) {
-		if (y % 2){ // for odd rows scan from right side
-
-			for (int16_t x = 15; x > -1; x--) {
-				uint32_t tempcolor = 0;
-				uint32_t tempcolor2 = 0;
-				if (scroll_count > 0){
-
-					if (display.readPixel(scroll_pos + x, 7 - y + 11) == true){  // flip Y for helmet external display by subtracting from 7
-						tempcolor2 = (uint32_t)gammatable[255] << 16 | (uint32_t)gammatable[255] << 8 | (uint32_t)gammatable[255];
-					}
+			if (scroll_count > 0){
+				if (display.readPixel(scroll_pos + x, 7 - y + 11) == true){ // flip Y for helmet external display by subtracting from 7
+					menu_name = (uint32_t)gammatable[255] << 16 | (uint32_t)gammatable[255] << 8 | (uint32_t)gammatable[255];
 				}
-
-				if (gloveindicator[x][7-y] > 0){ // flip Y for helmet external display by subtracting from 7
-					tempcolor = (uint32_t)gammatable[gloveindicator[x][7-y]] << 16 | (uint32_t)gammatable[gloveindicator[x][7-y]] << 8 | (uint32_t)gammatable[gloveindicator[x][7-y]];
-				}
-
-				leds.setPixel(index_led + 15 - x, tempcolor | tempcolor2);
-			}
-			index_led = index_led + 16;
-		}
-		else{  // for even rows scan from left side
-			for (int16_t x = 0; x < 16; x++) {
-
-				uint32_t tempcolor = 0;
-				uint32_t tempcolor2 = 0;
-
-				if (scroll_count > 0){
-					if (display.readPixel(scroll_pos + x, 7 - y + 11) == true){ // flip Y for helmet external display by subtracting from 7
-						tempcolor2 = (uint32_t)gammatable[255] << 16 | (uint32_t)gammatable[255] << 8 | (uint32_t)gammatable[255];
-					}	
-				}
-
-				if (gloveindicator[x][7-y] > 0){ // flip Y for helmet external display by subtracting from 7
-					tempcolor = (uint32_t)gammatable[gloveindicator[x][7-y]] << 16 | (uint32_t)gammatable[gloveindicator[x][7-y]] << 8 | (uint32_t)gammatable[gloveindicator[x][7-y]];
-				}
-
-				leds.setPixel(index_led, tempcolor | tempcolor2);
-				index_led++;
 			}
 
+			if (gloveindicator[x][7 - y] > 0){ // flip Y for helmet external display by subtracting from 7
+				background_array = (uint32_t)gammatable[gloveindicator[x][7 - y]] << 16 | (uint32_t)gammatable[gloveindicator[x][7 - y]] << 8 | (uint32_t)gammatable[gloveindicator[x][7 - y]];
+			}
+
+			uint8_t tempindex;  //HUD is only 128 LEDs so it will fit in a byte
+
+			if (y & 0x01 == 1){ // for odd rows scan from opposite side since external display is zig zag wired
+				tempindex = (y << 4) + 15 - x;  //  << 4 is multiply by 16 pixels per row
+			}
+			else{
+				tempindex = (y << 4) + x; //  << 4 is multiply by 16 pixels per row
+			}
+
+			//blackout behind text
+			if ((scroll_count > 0) && ((scroll_pos + x) >= 0) && ((scroll_pos + x) <= menu_text_length)){
+				final_color = menu_name;
+			}
+			else{
+				final_color = background_array;
+			}
+
+
+			leds.setPixel(tempindex, final_color);
 		}
 	}
 
 
 	//advance scrolling if timer reached or stop
+
 	if (ScrollSpeed.check()){
 		scroll_pos++;
 		if (scroll_pos > 16){
 			scroll_count = 0;
 		}
 	}
+
 
 	leds.show();
 
@@ -402,20 +384,8 @@ void loop() {
 
 		display.reinit();
 
-		Serial.println("");
-		for (int16_t y = 11; y < 18; y++) {
-			for (int16_t x = 0; x < 16; x++) {
-				if (display.readPixel(x, y) == true){
-					Serial.print("*");
 
-				}
-				else{
-					Serial.print(" ");
-				}
-			}
-			Serial.println("");
-		}
-		Serial.println("");
+
 		if (0){
 			Serial.print("ypr\t");
 			Serial.print(sin(glove1.roll_raw * PI / 18000));
@@ -462,7 +432,7 @@ void loop() {
 	float n;
 	int i;
 
-	if (fft256_1.available() && 0) {
+	if (fft256_1.available() ) {
 		// each time new FFT data is available
 		// print it all to the Arduino Serial Monitor
 		Serial.print("FFT: ");
@@ -482,6 +452,8 @@ void loop() {
 	SerialUpdate();
 }
 
+#define MODECHANGEBRIGHTNESS 250  
+
 void readglove(void * temp){
 
 
@@ -496,14 +468,14 @@ void readglove(void * temp){
 			scroll_count = 1;
 			scroll_pos = -16;
 			if (current_glove == &glove1){
-				gloveindicator[0][4] = 100;
-				gloveindicator[1][5] = 100;
-				gloveindicator[2][6] = 100;
-				gloveindicator[3][7] = 100;
-				gloveindicator[4][7] = 100;
-				gloveindicator[5][6] = 100;
-				gloveindicator[6][5] = 100;
-				gloveindicator[7][4] = 100;
+				gloveindicator[0][4] = MODECHANGEBRIGHTNESS;
+				gloveindicator[1][5] = MODECHANGEBRIGHTNESS;
+				gloveindicator[2][6] = MODECHANGEBRIGHTNESS;
+				gloveindicator[3][7] = MODECHANGEBRIGHTNESS;
+				gloveindicator[4][7] = MODECHANGEBRIGHTNESS;
+				gloveindicator[5][6] = MODECHANGEBRIGHTNESS;
+				gloveindicator[6][5] = MODECHANGEBRIGHTNESS;
+				gloveindicator[7][4] = MODECHANGEBRIGHTNESS;
 			}
 			//root menus
 			if (menu_mode == 3){
@@ -536,17 +508,17 @@ void readglove(void * temp){
 				scroll_pos = -16;
 
 				if (current_glove == &glove1){
-					gloveindicator[0][3] = 100;
-					gloveindicator[1][2] = 100;
-					gloveindicator[2][1] = 100;
-					gloveindicator[3][0] = 100;
-					gloveindicator[4][0] = 100;
-					gloveindicator[5][1] = 100;
-					gloveindicator[6][2] = 100;
-					gloveindicator[7][3] = 100;
+					gloveindicator[0][3] = MODECHANGEBRIGHTNESS;
+					gloveindicator[1][2] = MODECHANGEBRIGHTNESS;
+					gloveindicator[2][1] = MODECHANGEBRIGHTNESS;
+					gloveindicator[3][0] = MODECHANGEBRIGHTNESS;
+					gloveindicator[4][0] = MODECHANGEBRIGHTNESS;
+					gloveindicator[5][1] = MODECHANGEBRIGHTNESS;
+					gloveindicator[6][2] = MODECHANGEBRIGHTNESS;
+					gloveindicator[7][3] = MODECHANGEBRIGHTNESS;
 
 
-				
+
 				}
 
 				//root menus
@@ -582,14 +554,14 @@ void readglove(void * temp){
 					scroll_pos = -16;
 
 					if (current_glove == &glove1){
-						gloveindicator[3][0] = 100;
-						gloveindicator[2][1] = 100;
-						gloveindicator[1][2] = 100;
-						gloveindicator[0][3] = 100;
-						gloveindicator[0][4] = 100;
-						gloveindicator[1][5] = 100;
-						gloveindicator[2][6] = 100;
-						gloveindicator[3][7] = 100;
+						gloveindicator[3][0] = MODECHANGEBRIGHTNESS;
+						gloveindicator[2][1] = MODECHANGEBRIGHTNESS;
+						gloveindicator[1][2] = MODECHANGEBRIGHTNESS;
+						gloveindicator[0][3] = MODECHANGEBRIGHTNESS;
+						gloveindicator[0][4] = MODECHANGEBRIGHTNESS;
+						gloveindicator[1][5] = MODECHANGEBRIGHTNESS;
+						gloveindicator[2][6] = MODECHANGEBRIGHTNESS;
+						gloveindicator[3][7] = MODECHANGEBRIGHTNESS;
 					}
 
 
@@ -606,14 +578,14 @@ void readglove(void * temp){
 					scroll_count = 1;
 					scroll_pos = -16;
 					if (current_glove == &glove1){
-						gloveindicator[4][0] = 100;
-						gloveindicator[5][1] = 100;
-						gloveindicator[6][2] = 100;
-						gloveindicator[7][3] = 100;
-						gloveindicator[7][4] = 100;
-						gloveindicator[6][5] = 100;
-						gloveindicator[5][6] = 100;
-						gloveindicator[4][7] = 100;
+						gloveindicator[4][0] = MODECHANGEBRIGHTNESS;
+						gloveindicator[5][1] = MODECHANGEBRIGHTNESS;
+						gloveindicator[6][2] = MODECHANGEBRIGHTNESS;
+						gloveindicator[7][3] = MODECHANGEBRIGHTNESS;
+						gloveindicator[7][4] = MODECHANGEBRIGHTNESS;
+						gloveindicator[6][5] = MODECHANGEBRIGHTNESS;
+						gloveindicator[5][6] = MODECHANGEBRIGHTNESS;
+						gloveindicator[4][7] = MODECHANGEBRIGHTNESS;
 					}
 
 					//back out of 10s menu
