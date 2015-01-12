@@ -11,6 +11,8 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
+#include "FastLED.h" //for HSV Libraries only, not for output!
+
 typedef struct {
 	uint8_t color_sensor_R;
 	uint8_t color_sensor_G;
@@ -131,12 +133,16 @@ OctoWS2811 leds(ledsPerStrip, displayMemory, drawingMemory, config);
 #define TESTING
 
 unsigned long fps_time = 0;
-
+int fpscount = 0;
 GLOVE glove0;
 GLOVE glove1;
 SERIALSTATS serial1stats;
 
 byte gloveindicator[16][8];
+
+CRGB EQdisplay[16][8];
+int EQdisplayValueMax[8]; //max vals for normalization over time
+int EQdisplayValueMin[8]; //max vals for normalization over time
 
 Metro FPSdisplay = Metro(1000);
 Metro glovedisplayfade = Metro(10);
@@ -196,7 +202,7 @@ void setup() {
 
 	pinMode(A4, INPUT); //audio input
 
-	AudioMemory(5);
+	AudioMemory(10);
 	fft256_1.windowFunction(AudioWindowHanning256);
 	fft256_1.averageTogether(4);
 
@@ -208,7 +214,7 @@ int ledmodifier = 1;
 int indexled = 0;
 
 void loop() {
-
+	fpscount++;
 	if (glove1.finger2 == 0 || glove1.finger3 == 0){
 		if (glove1.finger2 == 0){
 			glove0.color_sensor_LED = 0x01;
@@ -223,6 +229,7 @@ void loop() {
 		glove0.LED_R = (int)r;
 		glove0.LED_G = (int)g;
 		glove0.LED_B = (int)b;
+
 
 		helmet_LED_R = glove0.LED_R;
 		helmet_LED_G = glove0.LED_G;
@@ -333,7 +340,8 @@ void loop() {
 			}
 
 
-			leds.setPixel(tempindex, final_color);
+			uint32_t eqcolor = (uint32_t)gammatable[EQdisplay[x][y].red] << 16 | (uint32_t)gammatable[EQdisplay[x][y].green] << 8 | (uint32_t)gammatable[EQdisplay[x][y].blue];
+			leds.setPixel(tempindex, final_color | eqcolor);
 		}
 	}
 
@@ -353,6 +361,7 @@ void loop() {
 
 	if (GloveSend.check()){
 
+		
 		uint8_t raw_buffer[9];
 
 		raw_buffer[0] = glove0.LED_R;
@@ -380,7 +389,7 @@ void loop() {
 	}
 
 	if (YPRdisplay.check()){
-		long int start = micros();
+		
 
 		display.reinit();
 
@@ -414,9 +423,8 @@ void loop() {
 
 
 	if (FPSdisplay.check()){
-
-
-
+		Serial.println(fpscount);
+		fpscount = 0;
 		//cpu_usage = 100 - (idle_microseconds / 10000);
 		//local_packets_out_per_second_1 = local_packets_out_counter_1;
 		//local_packets_in_per_second_1 = local_packets_in_counter_1;
@@ -425,40 +433,118 @@ void loop() {
 		// local_packets_in_counter_1 = 0;
 
 
-
-
 	}
 
-	float n;
-	int i;
 
-	if (fft256_1.available() ) {
-		// each time new FFT data is available
-		// print it all to the Arduino Serial Monitor
-		Serial.print("FFT: ");
-		for (i = 0; i < 40; i++) {
-			n = fft256_1.read(i);
-			if (n >= 0.01) {
-				Serial.print(n);
-				Serial.print(" ");
-			}
-			else {
-				Serial.print("  -  "); // don't print "0.00"
+	if (fft256_1.available()) {
+
+
+		uint8_t fftmode = 2;
+
+		if (menu_mode == 20){
+			fftmode = 0;
+		}
+
+		if (fftmode == 0){
+			//move eq data left 1
+			for (uint8_t x = 1; x < 16; x++) {
+				for (uint8_t y = 0; y < 8; y++) {
+					EQdisplay[x - 1][y] = EQdisplay[x][y];
+				}
 			}
 		}
-		Serial.println();
+
+		if (fftmode == 1){
+			//move eq data right 1
+			for (uint8_t x = 15; x > 0; x--) {
+				for (uint8_t y = 0; y < 8; y++) {
+					EQdisplay[x][y] = EQdisplay[x - 1][y];
+				}
+			}
+		}
+
+		if (fftmode == 1 || fftmode == 0){
+			for (int i = 0; i < 8; i++) {
+
+				int n = 1000 * fft256_1.read((i * 5), (i * 5) + 5);
+
+				if (i == 0){
+					n = max(n - 150, 0);
+				}
+				else if (i == 1){
+					n = max(n - 15, 0);
+				}
+				else if (i == 2){
+					n = max(n - 6, 0);
+				}
+				else {
+					n = max(n - 5, 0);
+				}
+
+				//Serial.print((int)(n));
+				//Serial.print(' ');
+
+				EQdisplayValueMax[i] = max(max(EQdisplayValueMax[i] * .99, n), 10);
+
+				if (fftmode == 0){
+					EQdisplay[15][i].red = map(n, 0, EQdisplayValueMax[i], 0, 255);
+				}
+				if (fftmode == 1){
+					EQdisplay[0][i].red = map(n, 0, EQdisplayValueMax[i], 0, 255);
+				}
+			}
+			//Serial.println("");
+		}
+
+		if (fftmode == 2 || fftmode == 3){
+			for (uint8_t i = 0; i < 16; i++) {
+
+				int n = 1000 * fft256_1.read((i * 2), (i *2) + 2);
+
+				if (i == 0){
+					n = max(n - 150, 0);
+				}
+				else if (i == 1){
+					n = max(n - 50, 0);
+				}
+				else if (i == 2){
+					n = max(n - 15, 0);
+				}
+				else if (i == 3){
+					n = max(n - 10, 0);
+				}
+				else  {
+					n = max(n - 3, 0);
+				}
+
+				//Serial.print((int)(n));
+				//Serial.print(' ');
+
+				EQdisplayValueMax[i] = max(max(EQdisplayValueMax[i] * .98, n), 4);
+
+				//int y = map(n, 0, EQdisplayValueMax[i], 0, 8);
+				int value = map(n, 0, EQdisplayValueMax[i], 0, 255);
+
+				for (int index = 0; index < 8; index++){
+					EQdisplay[i][index].blue = 0;
+					EQdisplay[i][index].green =0;
+					EQdisplay[i][index].red = value;
+
+				}
+			}
+
+			//Serial.println("");
+
+		}
 	}
 
 	SerialUpdate();
 }
 
 #define MODECHANGEBRIGHTNESS 250  
+#define MODECHANGESTARTPOS -18
 
 void readglove(void * temp){
-
-
-
-
 
 	GLOVE * current_glove = (GLOVE *)temp;
 	if (current_glove->finger1 == 1 && current_glove->finger1_in_progress == true){
@@ -466,7 +552,7 @@ void readglove(void * temp){
 		if (current_glove->gloveY <= 0){
 			Serial.println(" down!");
 			scroll_count = 1;
-			scroll_pos = -16;
+			scroll_pos = MODECHANGESTARTPOS;
 			if (current_glove == &glove1){
 				gloveindicator[0][4] = MODECHANGEBRIGHTNESS;
 				gloveindicator[1][5] = MODECHANGEBRIGHTNESS;
@@ -505,7 +591,7 @@ void readglove(void * temp){
 			if (current_glove->gloveY >= 7){
 				Serial.println(" up!");
 				scroll_count = 1;
-				scroll_pos = -16;
+				scroll_pos = MODECHANGESTARTPOS;
 
 				if (current_glove == &glove1){
 					gloveindicator[0][3] = MODECHANGEBRIGHTNESS;
@@ -551,7 +637,7 @@ void readglove(void * temp){
 					Serial.println(" right!");
 
 					scroll_count = 1;
-					scroll_pos = -16;
+					scroll_pos = MODECHANGESTARTPOS;
 
 					if (current_glove == &glove1){
 						gloveindicator[3][0] = MODECHANGEBRIGHTNESS;
@@ -576,7 +662,7 @@ void readglove(void * temp){
 				if (current_glove->gloveX >= 7){
 					Serial.println(" left!");
 					scroll_count = 1;
-					scroll_pos = -16;
+					scroll_pos = MODECHANGESTARTPOS;
 					if (current_glove == &glove1){
 						gloveindicator[4][0] = MODECHANGEBRIGHTNESS;
 						gloveindicator[5][1] = MODECHANGEBRIGHTNESS;
