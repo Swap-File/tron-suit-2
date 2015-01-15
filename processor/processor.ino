@@ -89,7 +89,7 @@ typedef struct {
 
 } SERIALSTATS;
 
-byte gammatable[256];
+byte gammatable[256];// double or triple this later.
 
 
 
@@ -140,9 +140,10 @@ SERIALSTATS serial1stats;
 
 byte gloveindicator[16][8];
 
-CRGB EQdisplay[16][8];
-int EQdisplayValueMax[8]; //max vals for normalization over time
-int EQdisplayValueMin[8]; //max vals for normalization over time
+uint32_t EQdisplay[16][8];
+int EQdisplayValueMax[16]; //max vals for normalization over time
+long int EQmaxtime[16];
+int EQlastbrightnes[16]; //max vals for normalization over time
 
 Metro FPSdisplay = Metro(1000);
 Metro glovedisplayfade = Metro(10);
@@ -202,7 +203,7 @@ void setup() {
 
 	pinMode(A4, INPUT); //audio input
 
-	AudioMemory(10);
+	AudioMemory(4);
 	fft256_1.windowFunction(AudioWindowHanning256);
 	fft256_1.averageTogether(4);
 
@@ -340,8 +341,8 @@ void loop() {
 			}
 
 
-			uint32_t eqcolor = (uint32_t)gammatable[EQdisplay[x][y].red] << 16 | (uint32_t)gammatable[EQdisplay[x][y].green] << 8 | (uint32_t)gammatable[EQdisplay[x][y].blue];
-			leds.setPixel(tempindex, final_color | eqcolor);
+
+				leds.setPixel(tempindex, final_color | EQdisplay[x][y]);
 		}
 	}
 
@@ -486,20 +487,33 @@ void loop() {
 
 				EQdisplayValueMax[i] = max(max(EQdisplayValueMax[i] * .99, n), 10);
 
+				uint8_t brightness = map(n, 0, EQdisplayValueMax[i], 0, 255);
+				
+				uint16_t color = 0;
+
+			
+
+				color = constrain(map(brightness, 230, 250, 0, 255), 0, 255);
+
 				if (fftmode == 0){
-					EQdisplay[15][i].red = map(n, 0, EQdisplayValueMax[i], 0, 255);
+				
+					EQdisplay[15][i] = wheel(color, 0, brightness);
 				}
 				if (fftmode == 1){
-					EQdisplay[0][i].red = map(n, 0, EQdisplayValueMax[i], 0, 255);
+					EQdisplay[0][i] = wheel(min(color, 255), 0, brightness);
 				}
+
+				EQlastbrightnes[i] = brightness;
+			
 			}
 			//Serial.println("");
+			
 		}
 
 		if (fftmode == 2 || fftmode == 3){
 			for (uint8_t i = 0; i < 16; i++) {
 
-				int n = 1000 * fft256_1.read((i * 2), (i *2) + 2);
+				int n = 1000 * fft256_1.read((i * 2), (i * 2) + 2);
 
 				if (i == 0){
 					n = max(n - 150, 0);
@@ -523,12 +537,17 @@ void loop() {
 				EQdisplayValueMax[i] = max(max(EQdisplayValueMax[i] * .98, n), 4);
 
 				//int y = map(n, 0, EQdisplayValueMax[i], 0, 8);
-				int value = map(n, 0, EQdisplayValueMax[i], 0, 255);
+				int brightness = map(n, 0, EQdisplayValueMax[i], 0, 255);
+				int color = 0;
+				int offset = 127;
+
+
+				color = constrain(map(brightness, 230, 255, 0, 255), 0, 255);
 
 				for (int index = 0; index < 8; index++){
-					EQdisplay[i][index].blue = 0;
-					EQdisplay[i][index].green =0;
-					EQdisplay[i][index].red = value;
+				
+			
+					EQdisplay[i][index] = wheel(color, 0, brightness);
 
 				}
 			}
@@ -883,3 +902,37 @@ void onPacket1(const uint8_t* buffer, size_t size)
 	}
 }
 
+uint32_t wheel(uint16_t h, uint8_t s, uint8_t v){
+
+	//h goes from 0 to 256*3-1 = 767
+	//v goes from 0 to 255
+
+
+	uint32_t r, g, b;
+
+	switch (h / 256)
+	{
+	case 0:
+		r = (255 - h % 256);   //Red down
+		g = (h % 256);      // Green up
+		b = 0;                  //blue off
+		break;
+	case 1:
+		g = (255 - h % 256);  //green down
+		b = (h % 256);      //blue up
+		r = 0;                  //red off
+		break;
+	case 2:
+		b = (255 - h % 256);  //blue down 
+		r = (h % 256);      //red up
+		g = 0;                  //green off
+		break;
+	}
+
+	float brightness = (((float)v) / 255);
+	r = r * brightness;
+	g = g * brightness;
+	b = b * brightness;
+	
+	return((gammatable[r] << 16) | (gammatable[g] << 8) | gammatable[b]);
+}
