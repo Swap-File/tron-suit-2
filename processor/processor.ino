@@ -93,7 +93,7 @@ byte gammatable[256];// double or triple this later.
 
 
 
-int menu_mode = 0;
+
 
 const int ledsPerStrip = 128;
 
@@ -115,8 +115,13 @@ byte helmet_LED_B = 0;
 #define OLED_RESET  19
 Adafruit_SSD1306 display(OLED_DC, OLED_RESET, OLED_CS);
 
-int scroll_count = 0;
-int scroll_pos = 0;
+uint8_t menu_mode = 0;
+uint8_t menu_text_length = 0;
+uint8_t scroll_count = 0;
+int8_t scroll_pos_x = 0;
+int8_t scroll_pos_y = 0;
+uint8_t scroll_mode = 0;
+long int scroll_timer = 0;
 
 //crank up hardwareserial.cpp to 128 to match!
 #define INCOMING1_BUFFER_SIZE 128
@@ -142,13 +147,11 @@ byte gloveindicator[16][8];
 
 uint32_t EQdisplay[16][8];
 int EQdisplayValueMax[16]; //max vals for normalization over time
-long int EQmaxtime[16];
-int EQlastbrightnes[16]; //max vals for normalization over time
 
 Metro FPSdisplay = Metro(1000);
 Metro glovedisplayfade = Metro(10);
 Metro YPRdisplay = Metro(100);
-Metro ScrollSpeed = Metro(30);
+Metro ScrollSpeed = Metro(40);
 Metro GloveSend = Metro(10);
 
 void setup() {
@@ -213,6 +216,12 @@ void setup() {
 long int magictime = 0;
 int ledmodifier = 1;
 int indexled = 0;
+
+#define menu_location_x 1
+#define menu_location_y 11
+
+#define realtime_location_x 19
+#define realtime_location_y 1
 
 void loop() {
 	fpscount++;
@@ -283,12 +292,12 @@ void loop() {
 
 
 	//crosshair 
-
+	display.drawRect(realtime_location_x - 1, realtime_location_y - 1, 18, 10, WHITE);
 	display.drawRect(0, 0, 19, 10, WHITE);
-
+	display.drawRect(menu_location_x - 1, menu_location_y - 1, 19, 10, WHITE);
 	for (int x = 0; x < 16; x++) {
 		for (int y = 0; y < 8; y++) {
-			if (gloveindicator[x][y] > 100){
+			if (gloveindicator[x][y] == 100){
 				display.drawPixel(x + 1, y, WHITE);
 			}
 		}
@@ -296,15 +305,12 @@ void loop() {
 
 	display.setTextSize(1);
 	display.setTextColor(WHITE);
-	display.setCursor(0, 11);
+	display.setCursor(menu_location_x, menu_location_y);
 
 	display.setTextWrap(false);
 
 	display.print(menu_mode);
-	uint8_t menu_text_length = display.getCursorX();
-
-	display.display();
-
+	menu_text_length = display.getCursorX();
 
 	for (uint8_t y = 0; y < 8; y++) {
 		for (uint8_t x = 0; x < 16; x++) {
@@ -313,8 +319,8 @@ void loop() {
 			uint32_t menu_name = 0;
 			uint32_t final_color = 0;
 
-			if (scroll_count > 0){
-				if (display.readPixel(scroll_pos + x, 7 - y + 11) == true){ // flip Y for helmet external display by subtracting from 7
+			if (scroll_mode > 0){
+				if (read_menu_pixel(x, y) == 1){ // flip Y for helmet external display by subtracting from 7
 					menu_name = (uint32_t)gammatable[255] << 16 | (uint32_t)gammatable[255] << 8 | (uint32_t)gammatable[255];
 				}
 			}
@@ -333,36 +339,61 @@ void loop() {
 			}
 
 			//blackout behind text
-			if ((scroll_count > 0) && ((scroll_pos + x) >= 0) && ((scroll_pos + x) <= menu_text_length)){
-				final_color = menu_name;
+			//if ((scroll_count > 0) && ((scroll_pos_x + x) >= 0) && ((scroll_pos_x + x) <= menu_text_length)){
+
+			final_color = background_array;
+
+				if (read_menu_pixel(x, y) != 3){
+					final_color = menu_name;
+				}
+
+
+			
+			final_color = final_color | EQdisplay[x][y];
+
+			if ((final_color & 0xff == 0xff) | ((final_color >> 16) & 0xff == 0xff) | ((final_color >> 8) & 0xff == 0xff)){
+				display.drawPixel(realtime_location_x + x, realtime_location_y + 7 - y, WHITE);
 			}
-			else{
-				final_color = background_array;
-			}
 
-
-
-				leds.setPixel(tempindex, final_color | EQdisplay[x][y]);
+			leds.setPixel(tempindex, final_color);
 		}
 	}
-
 
 	//advance scrolling if timer reached or stop
 
 	if (ScrollSpeed.check()){
-		scroll_pos++;
-		if (scroll_pos > 16){
-			scroll_count = 0;
+		//center the text from whatever direction its coming from
+		switch (scroll_mode){
+		case 3:
+			if (scroll_pos_x > 0) scroll_pos_x--;
+			if (scroll_pos_y > 0) scroll_pos_y--;
+			if (scroll_pos_x < 0) scroll_pos_x++;
+			if (scroll_pos_y < 0) scroll_pos_y++;
+			if (scroll_pos_y == 0 && scroll_pos_x == 0){
+				scroll_mode = 2;
+				scroll_timer = millis();
+			}
+			break;
+		case 2:
+			if (millis() - scroll_timer > 1000){
+				scroll_mode = 1;
+			}
+			break;
+		case 1:
+			//scroll off the left side
+			scroll_pos_x++;
+			if (scroll_pos_x > menu_text_length){
+				scroll_mode = 0;
+			}
+			break;
 		}
 	}
 
-
+	display.display();
 	leds.show();
-
 
 	if (GloveSend.check()){
 
-		
 		uint8_t raw_buffer[9];
 
 		raw_buffer[0] = glove0.LED_R;
@@ -386,15 +417,11 @@ void loop() {
 		if (serial1stats.packets_out_per_second < 255){
 			serial1stats.packets_out_per_second++;
 		}
-
 	}
 
 	if (YPRdisplay.check()){
-		
 
 		display.reinit();
-
-
 
 		if (0){
 			Serial.print("ypr\t");
@@ -432,13 +459,10 @@ void loop() {
 		//idle_microseconds = 0;
 		// local_packets_out_counter_1 = 0;
 		// local_packets_in_counter_1 = 0;
-
-
 	}
 
 
 	if (fft256_1.available()) {
-
 
 		uint8_t fftmode = 2;
 
@@ -465,21 +489,15 @@ void loop() {
 		}
 
 		if (fftmode == 1 || fftmode == 0){
-			for (int i = 0; i < 8; i++) {
+			for (uint8_t i = 0; i < 8; i++) {
 
-				int n = 1000 * fft256_1.read((i * 5), (i * 5) + 5);
+				uint16_t n = 1000 * fft256_1.read((i * 5), (i * 5) + 5);
 
-				if (i == 0){
-					n = max(n - 150, 0);
-				}
-				else if (i == 1){
-					n = max(n - 15, 0);
-				}
-				else if (i == 2){
-					n = max(n - 6, 0);
-				}
-				else {
-					n = max(n - 5, 0);
+				switch (i){
+				case 0:  n = max(n - 150, 0); break;
+				case 1:  n = max(n - 15, 0);  break;
+				case 2:  n = max(n - 6, 0);   break;
+				default: n = max(n - 5, 0);   break;
 				}
 
 				//Serial.print((int)(n));
@@ -488,48 +506,34 @@ void loop() {
 				EQdisplayValueMax[i] = max(max(EQdisplayValueMax[i] * .99, n), 10);
 
 				uint8_t brightness = map(n, 0, EQdisplayValueMax[i], 0, 255);
-				
 				uint16_t color = 0;
-
-			
 
 				color = constrain(map(brightness, 230, 250, 0, 255), 0, 255);
 
 				if (fftmode == 0){
-				
+
 					EQdisplay[15][i] = wheel(color, 0, brightness);
 				}
 				if (fftmode == 1){
 					EQdisplay[0][i] = wheel(min(color, 255), 0, brightness);
 				}
-
-				EQlastbrightnes[i] = brightness;
-			
 			}
 			//Serial.println("");
-			
 		}
 
 		if (fftmode == 2 || fftmode == 3){
 			for (uint8_t i = 0; i < 16; i++) {
 
-				int n = 1000 * fft256_1.read((i * 2), (i * 2) + 2);
+				uint16_t n = 1000 * fft256_1.read((i * 2), (i * 2) + 2);
 
-				if (i == 0){
-					n = max(n - 150, 0);
+				switch (i){
+				case 0:  n = max(n - 150, 0); break;
+				case 1:  n = max(n - 50, 0);  break;
+				case 2:  n = max(n - 15, 0);  break;
+				case 3:  n = max(n - 10, 0);  break;
+				default: n = max(n - 3, 0);   break;
 				}
-				else if (i == 1){
-					n = max(n - 50, 0);
-				}
-				else if (i == 2){
-					n = max(n - 15, 0);
-				}
-				else if (i == 3){
-					n = max(n - 10, 0);
-				}
-				else  {
-					n = max(n - 3, 0);
-				}
+
 
 				//Serial.print((int)(n));
 				//Serial.print(' ');
@@ -541,27 +545,40 @@ void loop() {
 				int color = 0;
 				int offset = 127;
 
-
 				color = constrain(map(brightness, 230, 255, 0, 255), 0, 255);
 
 				for (int index = 0; index < 8; index++){
-				
-			
 					EQdisplay[i][index] = wheel(color, 0, brightness);
-
 				}
 			}
-
 			//Serial.println("");
-
 		}
 	}
 
 	SerialUpdate();
 }
 
+uint8_t read_menu_pixel(uint8_t x, uint8_t y){
+
+
+	//bounds check first
+	if (x + scroll_pos_x < 0 || x + scroll_pos_x > 15 || scroll_pos_y + (7 - y) < 0 || scroll_pos_y + (7 - y) > 7){
+		return 2;
+	}
+
+	//add 7 sub y to flip on y axis
+	if (display.readPixel(menu_location_x + scroll_pos_x + x, menu_location_y + scroll_pos_y + (7 - y))){
+		return 1;
+	}
+	else{
+		return 0;
+	}
+}
+
+
 #define MODECHANGEBRIGHTNESS 250  
-#define MODECHANGESTARTPOS -18
+#define MODECHANGESTARTPOSX -18
+#define MODECHANGESTARTPOSY 8
 
 void readglove(void * temp){
 
@@ -570,8 +587,12 @@ void readglove(void * temp){
 
 		if (current_glove->gloveY <= 0){
 			Serial.println(" down!");
-			scroll_count = 1;
-			scroll_pos = MODECHANGESTARTPOS;
+
+
+			scroll_mode = 3;
+			scroll_pos_x = 0;
+			scroll_pos_y = MODECHANGESTARTPOSY;
+
 			if (current_glove == &glove1){
 				gloveindicator[0][4] = MODECHANGEBRIGHTNESS;
 				gloveindicator[1][5] = MODECHANGEBRIGHTNESS;
@@ -609,8 +630,10 @@ void readglove(void * temp){
 		{
 			if (current_glove->gloveY >= 7){
 				Serial.println(" up!");
-				scroll_count = 1;
-				scroll_pos = MODECHANGESTARTPOS;
+
+				scroll_mode = 3;
+				scroll_pos_x = 0;
+				scroll_pos_y = -MODECHANGESTARTPOSY;
 
 				if (current_glove == &glove1){
 					gloveindicator[0][3] = MODECHANGEBRIGHTNESS;
@@ -655,8 +678,9 @@ void readglove(void * temp){
 				if (current_glove->gloveX <= 0){
 					Serial.println(" right!");
 
-					scroll_count = 1;
-					scroll_pos = MODECHANGESTARTPOS;
+					scroll_mode = 3;
+					scroll_pos_x = MODECHANGESTARTPOSX;
+					scroll_pos_y = 0;
 
 					if (current_glove == &glove1){
 						gloveindicator[3][0] = MODECHANGEBRIGHTNESS;
@@ -680,8 +704,11 @@ void readglove(void * temp){
 
 				if (current_glove->gloveX >= 7){
 					Serial.println(" left!");
-					scroll_count = 1;
-					scroll_pos = MODECHANGESTARTPOS;
+
+					scroll_mode = 3;
+					scroll_pos_x = min(menu_text_length, 16);
+					scroll_pos_y = 0;
+
 					if (current_glove == &glove1){
 						gloveindicator[4][0] = MODECHANGEBRIGHTNESS;
 						gloveindicator[5][1] = MODECHANGEBRIGHTNESS;
@@ -933,6 +960,6 @@ uint32_t wheel(uint16_t h, uint8_t s, uint8_t v){
 	r = r * brightness;
 	g = g * brightness;
 	b = b * brightness;
-	
+
 	return((gammatable[r] << 16) | (gammatable[g] << 8) | gammatable[b]);
 }
