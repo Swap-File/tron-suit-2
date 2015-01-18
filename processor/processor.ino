@@ -93,7 +93,7 @@ byte gammatable[256];// double or triple this later.
 
 
 
-
+int mask_mode = 1;
 
 const int ledsPerStrip = 128;
 
@@ -116,6 +116,11 @@ byte helmet_LED_B = 0;
 Adafruit_SSD1306 display(OLED_DC, OLED_RESET, OLED_CS);
 
 uint8_t menu_mode = 0;
+
+char sms_message[160];
+int16_t sms_text_length = 0; //160 * 5 max length
+int16_t sms_scroll_pos = 0;
+
 uint8_t menu_text_length = 0;
 uint8_t scroll_count = 0;
 int8_t scroll_pos_x = 0;
@@ -155,6 +160,9 @@ Metro ScrollSpeed = Metro(40);
 Metro GloveSend = Metro(10);
 
 void setup() {
+
+	strcpy(sms_message, "TESTING TEXT MESSAGE");
+
 	for (int i = 0; i < 256; i++) {
 		float x = i;
 		x /= 255;
@@ -217,11 +225,20 @@ long int magictime = 0;
 int ledmodifier = 1;
 int indexled = 0;
 
+#define trails_location_x 1
+#define trails_location_y 1
+
+#define sms_location_x 1
+#define sms_location_y 20
+
 #define menu_location_x 1
 #define menu_location_y 11
 
-#define realtime_location_x 19
+#define realtime_location_x 18
 #define realtime_location_y 1
+
+#define hand_location_x 35
+#define hand_location_y 1
 
 void loop() {
 	fpscount++;
@@ -291,26 +308,48 @@ void loop() {
 	display.clearDisplay();
 
 
-	//crosshair 
+	//draw the boxes 
+
+	display.drawRect(hand_location_x - 1, hand_location_y - 1, 18, 10, WHITE);
+	display.drawPixel(hand_location_x + 8 + glove0.gloveX, hand_location_y + 7 - glove0.gloveY, WHITE);
+	display.drawPixel(hand_location_x + glove1.gloveX, hand_location_y + 7 - glove1.gloveY, WHITE);
+
+	display.drawRect(sms_location_x - 1, sms_location_y - 1, 18, 11, WHITE);
+
+
 	display.drawRect(realtime_location_x - 1, realtime_location_y - 1, 18, 10, WHITE);
-	display.drawRect(0, 0, 19, 10, WHITE);
-	display.drawRect(menu_location_x - 1, menu_location_y - 1, 19, 10, WHITE);
+
+	display.drawRect(menu_location_x - 1, menu_location_y - 2, 18, 11, WHITE);
+
+
+	display.drawRect(trails_location_x - 1, trails_location_y - 1, 18, 10, WHITE);
 	for (int x = 0; x < 16; x++) {
 		for (int y = 0; y < 8; y++) {
-			if (gloveindicator[x][y] == 100){
-				display.drawPixel(x + 1, y, WHITE);
+			if (gloveindicator[x][y] >= 50){  //This sets where decayed pixels disappear from HUD
+				display.drawPixel(trails_location_x + x, trails_location_y + y, WHITE);
 			}
 		}
 	}
 
+	//write out the menu text
 	display.setTextSize(1);
 	display.setTextColor(WHITE);
+	display.setTextWrap(false);
 	display.setCursor(menu_location_x, menu_location_y);
 
-	display.setTextWrap(false);
-
 	display.print(menu_mode);
-	menu_text_length = display.getCursorX();
+	menu_text_length = display.getCursorX(); //save menu text length for elsewhere
+
+
+	display.setCursor(sms_location_x + 16 + sms_scroll_pos, sms_location_y + 1);
+	display.print(sms_message);
+	sms_text_length = display.getCursorX(); //save menu text length for elsewhere
+
+	//pad out message for looping in the HUD
+	display.setCursor(sms_text_length + 19, sms_location_y + 1);
+	for (uint8_t i = 0; i < 7; i++){
+		display.print(sms_message[i]);
+	}
 
 	for (uint8_t y = 0; y < 8; y++) {
 		for (uint8_t x = 0; x < 16; x++) {
@@ -318,6 +357,7 @@ void loop() {
 			uint32_t background_array = 0;
 			uint32_t menu_name = 0;
 			uint32_t final_color = 0;
+
 
 			if (scroll_mode > 0){
 				if (read_menu_pixel(x, y) == 1){ // flip Y for helmet external display by subtracting from 7
@@ -338,18 +378,19 @@ void loop() {
 				tempindex = (y << 4) + x; //  << 4 is multiply by 16 pixels per row
 			}
 
-			//blackout behind text
-			//if ((scroll_count > 0) && ((scroll_pos_x + x) >= 0) && ((scroll_pos_x + x) <= menu_text_length)){
 
-			final_color = background_array;
-
-				if (read_menu_pixel(x, y) != 3){
-					final_color = menu_name;
+			mask_mode = 1;
+			if (mask_mode == 0){
+				final_color = background_array | EQdisplay[x][y] | menu_name;
+			}
+			else{
+				if (background_array || menu_name || read_sms_pixel(x,y-1) != 0){
+					final_color = EQdisplay[x][y] ;
 				}
 
+			}
+		
 
-			
-			final_color = final_color | EQdisplay[x][y];
 
 			if ((final_color & 0xff == 0xff) | ((final_color >> 16) & 0xff == 0xff) | ((final_color >> 8) & 0xff == 0xff)){
 				display.drawPixel(realtime_location_x + x, realtime_location_y + 7 - y, WHITE);
@@ -362,6 +403,11 @@ void loop() {
 	//advance scrolling if timer reached or stop
 
 	if (ScrollSpeed.check()){
+		sms_scroll_pos--;
+		if (sms_text_length < 0){
+			sms_scroll_pos = 0;
+
+		}
 		//center the text from whatever direction its coming from
 		switch (scroll_mode){
 		case 3:
@@ -380,7 +426,7 @@ void loop() {
 			}
 			break;
 		case 1:
-			//scroll off the left side
+			//scroll off the left side  
 			scroll_pos_x++;
 			if (scroll_pos_x > menu_text_length){
 				scroll_mode = 0;
@@ -559,8 +605,6 @@ void loop() {
 }
 
 uint8_t read_menu_pixel(uint8_t x, uint8_t y){
-
-
 	//bounds check first
 	if (x + scroll_pos_x < 0 || x + scroll_pos_x > 15 || scroll_pos_y + (7 - y) < 0 || scroll_pos_y + (7 - y) > 7){
 		return 2;
@@ -575,6 +619,18 @@ uint8_t read_menu_pixel(uint8_t x, uint8_t y){
 	}
 }
 
+boolean read_sms_pixel(uint8_t x, uint8_t y){
+	//bounds check first
+	if (sms_location_y < 7 || sms_location_y < 0 || sms_location_x < 0 || sms_location_x > 15){
+		return false;
+	}
+
+	//add 7 sub y to flip on y axis
+	if (display.readPixel(sms_location_x + x, sms_location_y + (7 - y))){
+		return true;
+	}
+	return false;
+}
 
 #define MODECHANGEBRIGHTNESS 250  
 #define MODECHANGESTARTPOSX -18
@@ -593,16 +649,6 @@ void readglove(void * temp){
 			scroll_pos_x = 0;
 			scroll_pos_y = MODECHANGESTARTPOSY;
 
-			if (current_glove == &glove1){
-				gloveindicator[0][4] = MODECHANGEBRIGHTNESS;
-				gloveindicator[1][5] = MODECHANGEBRIGHTNESS;
-				gloveindicator[2][6] = MODECHANGEBRIGHTNESS;
-				gloveindicator[3][7] = MODECHANGEBRIGHTNESS;
-				gloveindicator[4][7] = MODECHANGEBRIGHTNESS;
-				gloveindicator[5][6] = MODECHANGEBRIGHTNESS;
-				gloveindicator[6][5] = MODECHANGEBRIGHTNESS;
-				gloveindicator[7][4] = MODECHANGEBRIGHTNESS;
-			}
 			//root menus
 			if (menu_mode == 3){
 				menu_mode = 2;
@@ -635,19 +681,7 @@ void readglove(void * temp){
 				scroll_pos_x = 0;
 				scroll_pos_y = -MODECHANGESTARTPOSY;
 
-				if (current_glove == &glove1){
-					gloveindicator[0][3] = MODECHANGEBRIGHTNESS;
-					gloveindicator[1][2] = MODECHANGEBRIGHTNESS;
-					gloveindicator[2][1] = MODECHANGEBRIGHTNESS;
-					gloveindicator[3][0] = MODECHANGEBRIGHTNESS;
-					gloveindicator[4][0] = MODECHANGEBRIGHTNESS;
-					gloveindicator[5][1] = MODECHANGEBRIGHTNESS;
-					gloveindicator[6][2] = MODECHANGEBRIGHTNESS;
-					gloveindicator[7][3] = MODECHANGEBRIGHTNESS;
 
-
-
-				}
 
 				//root menus
 				if (menu_mode == 1){
@@ -682,16 +716,7 @@ void readglove(void * temp){
 					scroll_pos_x = MODECHANGESTARTPOSX;
 					scroll_pos_y = 0;
 
-					if (current_glove == &glove1){
-						gloveindicator[3][0] = MODECHANGEBRIGHTNESS;
-						gloveindicator[2][1] = MODECHANGEBRIGHTNESS;
-						gloveindicator[1][2] = MODECHANGEBRIGHTNESS;
-						gloveindicator[0][3] = MODECHANGEBRIGHTNESS;
-						gloveindicator[0][4] = MODECHANGEBRIGHTNESS;
-						gloveindicator[1][5] = MODECHANGEBRIGHTNESS;
-						gloveindicator[2][6] = MODECHANGEBRIGHTNESS;
-						gloveindicator[3][7] = MODECHANGEBRIGHTNESS;
-					}
+
 
 
 					//jump into first layer menu
@@ -709,16 +734,7 @@ void readglove(void * temp){
 					scroll_pos_x = min(menu_text_length, 16);
 					scroll_pos_y = 0;
 
-					if (current_glove == &glove1){
-						gloveindicator[4][0] = MODECHANGEBRIGHTNESS;
-						gloveindicator[5][1] = MODECHANGEBRIGHTNESS;
-						gloveindicator[6][2] = MODECHANGEBRIGHTNESS;
-						gloveindicator[7][3] = MODECHANGEBRIGHTNESS;
-						gloveindicator[7][4] = MODECHANGEBRIGHTNESS;
-						gloveindicator[6][5] = MODECHANGEBRIGHTNESS;
-						gloveindicator[5][6] = MODECHANGEBRIGHTNESS;
-						gloveindicator[4][7] = MODECHANGEBRIGHTNESS;
-					}
+
 
 					//back out of 10s menu
 					if (menu_mode <= 19 && menu_mode >= 10){
@@ -934,7 +950,9 @@ uint32_t wheel(uint16_t h, uint8_t s, uint8_t v){
 	//h goes from 0 to 256*3-1 = 767
 	//v goes from 0 to 255
 
-
+	if (mask_mode == 1){
+		v = max(v, 40);
+	}
 	uint32_t r, g, b;
 
 	switch (h / 256)
