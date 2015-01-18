@@ -92,8 +92,9 @@ typedef struct {
 byte gammatable[256];// double or triple this later.
 
 
+uint8_t fftmode = 2;
 
-int mask_mode = 1;
+int mask_mode = 0;
 
 const int ledsPerStrip = 128;
 
@@ -118,12 +119,16 @@ Adafruit_SSD1306 display(OLED_DC, OLED_RESET, OLED_CS);
 uint8_t menu_mode = 0;
 
 char sms_message[160];
-int16_t sms_text_length = 0; //160 * 5 max length
+int16_t sms_text_ending_pos = 0; //160 * 5 max length
 int16_t sms_scroll_pos = 0;
 
-uint8_t menu_text_length = 0;
+int16_t menu_text_ending_pos = 0;
+
+
 uint8_t scroll_count = 0;
 int8_t scroll_pos_x = 0;
+int8_t scroll_pos_x_offset = 0; //used for scrolling from the wrong end 
+
 int8_t scroll_pos_y = 0;
 uint8_t scroll_mode = 0;
 long int scroll_timer = 0;
@@ -141,9 +146,9 @@ AudioConnection          patchCord1(adc1, fft256_1);
 OctoWS2811 leds(ledsPerStrip, displayMemory, drawingMemory, config);
 
 #define TESTING
-
+int color_on = 0;
 unsigned long fps_time = 0;
-int fpscount = 0;
+uint16_t fpscount = 0;
 GLOVE glove0;
 GLOVE glove1;
 SERIALSTATS serial1stats;
@@ -229,10 +234,10 @@ int indexled = 0;
 #define trails_location_y 1
 
 #define sms_location_x 1
-#define sms_location_y 20
+#define sms_location_y 19
 
 #define menu_location_x 1
-#define menu_location_y 11
+#define menu_location_y 10
 
 #define realtime_location_x 18
 #define realtime_location_y 1
@@ -240,8 +245,12 @@ int indexled = 0;
 #define hand_location_x 35
 #define hand_location_y 1
 
+#define static_menu_location_x 18
+#define static_menu_location_y 10
+
 void loop() {
 	fpscount++;
+
 	if (glove1.finger2 == 0 || glove1.finger3 == 0){
 		if (glove1.finger2 == 0){
 			glove0.color_sensor_LED = 0x01;
@@ -304,24 +313,43 @@ void loop() {
 
 
 	//HUD!
-
 	display.clearDisplay();
 
+	//global settings (might not need to keep setting, figure it out later
+	display.setTextSize(1);
+	display.setTextColor(WHITE);
+	display.setTextWrap(false);
 
-	//draw the boxes 
+	//most boxes are widt
+	//draw the boxes are 18x10, thats 16x8 + the boarder pixels
 
+	//draw the menu first for masking purposes
+	display.drawRect(menu_location_x - 1, menu_location_y - 1, 18, 10, WHITE);
+
+	display.setCursor(menu_location_x + scroll_pos_x + scroll_pos_x_offset, menu_location_y + scroll_pos_y);
+	display.print(menu_mode);
+	menu_text_ending_pos = display.getCursorX(); //save menu text length for elsewhere
+	//black out the rest!  probably dont need full width... 
+	display.fillRect(menu_location_x - 1, menu_location_y - 1 - 10, display.width() - (menu_location_x - 1), 10, BLACK);
+	display.fillRect(menu_location_x - 1, menu_location_y - 1 + 10, display.width() - (menu_location_x - 1), 10, BLACK);
+	display.fillRect(menu_location_x - 1 + 18, menu_location_y - 1, display.width() - (menu_location_x - 1 + 18), 10, BLACK);
+
+	//staticmode
+	display.drawRect(static_menu_location_x - 1, static_menu_location_y - 1, 35, 10, WHITE);
+	display.setCursor(static_menu_location_x, static_menu_location_y);
+	display.print(menu_mode);
+
+
+	//hand display dots - its important to always know where your hands are.
 	display.drawRect(hand_location_x - 1, hand_location_y - 1, 18, 10, WHITE);
 	display.drawPixel(hand_location_x + 8 + glove0.gloveX, hand_location_y + 7 - glove0.gloveY, WHITE);
 	display.drawPixel(hand_location_x + glove1.gloveX, hand_location_y + 7 - glove1.gloveY, WHITE);
 
-	display.drawRect(sms_location_x - 1, sms_location_y - 1, 18, 11, WHITE);
 
 
-	display.drawRect(realtime_location_x - 1, realtime_location_y - 1, 18, 10, WHITE);
-
-	display.drawRect(menu_location_x - 1, menu_location_y - 2, 18, 11, WHITE);
 
 
+	//background overlay with trails, also shows HUD changes
 	display.drawRect(trails_location_x - 1, trails_location_y - 1, 18, 10, WHITE);
 	for (int x = 0; x < 16; x++) {
 		for (int y = 0; y < 8; y++) {
@@ -331,25 +359,21 @@ void loop() {
 		}
 	}
 
-	//write out the menu text
-	display.setTextSize(1);
-	display.setTextColor(WHITE);
-	display.setTextWrap(false);
-	display.setCursor(menu_location_x, menu_location_y);
 
-	display.print(menu_mode);
-	menu_text_length = display.getCursorX(); //save menu text length for elsewhere
-
-
-	display.setCursor(sms_location_x + 16 + sms_scroll_pos, sms_location_y + 1);
+	//sms display
+	display.drawRect(sms_location_x - 1, sms_location_y - 1, 18, 10, WHITE);
+	display.setCursor(sms_location_x + 16 + sms_scroll_pos, sms_location_y);
 	display.print(sms_message);
-	sms_text_length = display.getCursorX(); //save menu text length for elsewhere
-
-	//pad out message for looping in the HUD
-	display.setCursor(sms_text_length + 19, sms_location_y + 1);
+	sms_text_ending_pos = display.getCursorX(); //save menu text length for elsewhere
+	//pad out message for contiual scrolling in the HUD, gives me more text at once
+	display.setCursor(sms_text_ending_pos + 19, sms_location_y + 1);
 	for (uint8_t i = 0; i < 7; i++){
 		display.print(sms_message[i]);
 	}
+
+
+	//this gets updated during writing out the main LED display, its the last thing to do
+	display.drawRect(realtime_location_x - 1, realtime_location_y - 1, 18, 10, WHITE);
 
 	for (uint8_t y = 0; y < 8; y++) {
 		for (uint8_t x = 0; x < 16; x++) {
@@ -360,14 +384,44 @@ void loop() {
 
 
 			if (scroll_mode > 0){
-				if (read_menu_pixel(x, y) == 1){ // flip Y for helmet external display by subtracting from 7
-					menu_name = (uint32_t)gammatable[255] << 16 | (uint32_t)gammatable[255] << 8 | (uint32_t)gammatable[255];
+				if (read_menu_pixel(x, y)){
+					menu_name = (uint32_t)gammatable[180] << 16 | (uint32_t)gammatable[180] << 8 | (uint32_t)gammatable[180];
 				}
 			}
 
 			if (gloveindicator[x][7 - y] > 0){ // flip Y for helmet external display by subtracting from 7
 				background_array = (uint32_t)gammatable[gloveindicator[x][7 - y]] << 16 | (uint32_t)gammatable[gloveindicator[x][7 - y]] << 8 | (uint32_t)gammatable[gloveindicator[x][7 - y]];
 			}
+
+
+
+			if (mask_mode == 1){
+				if (read_sms_pixel(x, y) != 0){
+					if (menu_mode > 0){
+						final_color = EQdisplay[x][y];
+					}
+				}
+			}
+			else{
+				if (menu_mode > 0){
+					final_color = EQdisplay[x][y];
+				}
+				final_color = background_array | menu_name | final_color;
+			}
+
+			//}
+			//else{
+			//	if (background_array || menu_name || read_sms_pixel(x,y-1) != 0){
+			//		final_color = EQdisplay[x][y] ;
+			//	}
+			//}
+
+
+
+			if ((final_color & 0xff == 0xff) | ((final_color >> 16) & 0xff == 0xff) | ((final_color >> 8) & 0xff == 0xff)){
+				display.drawPixel(realtime_location_x + x, realtime_location_y + 7 - y, WHITE);
+			}
+
 
 			uint8_t tempindex;  //HUD is only 128 LEDs so it will fit in a byte
 
@@ -378,24 +432,6 @@ void loop() {
 				tempindex = (y << 4) + x; //  << 4 is multiply by 16 pixels per row
 			}
 
-
-			mask_mode = 1;
-			if (mask_mode == 0){
-				final_color = background_array | EQdisplay[x][y] | menu_name;
-			}
-			else{
-				if (background_array || menu_name || read_sms_pixel(x,y-1) != 0){
-					final_color = EQdisplay[x][y] ;
-				}
-
-			}
-		
-
-
-			if ((final_color & 0xff == 0xff) | ((final_color >> 16) & 0xff == 0xff) | ((final_color >> 8) & 0xff == 0xff)){
-				display.drawPixel(realtime_location_x + x, realtime_location_y + 7 - y, WHITE);
-			}
-
 			leds.setPixel(tempindex, final_color);
 		}
 	}
@@ -404,13 +440,16 @@ void loop() {
 
 	if (ScrollSpeed.check()){
 		sms_scroll_pos--;
-		if (sms_text_length < 0){
+		if (sms_text_ending_pos < 0){
 			sms_scroll_pos = 0;
-
 		}
+
 		//center the text from whatever direction its coming from
 		switch (scroll_mode){
 		case 3:
+			//take up slack when scrolling in from the far side
+			if (menu_text_ending_pos < 0 && scroll_pos_x < 0) scroll_pos_x -= menu_text_ending_pos;
+
 			if (scroll_pos_x > 0) scroll_pos_x--;
 			if (scroll_pos_y > 0) scroll_pos_y--;
 			if (scroll_pos_x < 0) scroll_pos_x++;
@@ -419,6 +458,7 @@ void loop() {
 				scroll_mode = 2;
 				scroll_timer = millis();
 			}
+
 			break;
 		case 2:
 			if (millis() - scroll_timer > 1000){
@@ -427,14 +467,16 @@ void loop() {
 			break;
 		case 1:
 			//scroll off the left side  
-			scroll_pos_x++;
-			if (scroll_pos_x > menu_text_length){
+			scroll_pos_x--;
+
+			if (menu_text_ending_pos < 0 && scroll_pos_x < -16){
 				scroll_mode = 0;
 			}
 			break;
 		}
 	}
 
+	//show it all
 	display.display();
 	leds.show();
 
@@ -510,11 +552,7 @@ void loop() {
 
 	if (fft256_1.available()) {
 
-		uint8_t fftmode = 2;
 
-		if (menu_mode == 20){
-			fftmode = 0;
-		}
 
 		if (fftmode == 0){
 			//move eq data left 1
@@ -553,9 +591,9 @@ void loop() {
 
 				uint8_t brightness = map(n, 0, EQdisplayValueMax[i], 0, 255);
 				uint16_t color = 0;
-
-				color = constrain(map(brightness, 230, 250, 0, 255), 0, 255);
-
+				if (color_on){
+					color = constrain(map(brightness, 230, 250, 0, 255), 0, 255);
+				}
 				if (fftmode == 0){
 
 					EQdisplay[15][i] = wheel(color, 0, brightness);
@@ -591,7 +629,9 @@ void loop() {
 				int color = 0;
 				int offset = 127;
 
-				color = constrain(map(brightness, 230, 255, 0, 255), 0, 255);
+				if (color_on){
+					color = constrain(map(brightness, 230, 255, 0, 255), 0, 255);
+				}
 
 				for (int index = 0; index < 8; index++){
 					EQdisplay[i][index] = wheel(color, 0, brightness);
@@ -604,26 +644,49 @@ void loop() {
 	SerialUpdate();
 }
 
-uint8_t read_menu_pixel(uint8_t x, uint8_t y){
-	//bounds check first
-	if (x + scroll_pos_x < 0 || x + scroll_pos_x > 15 || scroll_pos_y + (7 - y) < 0 || scroll_pos_y + (7 - y) > 7){
-		return 2;
+boolean visible_menu(uint8_t x, uint8_t y){
+
+	if (scroll_mode == 3){
+		if (scroll_pos_y != 0){
+
+			if (scroll_pos_y < 0){
+				if (y >= -scroll_pos_y) return false;
+			}
+			if (scroll_pos_y > 0){
+				if (y <= 8 - scroll_pos_y)  return false;
+			}
+		}
+		if (scroll_pos_x != 0){
+
+			if (scroll_pos_x < 0){
+				if (x <= menu_text_ending_pos)  return false;
+			}
+			if (scroll_pos_x > 0){
+				if (x >= scroll_pos_x)  return false;
+
+			}
+		}
 	}
+	if (scroll_mode == 2){
+		return false;
+	}
+	if (scroll_mode == 1){
+		if (x <= max(menu_text_ending_pos, scroll_pos_x + 16))  return false;
+	}
+	return true;
+
+}
+
+boolean read_menu_pixel(uint8_t x, uint8_t y){
 
 	//add 7 sub y to flip on y axis
-	if (display.readPixel(menu_location_x + scroll_pos_x + x, menu_location_y + scroll_pos_y + (7 - y))){
-		return 1;
+	if (display.readPixel(menu_location_x + x, menu_location_y + (7 - y))){
+		return true;
 	}
-	else{
-		return 0;
-	}
+	return false;
 }
 
 boolean read_sms_pixel(uint8_t x, uint8_t y){
-	//bounds check first
-	if (sms_location_y < 7 || sms_location_y < 0 || sms_location_x < 0 || sms_location_x > 15){
-		return false;
-	}
 
 	//add 7 sub y to flip on y axis
 	if (display.readPixel(sms_location_x + x, sms_location_y + (7 - y))){
@@ -632,8 +695,9 @@ boolean read_sms_pixel(uint8_t x, uint8_t y){
 	return false;
 }
 
+
 #define MODECHANGEBRIGHTNESS 250  
-#define MODECHANGESTARTPOSX -18
+#define MODECHANGESTARTPOSX 18
 #define MODECHANGESTARTPOSY 8
 
 void readglove(void * temp){
@@ -647,7 +711,7 @@ void readglove(void * temp){
 
 			scroll_mode = 3;
 			scroll_pos_x = 0;
-			scroll_pos_y = MODECHANGESTARTPOSY;
+			scroll_pos_y = -MODECHANGESTARTPOSY;
 
 			//root menus
 			if (menu_mode == 3){
@@ -659,15 +723,32 @@ void readglove(void * temp){
 			else if (menu_mode == 1){
 				menu_mode = 3;
 			}
-
-
 			//10s menus
 			if (menu_mode >= 10 && menu_mode <= 19){
 				menu_mode--;
 
 				//rollaround
 				if (menu_mode == 9){
-					menu_mode = 13;
+					menu_mode = 12;
+				}
+			}
+
+			//20s menus
+			if (menu_mode >= 20 && menu_mode <= 29){
+				menu_mode--;
+
+				//rollaround
+				if (menu_mode == 19){
+					menu_mode = 24;
+				}
+			}
+			//30s menus
+			if (menu_mode >= 30 && menu_mode <= 39){
+				menu_mode--;
+
+				//rollaround
+				if (menu_mode == 29){
+					menu_mode = 31;
 				}
 			}
 
@@ -679,7 +760,7 @@ void readglove(void * temp){
 
 				scroll_mode = 3;
 				scroll_pos_x = 0;
-				scroll_pos_y = -MODECHANGESTARTPOSY;
+				scroll_pos_y = MODECHANGESTARTPOSY;
 
 
 
@@ -699,11 +780,29 @@ void readglove(void * temp){
 					menu_mode++;
 
 					//rollaround
-					if (menu_mode == 14){
+					if (menu_mode == 13){
 						menu_mode = 10;
 					}
 				}
 
+				//20s menus
+				if (menu_mode >= 20 && menu_mode <= 29){
+					menu_mode++;
+
+					//rollaround
+					if (menu_mode == 24){
+						menu_mode = 20;
+					}
+				}
+				//30s menus
+				if (menu_mode >= 30 && menu_mode <= 39){
+					menu_mode++;
+
+					//rollaround
+					if (menu_mode == 32){
+						menu_mode = 30;
+					}
+				}
 
 
 			}
@@ -718,11 +817,42 @@ void readglove(void * temp){
 
 
 
+					if (menu_mode == 30){
+						mask_mode = 0;
+					}
+					if (menu_mode == 31){
+						mask_mode = 1;
+					}
+
+					if (menu_mode == 20){
+						fftmode = 0;
+					}
+					if (menu_mode == 21){
+						fftmode = 1;
+					}
+					if (menu_mode == 22){
+						fftmode = 2;
+					}
+					if (menu_mode == 23){
+						fftmode = 3;
+					}
+
+					if (menu_mode == 10){
+						color_on = 0;
+					}
+					if (menu_mode == 11){
+						color_on = 1;
+					}
+
 
 					//jump into first layer menu
 					if (menu_mode < 10){
 						menu_mode = menu_mode * 10;
 					}
+
+
+
+
 
 
 				}
@@ -731,7 +861,7 @@ void readglove(void * temp){
 					Serial.println(" left!");
 
 					scroll_mode = 3;
-					scroll_pos_x = min(menu_text_length, 16);
+					scroll_pos_x = -128; //negative a lot, this gets fixed by the shift code
 					scroll_pos_y = 0;
 
 
@@ -953,6 +1083,7 @@ uint32_t wheel(uint16_t h, uint8_t s, uint8_t v){
 	if (mask_mode == 1){
 		v = max(v, 40);
 	}
+
 	uint32_t r, g, b;
 
 	switch (h / 256)
