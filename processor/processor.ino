@@ -11,7 +11,9 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
-#include "FastLED.h" //for HSV Libraries only, not for output!
+#include "FastLED.h" 
+#include "hsv2rgb.h"
+#include "RGBConverter.h"
 
 typedef struct {
 	uint8_t color_sensor_R;
@@ -89,12 +91,14 @@ typedef struct {
 
 } SERIALSTATS;
 
-byte gammatable[256];// double or triple this later.
+uint8_t gammatable[256];// double or triple this later.
 
 
 uint8_t fftmode = 2;
 
 int mask_mode = 0;
+
+RGBConverter conver;
 
 const int ledsPerStrip = 128;
 
@@ -116,7 +120,8 @@ byte helmet_LED_B = 0;
 #define OLED_RESET  19
 Adafruit_SSD1306 display(OLED_DC, OLED_RESET, OLED_CS);
 
-uint8_t menu_mode = 0;
+
+uint8_t menu_mode = 1;
 
 char sms_message[160];
 int16_t sms_text_ending_pos = 0; //160 * 5 max length
@@ -146,7 +151,7 @@ AudioConnection          patchCord1(adc1, fft256_1);
 OctoWS2811 leds(ledsPerStrip, displayMemory, drawingMemory, config);
 
 #define TESTING
-int color_on = 0;
+int color_on = 1;
 unsigned long fps_time = 0;
 uint16_t fpscount = 0;
 GLOVE glove0;
@@ -155,7 +160,7 @@ SERIALSTATS serial1stats;
 
 byte gloveindicator[16][8];
 
-uint32_t EQdisplay[16][8];
+CHSV EQdisplay[16][8];
 int EQdisplayValueMax[16]; //max vals for normalization over time
 
 Metro FPSdisplay = Metro(1000);
@@ -262,14 +267,25 @@ void loop() {
 		b = glove0.color_sensor_B; b /= sum;
 		r *= 256; g *= 256; b *= 256;
 
-		glove0.LED_R = (int)r;
-		glove0.LED_G = (int)g;
-		glove0.LED_B = (int)b;
+		double hsv[3];
 
+		conver.rgbToHsv(r, g, b, hsv);
+		
+		Serial.print((int)(hsv[0] * 255));
+		Serial.print(" ");
+		Serial.print((int)(hsv[1] * 255));
+		Serial.print(" ");
+		Serial.println((int)(hsv[2] * 255));
 
-		helmet_LED_R = glove0.LED_R;
-		helmet_LED_G = glove0.LED_G;
-		helmet_LED_B = glove0.LED_B;
+		CHSV temp = CHSV((int)(hsv[0] * 255), (int)(hsv[1] * 255), 255);
+		CRGB temp2;
+		hsv2rgb_raw(temp, temp2);
+
+		glove0.LED_R = gammatable[temp2.red];
+		glove0.LED_G = gammatable[temp2.green];
+		glove0.LED_B = gammatable[temp2.blue];
+		
+
 
 	}
 	else{
@@ -375,8 +391,11 @@ void loop() {
 	//this gets updated during writing out the main LED display, its the last thing to do
 	display.drawRect(realtime_location_x - 1, realtime_location_y - 1, 18, 10, WHITE);
 
+
+
 	for (uint8_t y = 0; y < 8; y++) {
 		for (uint8_t x = 0; x < 16; x++) {
+
 
 			uint32_t background_array = 0;
 			uint32_t menu_name = 0;
@@ -398,13 +417,13 @@ void loop() {
 			if (mask_mode == 1){
 				if (read_sms_pixel(x, y) != 0){
 					if (menu_mode > 0){
-						final_color = EQdisplay[x][y];
+						final_color = HSV_to_RGB_With_Gamma(EQdisplay[x][y]);
 					}
 				}
 			}
 			else{
 				if (menu_mode > 0){
-					final_color = EQdisplay[x][y];
+					final_color = HSV_to_RGB_With_Gamma(EQdisplay[x][y]);
 				}
 				final_color = background_array | menu_name | final_color;
 			}
@@ -476,9 +495,12 @@ void loop() {
 		}
 	}
 
+
 	//show it all
 	display.display();
-	leds.show();
+	if (leds.busy() == 0){
+		leds.show();
+	}
 
 	if (GloveSend.check()){
 
@@ -552,8 +574,6 @@ void loop() {
 
 	if (fft256_1.available()) {
 
-
-
 		if (fftmode == 0){
 			//move eq data left 1
 			for (uint8_t x = 1; x < 16; x++) {
@@ -589,17 +609,21 @@ void loop() {
 
 				EQdisplayValueMax[i] = max(max(EQdisplayValueMax[i] * .99, n), 10);
 
-				uint8_t brightness = map(n, 0, EQdisplayValueMax[i], 0, 255);
-				uint16_t color = 0;
-				if (color_on){
-					color = constrain(map(brightness, 230, 250, 0, 255), 0, 255);
+				uint8_t value = map(n, 0, EQdisplayValueMax[i], 0, 255);
+
+				uint8_t hue = 0;
+				uint8_t saturation = 255;
+
+				if (0){
+					hue = constrain(map(value, 240, 255, 0, 64), 0, 64);
 				}
 				if (fftmode == 0){
 
-					EQdisplay[15][i] = wheel(color, 0, brightness);
+					EQdisplay[15][i] = CHSV(hue, saturation, value);
+
 				}
 				if (fftmode == 1){
-					EQdisplay[0][i] = wheel(min(color, 255), 0, brightness);
+					EQdisplay[0][i] = CHSV(hue, saturation, value);
 				}
 			}
 			//Serial.println("");
@@ -625,20 +649,25 @@ void loop() {
 				EQdisplayValueMax[i] = max(max(EQdisplayValueMax[i] * .98, n), 4);
 
 				//int y = map(n, 0, EQdisplayValueMax[i], 0, 8);
-				int brightness = map(n, 0, EQdisplayValueMax[i], 0, 255);
-				int color = 0;
-				int offset = 127;
+				uint8_t value = constrain(map(n, 0, EQdisplayValueMax[i], 0, 255), 0, 255);
+
+				uint8_t hue = 0;
+				uint8_t saturation = 255;
 
 				if (color_on){
-					color = constrain(map(brightness, 230, 255, 0, 255), 0, 255);
+					hue = constrain(map(value, 250, 255, 0, 128), 0, 64);
 				}
 
-				for (int index = 0; index < 8; index++){
-					EQdisplay[i][index] = wheel(color, 0, brightness);
+				for (uint8_t index = 0; index < 8; index++){
+					EQdisplay[i][index] = CHSV(hue, saturation, value);
 				}
 			}
 			//Serial.println("");
 		}
+
+
+
+
 	}
 
 	SerialUpdate();
@@ -895,14 +924,14 @@ void readglove(void * temp){
 		if (current_glove->finger4_in_progress == false){
 			current_glove->finger4_in_progress = true;
 
-			if (menu_mode == 0){
-				menu_mode = 1;
+			//if (menu_mode == 0){
+			//	menu_mode = 1;
 
-			}
-			else{
-				menu_mode = 0;
-
-			}
+			//	}
+			//	else{
+			//	menu_mode = 0;
+			//
+			//	}
 
 		}
 	}
@@ -1075,40 +1104,12 @@ void onPacket1(const uint8_t* buffer, size_t size)
 	}
 }
 
-uint32_t wheel(uint16_t h, uint8_t s, uint8_t v){
 
-	//h goes from 0 to 256*3-1 = 767
-	//v goes from 0 to 255
 
-	if (mask_mode == 1){
-		v = max(v, 40);
-	}
-
-	uint32_t r, g, b;
-
-	switch (h / 256)
-	{
-	case 0:
-		r = (255 - h % 256);   //Red down
-		g = (h % 256);      // Green up
-		b = 0;                  //blue off
-		break;
-	case 1:
-		g = (255 - h % 256);  //green down
-		b = (h % 256);      //blue up
-		r = 0;                  //red off
-		break;
-	case 2:
-		b = (255 - h % 256);  //blue down 
-		r = (h % 256);      //red up
-		g = 0;                  //green off
-		break;
-	}
-
-	float brightness = (((float)v) / 255);
-	r = r * brightness;
-	g = g * brightness;
-	b = b * brightness;
-
-	return((gammatable[r] << 16) | (gammatable[g] << 8) | gammatable[b]);
+uint32_t HSV_to_RGB_With_Gamma(CHSV hsv_input){
+	CRGB temp_rgb;
+	hsv2rgb_rainbow(hsv_input, temp_rgb);
+	//return((gammatable[temp_rgb.red] << 16) | (gammatable[temp_rgb.green] << 8) | gammatable[temp_rgb.blue]);
+	return((temp_rgb.red << 16) | (temp_rgb.green << 8) | temp_rgb.blue);
 }
+
