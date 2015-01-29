@@ -173,6 +173,7 @@ void setup() {
 
 	strcpy(sms_message, "TESTING TEXT MESSAGE");
 
+
 	for (int i = 0; i < 256; i++) {
 		float x = i;
 		x /= 255;
@@ -267,24 +268,19 @@ void loop() {
 		b = glove0.color_sensor_B; b /= sum;
 		r *= 256; g *= 256; b *= 256;
 
-		double hsv[3];
+	
 
-		conver.rgbToHsv(r, g, b, hsv);
-		
-		Serial.print((int)(hsv[0] * 255));
-		Serial.print(" ");
-		Serial.print((int)(hsv[1] * 255));
-		Serial.print(" ");
-		Serial.println((int)(hsv[2] * 255));
-
-		CHSV temp = CHSV((int)(hsv[0] * 255), (int)(hsv[1] * 255), 255);
+		CHSV temp = rgb_to_hsv_rainbow(CRGB(r, g, b));
+		temp.v = min(temp.v,200);
+		//temp.s = max(temp.s,64);
 		CRGB temp2;
-		hsv2rgb_raw(temp, temp2);
+		hsv2rgb_rainbow(temp, temp2);
 
-		glove0.LED_R = gammatable[temp2.red];
-		glove0.LED_G = gammatable[temp2.green];
-		glove0.LED_B = gammatable[temp2.blue];
-		
+
+		glove0.LED_R = temp2.red;
+		glove0.LED_G = temp2.green;
+		glove0.LED_B = temp2.blue;
+
 
 
 	}
@@ -1109,7 +1105,72 @@ void onPacket1(const uint8_t* buffer, size_t size)
 uint32_t HSV_to_RGB_With_Gamma(CHSV hsv_input){
 	CRGB temp_rgb;
 	hsv2rgb_rainbow(hsv_input, temp_rgb);
-	//return((gammatable[temp_rgb.red] << 16) | (gammatable[temp_rgb.green] << 8) | gammatable[temp_rgb.blue]);
 	return((temp_rgb.red << 16) | (temp_rgb.green << 8) | temp_rgb.blue);
 }
 
+
+CHSV rgb_to_hsv_rainbow(CRGB input_color){
+
+	CHSV output_color;
+
+	uint8_t maximum = max(input_color.r, max(input_color.g, input_color.b));
+	uint8_t minimum = min(input_color.r, min(input_color.g, input_color.b));
+
+	output_color.v = maximum;
+	uint8_t delta = maximum - minimum;
+
+	output_color.s = (maximum == 0) ? 0 : (255 * delta / maximum);
+
+	if (maximum == minimum) {
+		output_color.h = 0;
+	}
+	else {
+		if (maximum == input_color.r){
+			Serial.println("red is max");
+			if (input_color.g >= input_color.b){
+				if ((input_color.r - input_color.g) <= (delta / 3)){
+					Serial.println("32-64");
+					output_color.h = map((input_color.r - input_color.g), delta / 3,0, 32, 64);
+				}
+				else{
+					Serial.println("0-32");
+					output_color.h = map((input_color.r - input_color.g), delta, delta / 3, 0, 32);
+				}
+			}
+			else{
+				Serial.println("208-255");
+				output_color.h = map((input_color.r - input_color.b), 0, delta,208, 255);
+			}
+		}
+		else if (maximum == input_color.g){
+			Serial.println("green is max");
+			if (input_color.r >= input_color.b){
+				Serial.println("64-96");
+				output_color.h = map((input_color.g - input_color.r), 0, delta, 64, 96);
+			}
+			else{
+				if (input_color.g - input_color.b <= delta / 3){
+					Serial.println("96-128");
+					output_color.h = map((input_color.g - input_color.b), delta, delta / 3, 96, 128);
+				}
+				else{
+					Serial.println("128-132?");
+					output_color.h = map((input_color.g - input_color.b), delta / 3, delta , 128, 160);
+				}
+			}
+		}
+		else if (maximum == input_color.b){
+			Serial.println("blue is max");
+			if (input_color.g > input_color.r){
+				Serial.println("132?-160");
+				output_color.h = map((input_color.b - input_color.g), -delta / 3, delta, 128, 160);
+			}
+			else{
+				Serial.println("160-208");
+				output_color.h = map((input_color.b - input_color.r), delta , 0, 160, 208);
+			}
+		}
+	}
+
+	return output_color;
+}
