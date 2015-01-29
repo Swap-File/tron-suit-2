@@ -268,10 +268,10 @@ void loop() {
 		b = glove0.color_sensor_B; b /= sum;
 		r *= 256; g *= 256; b *= 256;
 
-	
+
 
 		CHSV temp = rgb_to_hsv_rainbow(CRGB(r, g, b));
-		temp.v = min(temp.v,200);
+		temp.v = min(temp.v, 200);
 		//temp.s = max(temp.s,64);
 		CRGB temp2;
 		hsv2rgb_rainbow(temp, temp2);
@@ -1126,48 +1126,48 @@ CHSV rgb_to_hsv_rainbow(CRGB input_color){
 	}
 	else {
 		if (maximum == input_color.r){
-			Serial.println("red is max");
+			//Serial.println("red is max");
 			if (input_color.g >= input_color.b){
 				if ((input_color.r - input_color.g) <= (delta / 3)){
-					Serial.println("32-64");
-					output_color.h = map((input_color.r - input_color.g), delta / 3,0, 32, 64);
+					//Serial.println("32-64");
+					output_color.h = map((input_color.r - input_color.g), delta / 3, 0, 32, 64);
 				}
 				else{
-					Serial.println("0-32");
+					//Serial.println("0-32");
 					output_color.h = map((input_color.r - input_color.g), delta, delta / 3, 0, 32);
 				}
 			}
 			else{
-				Serial.println("208-255");
-				output_color.h = map((input_color.r - input_color.b), 0, delta,208, 255);
+				//Serial.println("208-255");
+				output_color.h = map((input_color.r - input_color.b), 0, delta, 208, 255);
 			}
 		}
 		else if (maximum == input_color.g){
-			Serial.println("green is max");
+			//Serial.println("green is max");
 			if (input_color.r >= input_color.b){
-				Serial.println("64-96");
+				//Serial.println("64-96");
 				output_color.h = map((input_color.g - input_color.r), 0, delta, 64, 96);
 			}
 			else{
 				if (input_color.g - input_color.b <= delta / 3){
-					Serial.println("96-128");
+					//Serial.println("96-128");
 					output_color.h = map((input_color.g - input_color.b), delta, delta / 3, 96, 128);
 				}
 				else{
-					Serial.println("128-132?");
-					output_color.h = map((input_color.g - input_color.b), delta / 3, delta , 128, 160);
+					//Serial.println("128-132?");
+					output_color.h = map((input_color.g - input_color.b), delta / 3, delta, 128, 160);
 				}
 			}
 		}
 		else if (maximum == input_color.b){
-			Serial.println("blue is max");
+			//Serial.println("blue is max");
 			if (input_color.g > input_color.r){
-				Serial.println("132?-160");
+				//Serial.println("132?-160");
 				output_color.h = map((input_color.b - input_color.g), -delta / 3, delta, 128, 160);
 			}
 			else{
-				Serial.println("160-208");
-				output_color.h = map((input_color.b - input_color.r), delta , 0, 160, 208);
+				//Serial.println("160-208");
+				output_color.h = map((input_color.b - input_color.r), delta, 0, 160, 208);
 			}
 		}
 	}
