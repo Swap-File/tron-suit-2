@@ -13,7 +13,7 @@
 
 #include "FastLED.h" 
 #include "hsv2rgb.h"
-#include "RGBConverter.h"
+
 
 typedef struct {
 	uint8_t color_sensor_R;
@@ -98,14 +98,9 @@ uint8_t fftmode = 2;
 
 int mask_mode = 0;
 
-RGBConverter conver;
 
-const int ledsPerStrip = 128;
 
-DMAMEM int displayMemory[ledsPerStrip * 6];
-int drawingMemory[ledsPerStrip * 6];
 
-const int config = WS2811_GRB | WS2811_800kHz;
 
 byte helmet_LED_R = 0xff;
 byte helmet_LED_G = 0;
@@ -148,6 +143,10 @@ AudioInputAnalog         adc1(A9);
 AudioAnalyzeFFT256       fft256_1;
 AudioConnection          patchCord1(adc1, fft256_1);
 
+const int config = WS2811_GRB | WS2811_800kHz;
+const int ledsPerStrip = 128;
+DMAMEM int displayMemory[ledsPerStrip * 6];
+int drawingMemory[ledsPerStrip * 6];
 OctoWS2811 leds(ledsPerStrip, displayMemory, drawingMemory, config);
 
 #define TESTING
@@ -270,9 +269,9 @@ void loop() {
 
 
 
-		CHSV temp = rgb_to_hsv_rainbow(CRGB(r, g, b));
-		temp.v = min(temp.v, 200);
-		//temp.s = max(temp.s,64);
+		CHSV temp = rgb2hsv_approximate(CRGB(r, g, b));
+		//temp.v = min(temp.v, 200);
+		temp.s = max(temp.s,64);
 		CRGB temp2;
 		hsv2rgb_rainbow(temp, temp2);
 
@@ -1106,71 +1105,4 @@ uint32_t HSV_to_RGB_With_Gamma(CHSV hsv_input){
 	CRGB temp_rgb;
 	hsv2rgb_rainbow(hsv_input, temp_rgb);
 	return((temp_rgb.red << 16) | (temp_rgb.green << 8) | temp_rgb.blue);
-}
-
-
-CHSV rgb_to_hsv_rainbow(CRGB input_color){
-
-	CHSV output_color;
-
-	uint8_t maximum = max(input_color.r, max(input_color.g, input_color.b));
-	uint8_t minimum = min(input_color.r, min(input_color.g, input_color.b));
-
-	output_color.v = maximum;
-	uint8_t delta = maximum - minimum;
-
-	output_color.s = (maximum == 0) ? 0 : (255 * delta / maximum);
-
-	if (maximum == minimum) {
-		output_color.h = 0;
-	}
-	else {
-		if (maximum == input_color.r){
-			//Serial.println("red is max");
-			if (input_color.g >= input_color.b){
-				if ((input_color.r - input_color.g) <= (delta / 3)){
-					//Serial.println("32-64");
-					output_color.h = map((input_color.r - input_color.g), delta / 3, 0, 32, 64);
-				}
-				else{
-					//Serial.println("0-32");
-					output_color.h = map((input_color.r - input_color.g), delta, delta / 3, 0, 32);
-				}
-			}
-			else{
-				//Serial.println("208-255");
-				output_color.h = map((input_color.r - input_color.b), 0, delta, 208, 255);
-			}
-		}
-		else if (maximum == input_color.g){
-			//Serial.println("green is max");
-			if (input_color.r >= input_color.b){
-				//Serial.println("64-96");
-				output_color.h = map((input_color.g - input_color.r), 0, delta, 64, 96);
-			}
-			else{
-				if (input_color.g - input_color.b <= delta / 3){
-					//Serial.println("96-128");
-					output_color.h = map((input_color.g - input_color.b), delta, delta / 3, 96, 128);
-				}
-				else{
-					//Serial.println("128-132?");
-					output_color.h = map((input_color.g - input_color.b), delta / 3, delta, 128, 160);
-				}
-			}
-		}
-		else if (maximum == input_color.b){
-			//Serial.println("blue is max");
-			if (input_color.g > input_color.r){
-				//Serial.println("132?-160");
-				output_color.h = map((input_color.b - input_color.g), -delta / 3, delta, 128, 160);
-			}
-			else{
-				//Serial.println("160-208");
-				output_color.h = map((input_color.b - input_color.r), delta, 0, 160, 208);
-			}
-		}
-	}
-
-	return output_color;
 }
