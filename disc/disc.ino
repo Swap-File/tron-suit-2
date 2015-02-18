@@ -29,8 +29,7 @@ DMAMEM int displayMemory[ledsPerStrip * 6];
 int drawingMemory[ledsPerStrip * 6];
 OctoWS2811 leds(ledsPerStrip, displayMemory, drawingMemory, config);
 
-uint8_t disc_inner_mode = 0;
-uint8_t disc_outer_mode = 0;
+uint8_t disc_mode = 0;
 
 uint32_t inner_opening_time = 0;
 uint32_t outer_opening_time = 0;
@@ -40,10 +39,17 @@ uint8_t opening_inner_index = 0;
 uint8_t opening_outer_index = 0;
 
 
-CHSV color1_inner = CHSV(128, 255, 255);
-CHSV color2_inner = CHSV(128, 255, 255);
-CHSV color1_outer = CHSV(128, 255, 255);
-CHSV color2_outer = CHSV(128, 255, 255);
+uint8_t saved_outer_index_acceleration = 0;
+uint8_t saved_inner_index_acceleration = 0;
+
+CHSV color1 = CHSV(128, 255, 255);
+CHSV color2 = CHSV(128, 255, 255);
+
+CHSV *color1_inner = &color1;
+CHSV *color2_inner = &color2;
+CHSV *color1_outer = &color1;
+CHSV *color2_outer = &color2;
+
 
 uint8_t inner_offset = 0;
 uint8_t inner_magnitude = 16;
@@ -70,7 +76,8 @@ uint8_t packets_in_per_second = 0; //saves the value
 uint8_t packets_out_counter = 0;  //counts up
 uint8_t packets_out_per_second = 0; //saves the value
 
-
+double xy_accel_magnitude_smoothed = 0;
+double saved_xy_accel_magnitude_smoothed = 0;
 
 #define LED_PIN 13 
 uint8_t blinkState = 0x00;
@@ -215,7 +222,7 @@ void loop() {
 			packets_out_per_second = packets_out_counter;
 			packets_out_counter = 0;
 
-			//	Serial.println(cpu_usage);
+			Serial.println(disc_mode);
 
 
 		}
@@ -306,43 +313,61 @@ void loop() {
 		int inner_index = ((int)floor((temp + 0.5) + 30)) % 30;
 		int outer_index = ((29 - inner_index) + 32) % 30;
 
-
+		//instant accel mag
 		double xy_accel_magnitude = sqrt((long)aaReal.x*aaReal.x + aaReal.y*aaReal.y);
+
+		//delayed a bit...
+		xy_accel_magnitude_smoothed = xy_accel_magnitude_smoothed * .8 + xy_accel_magnitude * .2;
 
 		double temp2 = (atan2(aaReal.x, aaReal.y) * 4.77) + 15;
 		int inner_index_acceleration = ((int)floor((temp2 + 0.5) + 30)) % 30;
 		int outer_index_acceleration = ((29 - inner_index_acceleration) + 32) % 30;
 
-		Serial.println(aaReal.z);
-
+	
 
 		boolean cooldowncomplete = false;
-		if (millis() - cooldown > 100){
+		if (millis() - cooldown > 250){
 			cooldowncomplete = true;
 		}
 
 
-		if (disc_outer_mode == 0 && opening_outer == false){
-
+		if (disc_mode == 0 && opening_outer == false){
+			inner_magnitude = 0;
 			outer_magnitude = 0;
 
 			if (xy_accel_magnitude > 4000){
 				outer_opening_time = millis();
 				opening_outer = true;
 				opening_outer_index = outer_index_acceleration;
+				cooldown = millis();
 			}
 		}
 
 
-		if (disc_inner_mode == 0 && opening_inner == false){
+		if (disc_mode == 1 && opening_inner == false && cooldowncomplete){
 
 			inner_magnitude = 0;
 
-			if (disc_outer_mode != 0 && xy_accel_magnitude > 4000){
+			if (xy_accel_magnitude > 4000){
 				inner_opening_time = millis();
 				opening_inner = true;
 				opening_inner_index = inner_index_acceleration;
 
+			}
+		}
+
+		if (opening_outer == true){
+
+			disc_mode = 1;
+			outer_index = opening_outer_index;
+
+			int location = map(millis() - outer_opening_time, 0, 500, 0, 16);
+
+			if (location < 16){
+				outer_magnitude = location;
+			}
+			else {
+				opening_outer = false;
 			}
 		}
 
@@ -354,54 +379,67 @@ void loop() {
 
 			if (location < 16){
 				inner_magnitude = location;
-			} else {
-				disc_inner_mode = 1;
-
-			}
-		}
-
-		if (opening_outer== true){
-			outer_index = opening_outer_index;
-
-			int location = map(millis() - outer_opening_time, 0, 500, 0, 16);
-
-			if (location < 16){
-				outer_magnitude = location;
 			}
 			else {
-				disc_outer_mode = 1;
-
+				disc_mode = 2;
+				opening_inner = false;
 			}
 		}
 
 
 
-		if (disc_outer_mode != 0 && disc_inner_mode != 0){
+		if (disc_mode >= 2){
+
 			if (abs(aaReal.z) > 8000 && cooldowncomplete){
-				disc_outer_mode = 1;
+				disc_mode = 2;
 			}
 
 
-			if (xy_accel_magnitude > 4000 && cooldowncomplete){
-				disc_outer_mode = 2;
+			if (xy_accel_magnitude >5000 && cooldowncomplete){
+				disc_mode = 3;
 			}
+
 		}
 
 
 
-		if (disc_outer_mode == 1 && disc_inner_mode == 1){
+		if (disc_mode == 2){
 			inner_magnitude = 16;
 			outer_magnitude = 16;
 		}
 
 
-		if (disc_outer_mode == 2){
-			inner_magnitude = 1;
-			outer_magnitude = 1;
-			if (xy_accel_magnitude > 4000){
-				inner_index = inner_index_acceleration;
-				outer_index = outer_index_acceleration;
+		if (disc_mode == 3){
+	
+			if (xy_accel_magnitude > 3000){
+				uint8_t magnitude_temp = constrain(map(xy_accel_magnitude, 3000, 10000, 1, 10), 1, 10);
+
+				inner_magnitude = magnitude_temp;
+				outer_magnitude = magnitude_temp;
+
+				if ((saved_inner_index_acceleration + 1) % 30 == inner_index_acceleration){
+					color1_outer->hue = color1_outer->hue + 1;
+
+				}
+				if (saved_inner_index_acceleration  == (inner_index_acceleration + 1 ) % 30 ){
+					color1_outer->hue = color1_outer->hue - 1;
+
+				}
+				saved_inner_index_acceleration = inner_index_acceleration;
+				saved_outer_index_acceleration = outer_index_acceleration;
+				saved_xy_accel_magnitude_smoothed = xy_accel_magnitude_smoothed ;
 			}
+			else{
+				uint8_t magnitude_temp = constrain(map(saved_xy_accel_magnitude_smoothed, 3000, 10000, 1, 10), 1, 10);
+
+				inner_magnitude = magnitude_temp;
+				outer_magnitude = magnitude_temp;
+			}
+
+
+			inner_index = saved_inner_index_acceleration;
+			outer_index = saved_outer_index_acceleration;
+
 		}
 
 
@@ -409,10 +447,6 @@ void loop() {
 		disc_voltage = disc_voltage * .97 + analogRead(23) * .03;
 
 		//Serial.println(disc_voltage);
-
-
-
-
 
 		CHSV tempcolor = CHSV(0, 5, 0);
 
@@ -454,9 +488,9 @@ void loop() {
 				//first pixel must be color 1!
 				CHSV temp;
 
-				temp.h = map(imag, 0, 16, color1_outer.h, color2_outer.h);
-				temp.s = map(imag, 0, 16, color1_outer.s, color2_outer.s);
-				temp.v = map(imag, 0, 16, color1_outer.v, color2_outer.v);
+				temp.h = map(imag, 0, 16, color1_outer->h, color2_outer->h);
+				temp.s = map(imag, 0, 16, color1_outer->s, color2_outer->s);
+				temp.v = map(imag, 0, 16, color1_outer->v, color2_outer->v);
 
 				uint32_t tempagain = HSV_to_RGB(temp);
 
@@ -484,9 +518,9 @@ void loop() {
 				//first pixel must be color 1!
 				CHSV temp;
 
-				temp.h = map(imag, 0, 16, color1_inner.h, color2_inner.h);
-				temp.s = map(imag, 0, 16, color1_inner.s, color2_inner.s);
-				temp.v = map(imag, 0, 16, color1_inner.v, color2_inner.v);
+				temp.h = map(imag, 0, 16, color1_inner->h, color2_inner->h);
+				temp.s = map(imag, 0, 16, color1_inner->s, color2_inner->s);
+				temp.v = map(imag, 0, 16, color1_inner->v, color2_inner->v);
 
 				uint32_t tempagain = HSV_to_RGB(temp);
 
