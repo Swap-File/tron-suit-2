@@ -29,7 +29,7 @@ DMAMEM int displayMemory[ledsPerStrip * 6];
 int drawingMemory[ledsPerStrip * 6];
 OctoWS2811 leds(ledsPerStrip, displayMemory, drawingMemory, config);
 
-uint8_t disc_mode = 0;
+uint8_t disc_mode = 2;
 
 uint32_t inner_opening_time = 0;
 uint32_t outer_opening_time = 0;
@@ -39,17 +39,22 @@ uint8_t opening_inner_index = 0;
 uint8_t opening_outer_index = 0;
 
 
+uint8_t flow_offset = 0;
 uint8_t saved_outer_index_acceleration = 0;
 uint8_t saved_inner_index_acceleration = 0;
 
-CHSV color1 = CHSV(128, 255, 255);
-CHSV color2 = CHSV(128, 255, 255);
+CHSV color1 = CHSV(96, 255, 255);
+CHSV color2 = CHSV(0, 255, 255);
 
 CHSV *color1_inner = &color1;
 CHSV *color2_inner = &color2;
 CHSV *color1_outer = &color1;
 CHSV *color2_outer = &color2;
 
+uint8_t inner_streaming_index = 0;
+CHSV inner_streaming[17];
+uint8_t outer_streaming_index = 0;
+CHSV outer_streaming[17];
 
 uint8_t inner_offset = 0;
 uint8_t inner_magnitude = 16;
@@ -63,6 +68,9 @@ uint8_t incoming_index = 0;
 uint8_t incoming_decoded_buffer[INCOMING_BUFFER_SIZE];
 
 Metro FPSdisplay = Metro(1000);
+Metro flow_speed = Metro(100);
+
+boolean flow_direction = true;
 
 uint32_t idle_microseconds = 0;
 uint32_t cooldown = 0;
@@ -192,9 +200,10 @@ void setup() {
 	//battery meter pin, 0-1023  
 	pinMode(23, INPUT);
 
+	outer_streaming[0] = CHSV(0, 255, 255);
 
 	leds.begin();
-	leds.setPixel(120 + 6, 0x0000ff);
+
 
 }
 
@@ -215,6 +224,9 @@ void loop() {
 
 		if (FPSdisplay.check()){
 
+		
+			
+
 			cpu_usage = 100 - (idle_microseconds / 10000);
 			idle_microseconds = 0;
 			packets_in_per_second = packets_in_counter;
@@ -226,6 +238,48 @@ void loop() {
 
 
 		}
+
+		if (flow_speed.check()){
+
+
+
+
+
+			if (flow_offset == 0){
+				flow_direction = true;
+			}
+			else if (flow_offset == 16)
+			{
+				flow_direction = false;
+			}
+
+			if (flow_direction){
+				flow_offset = flow_offset + 1;
+			}
+			else{
+				flow_offset = flow_offset - 1;
+			}
+
+
+
+			CHSV temp;
+		
+			
+				temp.h = map(flow_offset, 0, 16, color1_outer->h, color2_outer->h);
+				temp.s = map(flow_offset, 0, 16, color1_outer->s, color2_outer->s);
+				temp.v = map(flow_offset, 0, 16, color1_outer->v, color2_outer->v);
+
+			outer_streaming[outer_streaming_index] = temp;
+			outer_streaming_index++;
+			if (outer_streaming_index > 16){
+				outer_streaming_index = 0;
+			}
+			
+			//	uint32_t tempagain = HSV_to_RGB(temp);
+
+		
+		}
+
 		// other program behavior stuff here
 		// .
 		// .
@@ -322,6 +376,8 @@ void loop() {
 		double temp2 = (atan2(aaReal.x, aaReal.y) * 4.77) + 15;
 		int inner_index_acceleration = ((int)floor((temp2 + 0.5) + 30)) % 30;
 		int outer_index_acceleration = ((29 - inner_index_acceleration) + 32) % 30;
+
+	
 
 	
 
@@ -476,29 +532,45 @@ void loop() {
 		}
 
 
-		leds.setPixel(120 + outer_index, 0x00FFFF);
-		leds.setPixel(inner_index, 0x00FFFF);
+		//leds.setPixel(120 + outer_index, 0x00FFFF);
+	//	leds.setPixel(inner_index, 0x00FFFF);
 
 		for (int imag = 0; imag <= 16; imag++) {
 			//set outer LEDs
 			if (imag <= outer_magnitude && imag > 0){
 				//set pixels
 
+			
+				//static render + move color 1 from top to bottom back and forth
 				//calulate crossfade for multicolor action
 				//first pixel must be color 1!
 				CHSV temp;
-
-				temp.h = map(imag, 0, 16, color1_outer->h, color2_outer->h);
-				temp.s = map(imag, 0, 16, color1_outer->s, color2_outer->s);
-				temp.v = map(imag, 0, 16, color1_outer->v, color2_outer->v);
-
+				int temp_mag = (imag + flow_offset) % 17;
+				if (imag + flow_offset > 16){
+					temp.h = map(temp_mag, 0, 16, color2_outer->h, color1_outer->h);
+					temp.s = map(temp_mag, 0, 16, color2_outer->s, color1_outer->s);
+					temp.v = map(temp_mag, 0, 16, color2_outer->v, color1_outer->v);
+				}
+				else{
+					temp.h = map(temp_mag, 0, 16, color1_outer->h, color2_outer->h);
+					temp.s = map(temp_mag, 0, 16, color1_outer->s, color2_outer->s);
+					temp.v = map(temp_mag, 0, 16, color1_outer->v, color2_outer->v);
+				}
 				uint32_t tempagain = HSV_to_RGB(temp);
+
+
+				
+				//streaming input render
+				uint32_t tempagain2 = HSV_to_RGB(outer_streaming[(imag + outer_streaming_index) % 17]); 
 
 				int i;
 				i = (outer_index + imag - 1 + 60) % 30;
-				leds.setPixel(120 + i, tempagain);
+				
+				leds.setPixel(120 + i, tempagain2);
+				//leds.setPixel(120 + i, tempagain);
 				i = (outer_index - imag + 1 + 60) % 30;
-				leds.setPixel(120 + i, tempagain);
+				//leds.setPixel(120 + i, tempagain);
+				leds.setPixel(120 + i, tempagain2);
 			}
 			else{
 				//clear unused pixels
@@ -518,6 +590,7 @@ void loop() {
 				//first pixel must be color 1!
 				CHSV temp;
 
+				//int temp_mag = (imag + flow_offset ) % 16;
 				temp.h = map(imag, 0, 16, color1_inner->h, color2_inner->h);
 				temp.s = map(imag, 0, 16, color1_inner->s, color2_inner->s);
 				temp.v = map(imag, 0, 16, color1_inner->v, color2_inner->v);
@@ -526,8 +599,10 @@ void loop() {
 
 				int i;
 				i = (inner_index + imag - 1 + 60) % 30;
+
 				leds.setPixel(i, tempagain);
 				i = (inner_index - imag + 1 + 60) % 30;
+
 				leds.setPixel(i, tempagain);
 			}
 			else{
@@ -604,8 +679,6 @@ void onPacket(const uint8_t* buffer, size_t size)
 			if (packets_in_counter < 255){
 				packets_in_counter++;
 			}
-
-
 
 
 
