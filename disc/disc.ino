@@ -1,3 +1,4 @@
+#define USE_OCTOWS2811
 
 #include <OneWire.h> //crc8 
 #include <cobs.h> //cobs encoder and decoder 
@@ -7,7 +8,7 @@
 #include <Metro.h> //timers
 
 #include "FastLED.h" 
-#include "hsv2rgb.h"
+//#include "hsv2rgb.h"
 
 #include "I2Cdev.h"
 #include "MPU6050_6Axis_MotionApps20.h"
@@ -23,11 +24,16 @@
 
 MPU6050 mpu;
 
-const int config = WS2811_GRB | WS2811_800kHz;
-const int ledsPerStrip = 30;
-DMAMEM int displayMemory[ledsPerStrip * 6];
-int drawingMemory[ledsPerStrip * 6];
-OctoWS2811 leds(ledsPerStrip, displayMemory, drawingMemory, config);
+//const int config = WS2811_GRB | WS2811_800kHz;
+//const int ledsPerStrip = 30;
+//DMAMEM int displayMemory[ledsPerStrip * 6];
+//int drawingMemory[ledsPerStrip * 6];
+//OctoWS2811 leds(ledsPerStrip, displayMemory, drawingMemory, config);
+#define NUM_LEDS_PER_STRIP 30
+#define NUM_STRIPS 8
+CRGB actual_output[NUM_STRIPS * NUM_LEDS_PER_STRIP];
+
+
 
 uint8_t disc_mode = 2;
 
@@ -43,7 +49,7 @@ uint8_t flow_offset = 0;
 uint8_t saved_outer_index_acceleration = 0;
 uint8_t saved_inner_index_acceleration = 0;
 
-CHSV color1 = CHSV(96, 255, 255);
+CHSV color1 = CHSV(64, 255, 255);
 CHSV color2 = CHSV(0, 255, 255);
 
 CHSV *color1_inner = &color1;
@@ -180,7 +186,7 @@ void setup() {
 		// set our DMP Ready flag so the main loop() function knows it's okay to use it
 		Serial.println(F("DMP ready! Waiting for first interrupt..."));
 		dmpReady = true;
-
+		mpu.resetFIFO();
 		// get expected DMP packet size for later comparison
 		packetSize = mpu.dmpGetFIFOPacketSize();
 	}
@@ -202,8 +208,8 @@ void setup() {
 
 	outer_streaming[0] = CHSV(0, 255, 255);
 
-	leds.begin();
-
+	//leds.begin();
+	LEDS.addLeds<OCTOWS2811>(actual_output, NUM_LEDS_PER_STRIP);
 
 }
 
@@ -224,26 +230,20 @@ void loop() {
 
 		if (FPSdisplay.check()){
 
-		
-			
-
 			cpu_usage = 100 - (idle_microseconds / 10000);
 			idle_microseconds = 0;
 			packets_in_per_second = packets_in_counter;
 			packets_in_counter = 0;
 			packets_out_per_second = packets_out_counter;
 			packets_out_counter = 0;
-
+			Serial.print(cpu_usage);
+			Serial.print(" ");
 			Serial.println(disc_mode);
 
 
 		}
 
 		if (flow_speed.check()){
-
-
-
-
 
 			if (flow_offset == 0){
 				flow_direction = true;
@@ -263,21 +263,21 @@ void loop() {
 
 
 			CHSV temp;
-		
-			
-				temp.h = map(flow_offset, 0, 16, color1_outer->h, color2_outer->h);
-				temp.s = map(flow_offset, 0, 16, color1_outer->s, color2_outer->s);
-				temp.v = map(flow_offset, 0, 16, color1_outer->v, color2_outer->v);
+
+
+			temp.h = map(flow_offset, 0, 16, color1_outer->h, color2_outer->h);
+			temp.s = map(flow_offset, 0, 16, color1_outer->s, color2_outer->s);
+			temp.v = map(flow_offset, 0, 16, color1_outer->v, color2_outer->v);
 
 			outer_streaming[outer_streaming_index] = temp;
 			outer_streaming_index++;
 			if (outer_streaming_index > 16){
 				outer_streaming_index = 0;
 			}
-			
+
 			//	uint32_t tempagain = HSV_to_RGB(temp);
 
-		
+
 		}
 
 		// other program behavior stuff here
@@ -296,12 +296,13 @@ void loop() {
 		if (idle_start_timer == 0){
 			idle_start_timer = micros();
 		}
-
+	
 
 	}
 
 	idle_microseconds = idle_microseconds + (micros() - idle_start_timer);
 
+	long int starttime = micros();
 	// reset interrupt flag and get INT_STATUS byte
 	mpuInterrupt = false;
 	mpuIntStatus = mpu.getIntStatus();
@@ -328,7 +329,7 @@ void loop() {
 		// (this lets us immediately read more without waiting for an interrupt)
 		fifoCount -= packetSize;
 
-
+	
 		mpu.dmpGetQuaternion(&q, fifoBuffer);
 		mpu.dmpGetGravity(&gravity, &q);
 		mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
@@ -354,6 +355,8 @@ void loop() {
 		Serial.print(gravity.z);
 #endif
 
+
+	
 		//4.77 = (30/2) / PI + 0.5 physical offset
 		double temp = (atan2(gravity.x, gravity.y) * 4.77) + 15;
 
@@ -377,9 +380,8 @@ void loop() {
 		int inner_index_acceleration = ((int)floor((temp2 + 0.5) + 30)) % 30;
 		int outer_index_acceleration = ((29 - inner_index_acceleration) + 32) % 30;
 
-	
+		//Serial.println(micros() - starttime);
 
-	
 
 		boolean cooldowncomplete = false;
 		if (millis() - cooldown > 250){
@@ -451,7 +453,7 @@ void loop() {
 			}
 
 
-			if (xy_accel_magnitude >5000 && cooldowncomplete){
+			if (xy_accel_magnitude > 5000 && cooldowncomplete){
 				disc_mode = 3;
 			}
 
@@ -466,7 +468,7 @@ void loop() {
 
 
 		if (disc_mode == 3){
-	
+
 			if (xy_accel_magnitude > 3000){
 				uint8_t magnitude_temp = constrain(map(xy_accel_magnitude, 3000, 10000, 1, 10), 1, 10);
 
@@ -477,13 +479,13 @@ void loop() {
 					color1_outer->hue = color1_outer->hue + 1;
 
 				}
-				if (saved_inner_index_acceleration  == (inner_index_acceleration + 1 ) % 30 ){
+				if (saved_inner_index_acceleration == (inner_index_acceleration + 1) % 30){
 					color1_outer->hue = color1_outer->hue - 1;
 
 				}
 				saved_inner_index_acceleration = inner_index_acceleration;
 				saved_outer_index_acceleration = outer_index_acceleration;
-				saved_xy_accel_magnitude_smoothed = xy_accel_magnitude_smoothed ;
+				saved_xy_accel_magnitude_smoothed = xy_accel_magnitude_smoothed;
 			}
 			else{
 				uint8_t magnitude_temp = constrain(map(saved_xy_accel_magnitude_smoothed, 3000, 10000, 1, 10), 1, 10);
@@ -527,20 +529,15 @@ void loop() {
 
 
 
-		for (int i = 0; i < 30 * 8; i++){
-			leds.setPixel(i, 0);
-		}
-
-
 		//leds.setPixel(120 + outer_index, 0x00FFFF);
-	//	leds.setPixel(inner_index, 0x00FFFF);
+		//	leds.setPixel(inner_index, 0x00FFFF);
 
 		for (int imag = 0; imag <= 16; imag++) {
 			//set outer LEDs
 			if (imag <= outer_magnitude && imag > 0){
 				//set pixels
 
-			
+
 				//static render + move color 1 from top to bottom back and forth
 				//calulate crossfade for multicolor action
 				//first pixel must be color 1!
@@ -556,29 +553,33 @@ void loop() {
 					temp.s = map(temp_mag, 0, 16, color1_outer->s, color2_outer->s);
 					temp.v = map(temp_mag, 0, 16, color1_outer->v, color2_outer->v);
 				}
-				uint32_t tempagain = HSV_to_RGB(temp);
+				//uint32_t tempagain = HSV_to_RGB(temp);
 
 
-				
+
 				//streaming input render
-				uint32_t tempagain2 = HSV_to_RGB(outer_streaming[(imag + outer_streaming_index) % 17]); 
+				//uint32_t tempagain2 = HSV_to_RGB(outer_streaming[(imag + outer_streaming_index) % 17]);
 
 				int i;
 				i = (outer_index + imag - 1 + 60) % 30;
-				
-				leds.setPixel(120 + i, tempagain2);
+
+				//leds.setPixel(120 + i, tempagain2);
+				actual_output[120 + i] = outer_streaming[(imag + outer_streaming_index) % 17];
 				//leds.setPixel(120 + i, tempagain);
 				i = (outer_index - imag + 1 + 60) % 30;
 				//leds.setPixel(120 + i, tempagain);
-				leds.setPixel(120 + i, tempagain2);
+				actual_output[120 + i] = outer_streaming[(imag + outer_streaming_index) % 17];
+			//	leds.setPixel(120 + i, tempagain2);
 			}
 			else{
 				//clear unused pixels
 				int i;
 				i = (outer_index + imag - 1 + 60) % 30;
-				leds.setPixel(120 + i, 0);
+				//leds.setPixel(120 + i, 0);
+				actual_output[120 + i] = CRGB(0, 0, 0);
 				i = (outer_index - imag + 1 + 60) % 30;
-				leds.setPixel(120 + i, 0);
+				//leds.setPixel(120 + i, 0);
+				actual_output[120 + i] = CRGB(0, 0, 0);
 			}
 
 
@@ -595,31 +596,30 @@ void loop() {
 				temp.s = map(imag, 0, 16, color1_inner->s, color2_inner->s);
 				temp.v = map(imag, 0, 16, color1_inner->v, color2_inner->v);
 
-				uint32_t tempagain = HSV_to_RGB(temp);
-
+			
 				int i;
 				i = (inner_index + imag - 1 + 60) % 30;
-
-				leds.setPixel(i, tempagain);
+				actual_output[i] = temp;
+				//leds.setPixel(i, tempagain);
 				i = (inner_index - imag + 1 + 60) % 30;
-
-				leds.setPixel(i, tempagain);
+				actual_output[i] = temp;
+				//leds.setPixel(i, tempagain);
 			}
 			else{
 				//clear unused pixels
 				int i;
 				i = (inner_index + imag - 1 + 60) % 30;
-				leds.setPixel(i, 0);
+				actual_output[i] = CRGB(0, 0, 0);
 				i = (inner_index - imag + 1 + 60) % 30;
-				leds.setPixel(i, 0);
+				actual_output[i] = CRGB(0, 0, 0);
 			}
 		}
 
 
 		//double check if the LEDs are busy, but that should never happen at 100hz
-		if (!leds.busy()){
-			leds.show();
-		}
+		
+
+		LEDS.show();
 
 
 	}
@@ -685,10 +685,4 @@ void onPacket(const uint8_t* buffer, size_t size)
 
 		}
 	}
-}
-
-uint32_t HSV_to_RGB(CHSV hsv_input){
-	CRGB temp_rgb;
-	hsv2rgb_rainbow(hsv_input, temp_rgb);
-	return((temp_rgb.red << 16) | (temp_rgb.green << 8) | temp_rgb.blue);
 }
