@@ -1,18 +1,14 @@
-#define USE_OCTOWS2811
-
 #include <OneWire.h> //crc8 
 #include <cobs.h> //cobs encoder and decoder 
 
+#define USE_OCTOWS2811
 #include <OctoWS2811.h> //DMA strip output
+#include <FastLED.h> //LED handling
 
 #include <Metro.h> //timers
 
-#include "FastLED.h" 
-//#include "hsv2rgb.h"
-
 #include "I2Cdev.h"
 #include "MPU6050_6Axis_MotionApps20.h"
-
 
 // Arduino Wire library is required if I2Cdev I2CDEV_ARDUINO_WIRE implementation
 // is used in I2Cdev.h
@@ -24,16 +20,11 @@
 
 MPU6050 mpu;
 
-//const int config = WS2811_GRB | WS2811_800kHz;
-//const int ledsPerStrip = 30;
-//DMAMEM int displayMemory[ledsPerStrip * 6];
-//int drawingMemory[ledsPerStrip * 6];
-//OctoWS2811 leds(ledsPerStrip, displayMemory, drawingMemory, config);
 #define NUM_LEDS_PER_STRIP 30
 #define NUM_STRIPS 8
 CRGB actual_output[NUM_STRIPS * NUM_LEDS_PER_STRIP];
-
-
+CRGB previous_actual_output[NUM_STRIPS * NUM_LEDS_PER_STRIP];
+CHSV target_output[NUM_STRIPS * NUM_LEDS_PER_STRIP];
 
 uint8_t disc_mode = 2;
 
@@ -49,7 +40,8 @@ uint8_t flow_offset = 0;
 uint8_t saved_outer_index_acceleration = 0;
 uint8_t saved_inner_index_acceleration = 0;
 
-CHSV color1 = CHSV(64, 255, 255);
+uint8_t motion_blur = 0;
+CHSV color1 = CHSV(128, 255, 255);
 CHSV color2 = CHSV(0, 255, 255);
 
 CHSV *color1_inner = &color1;
@@ -114,31 +106,19 @@ Quaternion q;           // [w, x, y, z]         quaternion container
 VectorInt16 aa;         // [x, y, z]            accel sensor measurements
 VectorInt16 aaReal;     // [x, y, z]            gravity-free accel sensor measurements
 VectorFloat gravity;    // [x, y, z]            gravity vector
-
 float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
 
 uint16_t disc_voltage = 1024;
-
-// ================================================================
-// ===               INTERRUPT DETECTION ROUTINE                ===
-// ================================================================
 
 volatile bool mpuInterrupt = false;     // indicates whether MPU interrupt pin has gone high
 void dmpDataReady() {
 	mpuInterrupt = true;
 }
 
-
-
-// ================================================================
-// ===                      INITIAL SETUP                       ===
-// ================================================================
-
 void setup() {
 
 	//Inner LEDs are 0 to 29
 	//Outer LEDs are 120 to 129
-
 
 	// join I2C bus (I2Cdev library doesn't do this automatically)
 #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
@@ -211,6 +191,12 @@ void setup() {
 	//leds.begin();
 	LEDS.addLeds<OCTOWS2811>(actual_output, NUM_LEDS_PER_STRIP);
 
+	for (int i = 0; i < NUM_STRIPS * NUM_LEDS_PER_STRIP; i++) {
+		actual_output[i] = CRGB(0,0,0);
+		 previous_actual_output[i] = CRGB(0, 0, 0);
+		 target_output[i] = CHSV(0, 0, 0);
+	}
+
 }
 
 
@@ -269,7 +255,7 @@ void loop() {
 			temp.s = map(flow_offset, 0, 16, color1_outer->s, color2_outer->s);
 			temp.v = map(flow_offset, 0, 16, color1_outer->v, color2_outer->v);
 
-			outer_streaming[outer_streaming_index] = temp;
+				outer_streaming[outer_streaming_index] = temp;
 			outer_streaming_index++;
 			if (outer_streaming_index > 16){
 				outer_streaming_index = 0;
@@ -296,11 +282,13 @@ void loop() {
 		if (idle_start_timer == 0){
 			idle_start_timer = micros();
 		}
-	
+
 
 	}
 
 	idle_microseconds = idle_microseconds + (micros() - idle_start_timer);
+
+	memcpy(previous_actual_output, actual_output, sizeof(actual_output));
 
 	long int starttime = micros();
 	// reset interrupt flag and get INT_STATUS byte
@@ -329,7 +317,7 @@ void loop() {
 		// (this lets us immediately read more without waiting for an interrupt)
 		fifoCount -= packetSize;
 
-	
+
 		mpu.dmpGetQuaternion(&q, fifoBuffer);
 		mpu.dmpGetGravity(&gravity, &q);
 		mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
@@ -356,7 +344,7 @@ void loop() {
 #endif
 
 
-	
+
 		//4.77 = (30/2) / PI + 0.5 physical offset
 		double temp = (atan2(gravity.x, gravity.y) * 4.77) + 15;
 
@@ -564,22 +552,22 @@ void loop() {
 				i = (outer_index + imag - 1 + 60) % 30;
 
 				//leds.setPixel(120 + i, tempagain2);
-				actual_output[120 + i] = outer_streaming[(imag + outer_streaming_index) % 17];
+				target_output[120 + i] = outer_streaming[(imag + outer_streaming_index) % 17];
 				//leds.setPixel(120 + i, tempagain);
 				i = (outer_index - imag + 1 + 60) % 30;
 				//leds.setPixel(120 + i, tempagain);
-				actual_output[120 + i] = outer_streaming[(imag + outer_streaming_index) % 17];
-			//	leds.setPixel(120 + i, tempagain2);
+				target_output[120 + i] = outer_streaming[(imag + outer_streaming_index) % 17];
+				//	leds.setPixel(120 + i, tempagain2);
 			}
 			else{
 				//clear unused pixels
 				int i;
 				i = (outer_index + imag - 1 + 60) % 30;
 				//leds.setPixel(120 + i, 0);
-				actual_output[120 + i] = CRGB(0, 0, 0);
+				target_output[120 + i] = CHSV(0, 0, 0);
 				i = (outer_index - imag + 1 + 60) % 30;
 				//leds.setPixel(120 + i, 0);
-				actual_output[120 + i] = CRGB(0, 0, 0);
+				target_output[120 + i] = CHSV(0, 0, 0);
 			}
 
 
@@ -596,31 +584,68 @@ void loop() {
 				temp.s = map(imag, 0, 16, color1_inner->s, color2_inner->s);
 				temp.v = map(imag, 0, 16, color1_inner->v, color2_inner->v);
 
-			
+
 				int i;
 				i = (inner_index + imag - 1 + 60) % 30;
-				actual_output[i] = temp;
+				target_output[i] = temp;
 				//leds.setPixel(i, tempagain);
 				i = (inner_index - imag + 1 + 60) % 30;
-				actual_output[i] = temp;
+				target_output[i] = temp;
 				//leds.setPixel(i, tempagain);
 			}
 			else{
 				//clear unused pixels
 				int i;
 				i = (inner_index + imag - 1 + 60) % 30;
-				actual_output[i] = CRGB(0, 0, 0);
+				target_output[i] = CHSV(0, 0, 0);
 				i = (inner_index - imag + 1 + 60) % 30;
-				actual_output[i] = CRGB(0, 0, 0);
+				target_output[i] = CHSV(0, 0, 0);
 			}
 		}
 
 
 		//double check if the LEDs are busy, but that should never happen at 100hz
-		
+
+
+		for (int i = 0; i < NUM_STRIPS * NUM_LEDS_PER_STRIP; i++) {
+
+			//convert HSV to RGB
+			CRGB temp = target_output[i];
+
+			//if shutting off a LED, do so immediately
+			if (temp == CRGB(0, 0, 0)){
+				actual_output[i] = temp;
+			//if turning on a LED, do so immediately
+			}else if (previous_actual_output[i] == CRGB(0, 0, 0)){
+				actual_output[i] = temp;
+			}
+			//if changing a LED, blend
+			else{
+				if (previous_actual_output[i].r < temp.r){
+					temp.r = min(previous_actual_output[i].r + 2,temp.r);
+				}
+				else if (previous_actual_output[i].r > temp.r){
+					temp.r = max(previous_actual_output[i].r - 2, temp.r);
+				}
+				if (previous_actual_output[i].g < temp.g){
+					temp.g = min(previous_actual_output[i].g + 2, temp.g);
+				}
+				else if (previous_actual_output[i].g > temp.g){
+					temp.g = max(previous_actual_output[i].g - 2, temp.g);
+				}
+				if (previous_actual_output[i].b < temp.b){
+					temp.b = min(previous_actual_output[i].b + 2, temp.b);
+				}
+				else if (previous_actual_output[i].b > temp.b){
+					temp.b = max(previous_actual_output[i].b - 2, temp.b);
+				}
+
+				actual_output[i] = temp;
+			}
+
+		}
 
 		LEDS.show();
-
 
 	}
 }
