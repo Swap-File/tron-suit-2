@@ -189,9 +189,7 @@ void setup() {
 
 	outer_streaming[0] = CHSV(0, 255, 255);
 
-	//leds.begin();
 	LEDS.addLeds<OCTOWS2811>(actual_output, NUM_LEDS_PER_STRIP);
-
 	for (int i = 0; i < NUM_STRIPS * NUM_LEDS_PER_STRIP; i++) {
 		actual_output[i] = CRGB(0, 0, 0);
 		target_output[i] = CHSV(0, 0, 0);
@@ -227,7 +225,7 @@ void loop() {
 		}
 
 		if (flow_speed.check()){
-			increment_flow();
+			//increment_flow();
 		}
 
 		SerialUpdate();
@@ -394,8 +392,8 @@ void loop() {
 		}
 
 		if (disc_mode == 2){
-			inner_magnitude = 16;
-			outer_magnitude = 16;
+			//inner_magnitude = 16;
+			//outer_magnitude = 16;
 		}
 
 		if (disc_mode == 3){
@@ -458,10 +456,9 @@ void loop() {
 			if (pixel_index <= outer_magnitude && pixel_index > 0){
 				//set pixels
 
-
 				//static render + move color 1 from top to bottom back and forth
 				//calulate crossfade for multicolor action
-				//first pixel must be color 1!
+
 				CHSV temp;
 				int temp_mag = (pixel_index + flow_offset) % 17;
 				if (pixel_index + flow_offset > 16){
@@ -610,8 +607,9 @@ void onPacket(const uint8_t* buffer, size_t size)
 	//6 could be rendering mode (static versus stream)
 
 	//check for framing errors
-	if (size != 11){
+	if (size != 14){
 		framing_error++;
+
 	}
 	else{
 		//check for crc errors

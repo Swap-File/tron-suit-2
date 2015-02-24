@@ -5,15 +5,15 @@
 
 #include <OneWire.h> //crc8 
 #include <cobs.h> //cobs encoder and decoder 
+
+#define USE_OCTOWS2811
 #include <OctoWS2811.h> //DMA strip output
+#include <FastLED.h> //LED handling
+
 #include <Metro.h> //timers
 
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-
-#include "FastLED.h" 
-#include "hsv2rgb.h"
-
 
 typedef struct {
 	uint8_t color_sensor_R;
@@ -22,7 +22,7 @@ typedef struct {
 } SINGLELED;
 
 
-
+uint8_t disc_packet_fingerprint = 0;
 
 typedef struct {
 	boolean fresh;
@@ -143,11 +143,10 @@ AudioInputAnalog         adc1(A9);
 AudioAnalyzeFFT256       fft256_1;
 AudioConnection          patchCord1(adc1, fft256_1);
 
-const int config = WS2811_GRB | WS2811_800kHz;
-const int ledsPerStrip = 128;
-DMAMEM int displayMemory[ledsPerStrip * 6];
-int drawingMemory[ledsPerStrip * 6];
-OctoWS2811 leds(ledsPerStrip, displayMemory, drawingMemory, config);
+#define NUM_LEDS_PER_STRIP 128
+#define NUM_STRIPS 8
+CRGB actual_output[NUM_STRIPS * NUM_LEDS_PER_STRIP];
+CRGB target_output[NUM_STRIPS * NUM_LEDS_PER_STRIP];
 
 #define TESTING
 int color_on = 1;
@@ -167,6 +166,9 @@ Metro glovedisplayfade = Metro(10);
 Metro YPRdisplay = Metro(100);
 Metro ScrollSpeed = Metro(40);
 Metro GloveSend = Metro(10);
+Metro DiscSend = Metro(100);
+
+uint8_t test_bass = 0;
 
 void setup() {
 
@@ -214,7 +216,11 @@ void setup() {
 	glove1.color_sensor_LED = 0;
 
 	//must go first so Serial.begin can override pins!!!
-	leds.begin();
+	LEDS.addLeds<OCTOWS2811>(actual_output, NUM_LEDS_PER_STRIP);
+	for (int i = 0; i < NUM_STRIPS * NUM_LEDS_PER_STRIP; i++) {
+		actual_output[i] = CRGB(0, 0, 0);
+		target_output[i] = CHSV(0, 0, 0);
+	}
 
 	//bump hardwareserial.cpp to 255
 	Serial.begin(115200);   //USB Debug
@@ -228,7 +234,7 @@ void setup() {
 	fft256_1.windowFunction(AudioWindowHanning256);
 	fft256_1.averageTogether(4);
 
-	leds.show();
+	//leds.show();
 }
 
 long int magictime = 0;
@@ -296,13 +302,12 @@ void loop() {
 
 
 	if (Serial2.available()){
-		Serial2.write(Serial2.read());
-		indexled = 0;
+		Serial2.read();
 	}
 
 	if (Serial3.available()){
-		Serial3.write(Serial3.read());
-		indexled = 0;
+		Serial3.read();
+
 	}
 
 
@@ -392,33 +397,32 @@ void loop() {
 		for (uint8_t x = 0; x < 16; x++) {
 
 
-			uint32_t background_array = 0;
-			uint32_t menu_name = 0;
-			uint32_t final_color = 0;
+			CRGB background_array = CRGB(0, 0, 0);
+			CRGB menu_name = CRGB(0, 0, 0);
+			CRGB final_color = CRGB(0, 0, 0);
 
 
 			if (scroll_mode > 0){
 				if (read_menu_pixel(x, y)){
-					menu_name = (uint32_t)gammatable[180] << 16 | (uint32_t)gammatable[180] << 8 | (uint32_t)gammatable[180];
+					menu_name = CRGB(180, 180, 180);
 				}
 			}
 
 			if (gloveindicator[x][7 - y] > 0){ // flip Y for helmet external display by subtracting from 7
-				background_array = (uint32_t)gammatable[gloveindicator[x][7 - y]] << 16 | (uint32_t)gammatable[gloveindicator[x][7 - y]] << 8 | (uint32_t)gammatable[gloveindicator[x][7 - y]];
+				background_array = CRGB(gammatable[gloveindicator[x][7 - y]], gammatable[gloveindicator[x][7 - y]], gammatable[gloveindicator[x][7 - y]]);
 			}
-
-
+			
 
 			if (mask_mode == 1){
 				if (read_sms_pixel(x, y) != 0){
 					if (menu_mode > 0){
-						final_color = HSV_to_RGB_With_Gamma(EQdisplay[x][y]);
+						final_color = EQdisplay[x][y];
 					}
 				}
 			}
 			else{
 				if (menu_mode > 0){
-					final_color = HSV_to_RGB_With_Gamma(EQdisplay[x][y]);
+					final_color = EQdisplay[x][y];
 				}
 				final_color = background_array | menu_name | final_color;
 			}
@@ -432,7 +436,7 @@ void loop() {
 
 
 
-			if ((final_color & 0xff == 0xff) | ((final_color >> 16) & 0xff == 0xff) | ((final_color >> 8) & 0xff == 0xff)){
+			if ((final_color.r & 0xff == 0xff) | ((final_color.g >> 16) & 0xff == 0xff) | ((final_color.b >> 8) & 0xff == 0xff)){
 				display.drawPixel(realtime_location_x + x, realtime_location_y + 7 - y, WHITE);
 			}
 
@@ -446,7 +450,8 @@ void loop() {
 				tempindex = (y << 4) + x; //  << 4 is multiply by 16 pixels per row
 			}
 
-			leds.setPixel(tempindex, final_color);
+			target_output[tempindex] = final_color;
+			actual_output[tempindex] = target_output[tempindex];
 		}
 	}
 
@@ -493,13 +498,42 @@ void loop() {
 
 	//show it all
 	display.display();
-	if (leds.busy() == 0){
-		leds.show();
+
+	LEDS.show();
+
+	if (DiscSend.check()){
+		disc_packet_fingerprint++;
+
+		
 	}
 
 	if (GloveSend.check()){
 
-		uint8_t raw_buffer[9];
+		uint8_t raw_buffer[14];
+
+		raw_buffer[0] = 0;
+		raw_buffer[1] = 255;
+		raw_buffer[2] = 255;
+		raw_buffer[3] = 128;
+		raw_buffer[4] = 255;
+		raw_buffer[5] = 255;
+		raw_buffer[6] = 0;
+		raw_buffer[7] = 0;
+		raw_buffer[8] = test_bass;
+		raw_buffer[9] = test_bass;
+		raw_buffer[10] = 0;
+		raw_buffer[11] = 0;
+		raw_buffer[12] = disc_packet_fingerprint;
+		raw_buffer[13] = OneWire::crc8(raw_buffer, 12);
+
+		uint8_t encoded_buffer[14];
+		uint8_t encoded_size = COBSencode(raw_buffer, 14, encoded_buffer);
+
+		Serial2.write(encoded_buffer, encoded_size);
+		Serial2.write(0x00);
+
+
+		 raw_buffer[9];
 
 		raw_buffer[0] = glove0.LED_R;
 		raw_buffer[1] = glove0.LED_G;
@@ -512,8 +546,8 @@ void loop() {
 
 		raw_buffer[8] = OneWire::crc8(raw_buffer, 7);
 
-		uint8_t encoded_buffer[9];
-		uint8_t encoded_size = COBSencode(raw_buffer, 9, encoded_buffer);
+		// encoded_buffer[9];
+		 encoded_size = COBSencode(raw_buffer, 9, encoded_buffer);
 
 
 		Serial1.write(encoded_buffer, encoded_size);
@@ -606,6 +640,8 @@ void loop() {
 
 				uint8_t value = map(n, 0, EQdisplayValueMax[i], 0, 255);
 
+			
+
 				uint8_t hue = 0;
 				uint8_t saturation = 255;
 
@@ -645,6 +681,8 @@ void loop() {
 
 				//int y = map(n, 0, EQdisplayValueMax[i], 0, 8);
 				uint8_t value = constrain(map(n, 0, EQdisplayValueMax[i], 0, 255), 0, 255);
+
+				
 
 				uint8_t hue = 0;
 				uint8_t saturation = 255;
