@@ -52,34 +52,38 @@ CHSV *color2_inner;
 CHSV *color1_outer;
 CHSV *color2_outer;
 
+const uint8_t blur_rate = 2;
+
 //buffers to hold data as it streams in
 int8_t streaming_index = 0;
 CHSV inner_streaming[17];
 CHSV outer_streaming[17];
 
-
+//effect mode 2 variables
 uint8_t inner_offset = 0;
 uint8_t outer_offset = 0;
 uint8_t inner_magnitude = 16;
 uint8_t outer_magnitude = 16;
 
-
-uint8_t last_packet_counter = 0;
 //serial com data
 #define INCOMING_BUFFER_SIZE 128
 uint8_t incoming_raw_buffer[INCOMING_BUFFER_SIZE];
 uint8_t incoming_index = 0;
 uint8_t incoming_decoded_buffer[INCOMING_BUFFER_SIZE];
+uint8_t last_packet_sequence_number = 0;
 
+//fps display and debug
 Metro FPSdisplay = Metro(1000);
-Metro flow_speed = Metro(100);
 
+//self testing code
+Metro flow_speed = Metro(100);
 boolean flow_direction_positive = true;
 
-uint32_t idle_microseconds = 0;
 uint32_t cooldown = 0;
 
+//logging data
 uint8_t cpu_usage = 0;
+uint32_t idle_microseconds = 0;
 uint8_t crc_error = 0;
 uint8_t framing_error = 0;
 //double temperature = 0;
@@ -91,6 +95,10 @@ uint8_t packets_out_per_second = 0; //saves the value
 double xy_accel_magnitude_smoothed = 0;
 double saved_xy_accel_magnitude_smoothed = 0;
 
+//start voltage at full
+uint16_t disc_voltage = 1024;
+
+//activity LED and counter to slow pulses
 #define LED_PIN 13 
 uint8_t blinkState = 0x00;
 
@@ -108,8 +116,6 @@ VectorInt16 aa;         // [x, y, z]            accel sensor measurements
 VectorInt16 aaReal;     // [x, y, z]            gravity-free accel sensor measurements
 VectorFloat gravity;    // [x, y, z]            gravity vector
 float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
-
-uint16_t disc_voltage = 1024;
 
 volatile bool mpuInterrupt = false;     // indicates whether MPU interrupt pin has gone high
 void dmpDataReady() {
@@ -129,8 +135,8 @@ void setup() {
 	Fastwire::setup(400, true);
 #endif
 
-	Serial.begin(115200);
-	Serial1.begin(115200);
+	Serial.begin(115200); //Debug
+	Serial1.begin(115200); //Xbee
 
 	// initialize device
 	Serial.println(F("Initializing I2C devices..."));
@@ -144,13 +150,13 @@ void setup() {
 	Serial.println(F("Initializing DMP..."));
 	devStatus = mpu.dmpInitialize();
 
-	// supply your own gyro offsets here, scaled for min sensitivity
+	//collected from calibration app
 	mpu.setXGyroOffset(109);
 	mpu.setYGyroOffset(53);
 	mpu.setZGyroOffset(54);
-	mpu.setXAccelOffset(-1057); // 1688 factory default for my test chip
-	mpu.setYAccelOffset(669); // 1688 factory default for my test chip
-	mpu.setZAccelOffset(1482); // 1688 factory default for my test chip
+	mpu.setXAccelOffset(-1057); 
+	mpu.setYAccelOffset(669); 
+	mpu.setZAccelOffset(1482);
 
 	// make sure it worked (returns 0 if so)
 	if (devStatus == 0) {
@@ -158,8 +164,8 @@ void setup() {
 		Serial.println(F("Enabling DMP..."));
 		mpu.setDMPEnabled(true);
 
-		// enable Arduino interrupt detection
-		Serial.println(F("Enabling interrupt detection (Arduino external interrupt 0)..."));
+		// enable Teensy 3.1 interrupt detection
+		Serial.println(F("Enabling interrupt detection (Teensy 3.1 pin 22)..."));
 		pinMode(22, INPUT);
 		attachInterrupt(22, dmpDataReady, RISING);
 		mpuIntStatus = mpu.getIntStatus();
@@ -167,7 +173,7 @@ void setup() {
 		// set our DMP Ready flag so the main loop() function knows it's okay to use it
 		Serial.println(F("DMP ready! Waiting for first interrupt..."));
 		dmpReady = true;
-		mpu.resetFIFO();
+		
 		// get expected DMP packet size for later comparison
 		packetSize = mpu.dmpGetFIFOPacketSize();
 	}
@@ -187,21 +193,25 @@ void setup() {
 	//battery meter pin, 0-1023  
 	pinMode(23, INPUT);
 
+	//wipe and then put a single color in the streaming buffer for debug
+	for (int i = 0; i < 17; i++) {
+		inner_streaming[i] = CHSV(0, 0, 0);
+		outer_streaming[i] = CHSV(0, 0, 0);
+	}
 	outer_streaming[0] = CHSV(0, 255, 255);
 
+	//start the leds
 	LEDS.addLeds<OCTOWS2811>(actual_output, NUM_LEDS_PER_STRIP);
 	for (int i = 0; i < NUM_STRIPS * NUM_LEDS_PER_STRIP; i++) {
 		actual_output[i] = CRGB(0, 0, 0);
 		target_output[i] = CHSV(0, 0, 0);
 	}
 
+	LEDS.show();
+
+	//final reset to start it all
+	mpu.resetFIFO();
 }
-
-
-
-// ================================================================
-// ===                    MAIN PROGRAM LOOP                     ===
-// ================================================================
 
 void loop() {
 	// if programming failed, don't try to do anything
@@ -219,9 +229,11 @@ void loop() {
 			packets_in_counter = 0;
 			packets_out_per_second = packets_out_counter;
 			packets_out_counter = 0;
+
 			Serial.print(cpu_usage);
 			Serial.print(" ");
 			Serial.println(disc_mode);
+
 		}
 
 		if (flow_speed.check()){
@@ -452,80 +464,54 @@ void loop() {
 
 		//polar rendering
 		for (int pixel_index = 0; pixel_index <= 16; pixel_index++) {
+
 			//set outer LEDs
 			if (pixel_index <= outer_magnitude && pixel_index > 0){
 				//set pixels
 
-				//static render + move color 1 from top to bottom back and forth
-				//calulate crossfade for multicolor action
-
-				CHSV temp;
-				int temp_mag = (pixel_index + flow_offset) % 17;
-				if (pixel_index + flow_offset > 16){
-
-					temp.h = map(temp_mag, 0, 16, color2_outer->h, color1_outer->h);
-					temp.s = map(temp_mag, 0, 16, color2_outer->s, color1_outer->s);
-					temp.v = map(temp_mag, 0, 16, color2_outer->v, color1_outer->v);
-				}
-				else{
-					temp.h = map(temp_mag, 0, 16, color1_outer->h, color2_outer->h);
-					temp.s = map(temp_mag, 0, 16, color1_outer->s, color2_outer->s);
-					temp.v = map(temp_mag, 0, 16, color1_outer->v, color2_outer->v);
-				}
-				//uint32_t tempagain = HSV_to_RGB(temp);
-
 				//streaming input render
-				//uint32_t tempagain2 = HSV_to_RGB(outer_streaming[(pixel_index + outer_streaming_index) % 17]);
-
 				int absolute_LED_index;
 				CHSV LED_color = outer_streaming[(pixel_index + streaming_index) % 17];
 
-
-				absolute_LED_index = (outer_index + pixel_index - 1 + 60) % 30;
+				absolute_LED_index = (outer_index + pixel_index + outer_offset - 1 + 60) % 30;
 				target_output[120 + absolute_LED_index] = LED_color;
 
-				absolute_LED_index = (outer_index - pixel_index + 1 + 60) % 30;
+				absolute_LED_index = (outer_index - pixel_index + outer_offset + 1 + 60) % 30;
 				target_output[120 + absolute_LED_index] = LED_color;
 			}
 			else{
 				//clear unused pixels
 				int absolute_LED_index;
 
-				absolute_LED_index = (outer_index + pixel_index - 1 + 60) % 30;
+				absolute_LED_index = (outer_index + pixel_index + outer_offset - 1 + 60) % 30;
 				target_output[120 + absolute_LED_index] = CHSV(0, 0, 0);
 
-				absolute_LED_index = (outer_index - pixel_index + 1 + 60) % 30;
+				absolute_LED_index = (outer_index - pixel_index + outer_offset + 1 + 60) % 30;
 				target_output[120 + absolute_LED_index] = CHSV(0, 0, 0);
 			}
-
 
 			//set inner LEDs
 			if (pixel_index <= inner_magnitude && pixel_index > 0){
 				//set pixels
 
-				//calulate crossfade for multicolor action
-				//first pixel must be color 1!
-				CHSV temp;
+				//streaming input render
+				int absolute_LED_index;
+				CHSV LED_color = inner_streaming[(pixel_index + streaming_index) % 17];
 
-				//int temp_mag = (pixel_index + flow_offset ) % 16;
-				temp.h = map(pixel_index, 0, 16, color1_inner->h, color2_inner->h);
-				temp.s = map(pixel_index, 0, 16, color1_inner->s, color2_inner->s);
-				temp.v = map(pixel_index, 0, 16, color1_inner->v, color2_inner->v);
+				absolute_LED_index = (inner_index + pixel_index + inner_offset - 1 + 60) % 30;
+				target_output[absolute_LED_index] = LED_color;
 
-				int i;
-				i = (inner_index + pixel_index - 1 + 60) % 30;
-				target_output[i] = temp;
-				i = (inner_index - pixel_index + 1 + 60) % 30;
-				target_output[i] = temp;
+				absolute_LED_index = (inner_index - pixel_index + inner_offset + 1 + 60) % 30;
+				target_output[absolute_LED_index] = LED_color;
 			}
 			else{
 				//clear unused pixels
 				int absolute_LED_index;
 
-				absolute_LED_index = (inner_index + pixel_index - 1 + 60) % 30;
+				absolute_LED_index = (inner_index + pixel_index + inner_offset - 1 + 60) % 30;
 				target_output[absolute_LED_index] = CHSV(0, 0, 0);
 
-				absolute_LED_index = (inner_index - pixel_index + 1 + 60) % 30;
+				absolute_LED_index = (outer_index - pixel_index + inner_offset + 1 + 60) % 30;
 				target_output[absolute_LED_index] = CHSV(0, 0, 0);
 			}
 		}
@@ -547,14 +533,14 @@ void loop() {
 			}
 			//if changing a LED, blend
 			else{
-				if (actual_output[i].r < temp.r) temp.r = min(actual_output[i].r + 2, temp.r);
-				if (actual_output[i].r > temp.r) temp.r = max(actual_output[i].r - 2, temp.r);
+				if (actual_output[i].r < temp.r) temp.r = min(actual_output[i].r + blur_rate, temp.r);
+				if (actual_output[i].r > temp.r) temp.r = max(actual_output[i].r - blur_rate, temp.r);
 
-				if (actual_output[i].g < temp.g) temp.g = min(actual_output[i].g + 2, temp.g);
-				if (actual_output[i].g > temp.g) temp.g = max(actual_output[i].g - 2, temp.g);
+				if (actual_output[i].g < temp.g) temp.g = min(actual_output[i].g + blur_rate, temp.g);
+				if (actual_output[i].g > temp.g) temp.g = max(actual_output[i].g - blur_rate, temp.g);
 
-				if (actual_output[i].b < temp.b) temp.b = min(actual_output[i].b + 2, temp.b);
-				if (actual_output[i].b > temp.b) temp.b = max(actual_output[i].b - 2, temp.b);
+				if (actual_output[i].b < temp.b) temp.b = min(actual_output[i].b + blur_rate, temp.b);
+				if (actual_output[i].b > temp.b) temp.b = max(actual_output[i].b - blur_rate, temp.b);
 
 				actual_output[i] = temp;
 			}
@@ -602,20 +588,20 @@ void onPacket(const uint8_t* buffer, size_t size)
 
 	//mode bits
 	//0 - 3 are color mapping
-	//4 is flow direction
+	//4 is flow direction inner
 	//5 could be pulsing on and off?
-	//6 could be rendering mode (static versus stream)
 
 	//check for framing errors
 	if (size != 14){
 		framing_error++;
-
+		Serial.println(framing_error);
 	}
 	else{
 		//check for crc errors
 		byte crc = OneWire::crc8(buffer, size - 2);
 		if (crc != buffer[size - 1]){
 			crc_error++;
+			Serial.println("crc");
 		}
 		else{
 
@@ -627,18 +613,18 @@ void onPacket(const uint8_t* buffer, size_t size)
 			color1 = CHSV(buffer[0], buffer[1], buffer[2]);
 			color2 = CHSV(buffer[3], buffer[4], buffer[5]);
 
-			inner_offset = buffer[6];
-			outer_offset = buffer[7];
+			inner_offset = ((uint8_t)buffer[6]) % 30;
+			outer_offset = ((uint8_t)buffer[7]) % 30;
 
-			inner_magnitude = buffer[8];
-			outer_magnitude = buffer[9];
+			inner_magnitude = ((uint8_t)buffer[8]) % 17;
+			outer_magnitude = ((uint8_t)buffer[9]) % 17;
 
 			fade_level = buffer[10];
 
 			effect_mode = buffer[11];
 
-			if (last_packet_counter != buffer[12]){
-				last_packet_counter = buffer[12];
+			if (last_packet_sequence_number != buffer[12]){
+				last_packet_sequence_number = buffer[12];
 				increment_flow();
 			}
 		}

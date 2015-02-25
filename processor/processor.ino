@@ -15,14 +15,6 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
-typedef struct {
-	uint8_t color_sensor_R;
-	uint8_t color_sensor_G;
-	uint8_t color_sensor_B;
-} SINGLELED;
-
-
-uint8_t disc_packet_fingerprint = 0;
 
 typedef struct {
 	boolean fresh;
@@ -51,7 +43,7 @@ typedef struct {
 	int16_t gravityY;
 	int16_t gravityZ;
 
-	int16_t color_sensor_R; // world-frame accel sensor measurements
+	int16_t color_sensor_R;
 	int16_t color_sensor_G;
 	int16_t color_sensor_B;
 	int16_t color_sensor_Clear;
@@ -71,16 +63,49 @@ typedef struct {
 	uint8_t cpu_temp;
 
 	//outputs
-	uint8_t LED_R;
-	uint8_t LED_G;
-	uint8_t LED_B;
+	CRGB output_rgb_led;
+	uint8_t output_white_led;
 
-	uint8_t color_sensor_LED;
-
+	//calculated results
 	int8_t gloveX;
 	int8_t gloveY;
 
 } GLOVE;
+
+
+typedef struct {
+	//recieved data
+	uint8_t packets_in_per_second;
+	uint8_t packets_out_per_second;
+
+	uint8_t framing_errors;
+	uint8_t crc_errors;
+
+	uint8_t cpu_usage;
+	uint8_t cpu_temp;
+
+	uint8_t saved_angle;
+	uint8_t saved_magnitude;
+
+	uint8_t battery_voltage;
+	uint8_t current_mode;
+
+	//sending data
+	CHSV color1;
+	CHSV color2;
+
+	uint8_t inner_offset;
+	uint8_t outer_offset;
+
+	uint8_t inner_magnitude;
+	uint8_t outer_magnitude;
+
+	uint8_t fade_level;
+	uint8_t requested_mode;
+
+	uint8_t packet_sequence_number;
+
+} DISC;
 
 typedef struct {
 	uint8_t packets_in_per_second;
@@ -91,39 +116,22 @@ typedef struct {
 
 } SERIALSTATS;
 
-uint8_t gammatable[256];// double or triple this later.
-
-
-uint8_t fftmode = 2;
-
-int mask_mode = 0;
-
-
-
-
-
-byte helmet_LED_R = 0xff;
-byte helmet_LED_G = 0;
-byte helmet_LED_B = 0;
-
 #define GLOVE_DEADZONE 3000  //30 degrees
 #define GLOVE_MAXIMUM 30000 //90 degrees
-
 
 #define OLED_DC     17
 #define OLED_CS     22
 #define OLED_RESET  19
 Adafruit_SSD1306 display(OLED_DC, OLED_RESET, OLED_CS);
 
-
+uint8_t fftmode = 2;
+int mask_mode = 0;
 uint8_t menu_mode = 1;
 
 char sms_message[160];
 int16_t sms_text_ending_pos = 0; //160 * 5 max length
 int16_t sms_scroll_pos = 0;
-
 int16_t menu_text_ending_pos = 0;
-
 
 uint8_t scroll_count = 0;
 int8_t scroll_pos_x = 0;
@@ -152,12 +160,15 @@ CRGB target_output[NUM_STRIPS * NUM_LEDS_PER_STRIP];
 int color_on = 1;
 unsigned long fps_time = 0;
 uint16_t fpscount = 0;
+
 GLOVE glove0;
 GLOVE glove1;
 SERIALSTATS serial1stats;
+DISC disc0;
 
 byte gloveindicator[16][8];
 
+uint8_t oled_dimmer = 0;
 CHSV EQdisplay[16][8];
 int EQdisplayValueMax[16]; //max vals for normalization over time
 
@@ -168,29 +179,9 @@ Metro ScrollSpeed = Metro(40);
 Metro GloveSend = Metro(10);
 Metro DiscSend = Metro(100);
 
-uint8_t test_bass = 0;
-
 void setup() {
 
 	strcpy(sms_message, "TESTING TEXT MESSAGE");
-
-
-	for (int i = 0; i < 256; i++) {
-		float x = i;
-		x /= 255;
-		x = pow(x, 2.5);
-		x *= 255;
-
-		if (0) {
-			gammatable[i] = 255 - x;
-		}
-		else {
-			gammatable[i] = x;
-		}
-		//Serial.println(gammatable[i]);
-	}
-
-
 
 	display.begin(SSD1306_SWITCHCAPVCC);
 
@@ -206,14 +197,10 @@ void setup() {
 	glove0.yaw_offset = 0;
 	glove0.pitch_offset = 0;
 	glove0.roll_offset = 0;
-	glove0.LED_R = 0;
-	glove0.LED_G = 0;
-	glove0.LED_B = 0;
-	glove0.color_sensor_LED = 0;
-	glove1.LED_R = 0;
-	glove1.LED_G = 0;
-	glove1.LED_B = 0;
-	glove1.color_sensor_LED = 0;
+	glove0.output_rgb_led = CRGB(0, 0, 0);
+	glove0.output_white_led = 0;
+	glove1.output_rgb_led = CRGB(0, 0, 0);
+	glove1.output_white_led = 0;
 
 	//must go first so Serial.begin can override pins!!!
 	LEDS.addLeds<OCTOWS2811>(actual_output, NUM_LEDS_PER_STRIP);
@@ -223,10 +210,10 @@ void setup() {
 	}
 
 	//bump hardwareserial.cpp to 255
-	Serial.begin(115200);   //USB Debug
+	Serial.begin(115200);   //Debug
 	Serial1.begin(115200);  //Gloves	
-	Serial2.begin(115200);  //color_sensor_Btooth	
-	Serial3.begin(115200);  //Xbee	
+	Serial2.begin(115200);  //Xbee	
+	Serial3.begin(115200);  //BT
 
 	pinMode(A4, INPUT); //audio input
 
@@ -234,12 +221,9 @@ void setup() {
 	fft256_1.windowFunction(AudioWindowHanning256);
 	fft256_1.averageTogether(4);
 
-	//leds.show();
 }
 
-long int magictime = 0;
-int ledmodifier = 1;
-int indexled = 0;
+//HUD locations
 
 #define trails_location_x 1
 #define trails_location_y 1
@@ -260,11 +244,12 @@ int indexled = 0;
 #define static_menu_location_y 10
 
 void loop() {
+
 	fpscount++;
 
 	if (glove1.finger2 == 0 || glove1.finger3 == 0){
 		if (glove1.finger2 == 0){
-			glove0.color_sensor_LED = 0x01;
+			glove0.output_white_led = 0x01;
 		}
 		uint32_t sum = glove0.color_sensor_Clear;
 		float r, g, b;
@@ -273,33 +258,18 @@ void loop() {
 		b = glove0.color_sensor_B; b /= sum;
 		r *= 256; g *= 256; b *= 256;
 
-
-
 		CHSV temp = rgb2hsv_approximate(CRGB(r, g, b));
 		//temp.v = min(temp.v, 200);
-		temp.s = max(temp.s,64);
+		temp.s = max(temp.s, 64);
 		CRGB temp2;
 		hsv2rgb_rainbow(temp, temp2);
-
-
-		glove0.LED_R = temp2.red;
-		glove0.LED_G = temp2.green;
-		glove0.LED_B = temp2.blue;
-
-
+		glove0.output_rgb_led = temp2;
 
 	}
 	else{
-
-
-		glove0.color_sensor_LED = 0x00;
-		glove0.LED_R = 0;
-		glove0.LED_G = 0;
-		glove0.LED_B = 0;
-
+		glove0.output_white_led = 0x00;
+		glove0.output_rgb_led = CRGB(0, 0, 0);
 	}
-
-
 
 	if (Serial2.available()){
 		Serial2.read();
@@ -339,31 +309,26 @@ void loop() {
 	//most boxes are widt
 	//draw the boxes are 18x10, thats 16x8 + the boarder pixels
 
-	//draw the menu first for masking purposes
-	display.drawRect(menu_location_x - 1, menu_location_y - 1, 18, 10, WHITE);
+		//draw the menu first for masking purposes
+		display.drawRect(menu_location_x - 1, menu_location_y - 1, 18, 10, WHITE);
 
-	display.setCursor(menu_location_x + scroll_pos_x + scroll_pos_x_offset, menu_location_y + scroll_pos_y);
-	display.print(menu_mode);
-	menu_text_ending_pos = display.getCursorX(); //save menu text length for elsewhere
-	//black out the rest!  probably dont need full width... 
-	display.fillRect(menu_location_x - 1, menu_location_y - 1 - 10, display.width() - (menu_location_x - 1), 10, BLACK);
-	display.fillRect(menu_location_x - 1, menu_location_y - 1 + 10, display.width() - (menu_location_x - 1), 10, BLACK);
-	display.fillRect(menu_location_x - 1 + 18, menu_location_y - 1, display.width() - (menu_location_x - 1 + 18), 10, BLACK);
+		display.setCursor(menu_location_x + scroll_pos_x + scroll_pos_x_offset, menu_location_y + scroll_pos_y);
+		display.print(menu_mode);
+		menu_text_ending_pos = display.getCursorX(); //save menu text length for elsewhere
+		//black out the rest!  probably dont need full width... 
+		display.fillRect(menu_location_x - 1, menu_location_y - 1 - 10, display.width() - (menu_location_x - 1), 10, BLACK);
+		display.fillRect(menu_location_x - 1, menu_location_y - 1 + 10, display.width() - (menu_location_x - 1), 10, BLACK);
+		display.fillRect(menu_location_x - 1 + 18, menu_location_y - 1, display.width() - (menu_location_x - 1 + 18), 10, BLACK);
 
-	//staticmode
-	display.drawRect(static_menu_location_x - 1, static_menu_location_y - 1, 35, 10, WHITE);
-	display.setCursor(static_menu_location_x, static_menu_location_y);
-	display.print(menu_mode);
-
+		//staticmode
+		display.drawRect(static_menu_location_x - 1, static_menu_location_y - 1, 35, 10, WHITE);
+		display.setCursor(static_menu_location_x, static_menu_location_y);
+		display.print(menu_mode);
 
 	//hand display dots - its important to always know where your hands are.
 	display.drawRect(hand_location_x - 1, hand_location_y - 1, 18, 10, WHITE);
 	display.drawPixel(hand_location_x + 8 + glove0.gloveX, hand_location_y + 7 - glove0.gloveY, WHITE);
 	display.drawPixel(hand_location_x + glove1.gloveX, hand_location_y + 7 - glove1.gloveY, WHITE);
-
-
-
-
 
 	//background overlay with trails, also shows HUD changes
 	display.drawRect(trails_location_x - 1, trails_location_y - 1, 18, 10, WHITE);
@@ -409,9 +374,9 @@ void loop() {
 			}
 
 			if (gloveindicator[x][7 - y] > 0){ // flip Y for helmet external display by subtracting from 7
-				background_array = CRGB(gammatable[gloveindicator[x][7 - y]], gammatable[gloveindicator[x][7 - y]], gammatable[gloveindicator[x][7 - y]]);
+				background_array = CRGB(gloveindicator[x][7 - y], gloveindicator[x][7 - y], gloveindicator[x][7 - y]);
 			}
-			
+
 
 			if (mask_mode == 1){
 				if (read_sms_pixel(x, y) != 0){
@@ -502,9 +467,7 @@ void loop() {
 	LEDS.show();
 
 	if (DiscSend.check()){
-		disc_packet_fingerprint++;
-
-		
+		disc0.packet_sequence_number++;
 	}
 
 	if (GloveSend.check()){
@@ -517,37 +480,40 @@ void loop() {
 		raw_buffer[3] = 128;
 		raw_buffer[4] = 255;
 		raw_buffer[5] = 255;
-		raw_buffer[6] = 0;
-		raw_buffer[7] = 0;
-		raw_buffer[8] = test_bass;
-		raw_buffer[9] = test_bass;
+		raw_buffer[6] = disc0.packet_sequence_number ;
+		raw_buffer[7] = disc0.packet_sequence_number;
+		raw_buffer[8] = 8;
+		raw_buffer[9] = 8;
 		raw_buffer[10] = 0;
 		raw_buffer[11] = 0;
-		raw_buffer[12] = disc_packet_fingerprint;
+		raw_buffer[12] = disc0.packet_sequence_number;
 		raw_buffer[13] = OneWire::crc8(raw_buffer, 12);
 
+		if (disc0.packet_sequence_number > 29){
+			disc0.packet_sequence_number = 0;
+		}
 		uint8_t encoded_buffer[14];
 		uint8_t encoded_size = COBSencode(raw_buffer, 14, encoded_buffer);
-
+	
 		Serial2.write(encoded_buffer, encoded_size);
 		Serial2.write(0x00);
 
 
-		 raw_buffer[9];
+		raw_buffer[9];
 
-		raw_buffer[0] = glove0.LED_R;
-		raw_buffer[1] = glove0.LED_G;
-		raw_buffer[2] = glove0.LED_B;
-		raw_buffer[3] = glove0.color_sensor_LED;
-		raw_buffer[4] = glove1.LED_R;
-		raw_buffer[5] = glove1.LED_G;
-		raw_buffer[6] = glove1.LED_B;
-		raw_buffer[7] = glove1.color_sensor_LED;
+		raw_buffer[0] = glove0.output_rgb_led.r;
+		raw_buffer[1] = glove0.output_rgb_led.g;
+		raw_buffer[2] = glove0.output_rgb_led.b;
+		raw_buffer[3] = glove0.output_white_led;
+		raw_buffer[4] = glove1.output_rgb_led.r;
+		raw_buffer[5] = glove1.output_rgb_led.g;
+		raw_buffer[6] = glove1.output_rgb_led.b;
+		raw_buffer[7] = glove1.output_white_led;
 
 		raw_buffer[8] = OneWire::crc8(raw_buffer, 7);
 
 		// encoded_buffer[9];
-		 encoded_size = COBSencode(raw_buffer, 9, encoded_buffer);
+		encoded_size = COBSencode(raw_buffer, 9, encoded_buffer);
 
 
 		Serial1.write(encoded_buffer, encoded_size);
@@ -640,7 +606,7 @@ void loop() {
 
 				uint8_t value = map(n, 0, EQdisplayValueMax[i], 0, 255);
 
-			
+
 
 				uint8_t hue = 0;
 				uint8_t saturation = 255;
@@ -682,8 +648,6 @@ void loop() {
 				//int y = map(n, 0, EQdisplayValueMax[i], 0, 8);
 				uint8_t value = constrain(map(n, 0, EQdisplayValueMax[i], 0, 255), 0, 255);
 
-				
-
 				uint8_t hue = 0;
 				uint8_t saturation = 255;
 
@@ -697,12 +661,7 @@ void loop() {
 			}
 			//Serial.println("");
 		}
-
-
-
-
 	}
-
 	SerialUpdate();
 }
 
@@ -757,7 +716,6 @@ boolean read_sms_pixel(uint8_t x, uint8_t y){
 	return false;
 }
 
-
 #define MODECHANGEBRIGHTNESS 250  
 #define MODECHANGESTARTPOSX 18
 #define MODECHANGESTARTPOSY 8
@@ -769,7 +727,6 @@ void readglove(void * temp){
 
 		if (current_glove->gloveY <= 0){
 			Serial.println(" down!");
-
 
 			scroll_mode = 3;
 			scroll_pos_x = 0;
@@ -1090,14 +1047,11 @@ void onPacket1(const uint8_t* buffer, size_t size)
 			current_glove->cpu_usage = buffer[31];
 			current_glove->cpu_temp = buffer[32];
 
-
-
 			//update the gesture grid (8x8 grid + overlap 
 
 			int temp_gloveX = 0;
 
 			if (current_glove == &glove1){
-
 				temp_gloveX = map((current_glove->yaw_compensated - 18000) - ((current_glove->pitch_compensated - 18000)*abs(sin((current_glove->roll_raw - 18000)* PI / 18000))) + 18000, 18000 - GLOVE_DEADZONE, 18000 + GLOVE_DEADZONE, 0, 8);
 			}
 			else{
@@ -1135,12 +1089,4 @@ void onPacket1(const uint8_t* buffer, size_t size)
 
 		}
 	}
-}
-
-
-
-uint32_t HSV_to_RGB_With_Gamma(CHSV hsv_input){
-	CRGB temp_rgb;
-	hsv2rgb_rainbow(hsv_input, temp_rgb);
-	return((temp_rgb.red << 16) | (temp_rgb.green << 8) | temp_rgb.blue);
 }
