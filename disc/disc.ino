@@ -10,6 +10,8 @@
 #include "I2Cdev.h"
 #include "MPU6050_6Axis_MotionApps20.h"
 
+#include <ADC.h>
+
 // Arduino Wire library is required if I2Cdev I2CDEV_ARDUINO_WIRE implementation
 // is used in I2Cdev.h
 #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
@@ -19,6 +21,8 @@
 //#define TESTING
 
 MPU6050 mpu;
+
+ADC *adc = new ADC(); // adc object
 
 #define NUM_LEDS_PER_STRIP 30
 #define NUM_STRIPS 8
@@ -86,7 +90,8 @@ uint8_t cpu_usage = 0;
 uint32_t idle_microseconds = 0;
 uint8_t crc_error = 0;
 uint8_t framing_error = 0;
-//double temperature = 0;
+double temperature = 0.0;
+double voltage = 24.0;
 uint8_t packets_in_counter = 0;  //counts up
 uint8_t packets_in_per_second = 0; //saves the value
 uint8_t packets_out_counter = 0;  //counts up
@@ -124,6 +129,23 @@ void dmpDataReady() {
 
 void setup() {
 
+	//battery meter pin
+	pinMode(A9, INPUT);
+	adc->setReference(ADC_REF_EXTERNAL, ADC_0);
+	adc->setConversionSpeed(ADC_VERY_LOW_SPEED, ADC_0);
+	adc->setSamplingSpeed(ADC_VERY_LOW_SPEED, ADC_0);
+	adc->setAveraging(32, ADC_0);
+	adc->setResolution(16, ADC_0);
+	adc->startContinuous(A9, ADC_0);
+
+	//temp sensor
+	adc->setReference(ADC_REF_INTERNAL, ADC_1);
+	adc->setConversionSpeed(ADC_VERY_LOW_SPEED, ADC_1);
+	adc->setSamplingSpeed(ADC_VERY_LOW_SPEED, ADC_1);
+	adc->setAveraging(32, ADC_1);
+	adc->setResolution(16, ADC_1);
+	adc->startContinuous(38, ADC_1);
+
 	//Inner LEDs are 0 to 29
 	//Outer LEDs are 120 to 129
 
@@ -154,8 +176,8 @@ void setup() {
 	mpu.setXGyroOffset(109);
 	mpu.setYGyroOffset(53);
 	mpu.setZGyroOffset(54);
-	mpu.setXAccelOffset(-1057); 
-	mpu.setYAccelOffset(669); 
+	mpu.setXAccelOffset(-1057);
+	mpu.setYAccelOffset(669);
 	mpu.setZAccelOffset(1482);
 
 	// make sure it worked (returns 0 if so)
@@ -173,7 +195,7 @@ void setup() {
 		// set our DMP Ready flag so the main loop() function knows it's okay to use it
 		Serial.println(F("DMP ready! Waiting for first interrupt..."));
 		dmpReady = true;
-		
+
 		// get expected DMP packet size for later comparison
 		packetSize = mpu.dmpGetFIFOPacketSize();
 	}
@@ -190,8 +212,7 @@ void setup() {
 	// configure LED for output
 	pinMode(LED_PIN, OUTPUT);
 
-	//battery meter pin, 0-1023  
-	pinMode(23, INPUT);
+
 
 	//wipe and then put a single color in the streaming buffer for debug
 	for (int i = 0; i < 17; i++) {
@@ -234,6 +255,14 @@ void loop() {
 			Serial.print(" ");
 			Serial.println(disc_mode);
 
+			Serial.print("Voltage: ");
+
+			Serial.println(voltage);
+			Serial.print("Temp in C: ");
+
+
+			Serial.println(temperature);
+
 		}
 
 		if (flow_speed.check()){
@@ -254,6 +283,7 @@ void loop() {
 	}
 
 	idle_microseconds = idle_microseconds + (micros() - idle_start_timer);
+
 
 	// reset interrupt flag and get INT_STATUS byte
 	mpuInterrupt = false;
@@ -280,7 +310,6 @@ void loop() {
 		// track FIFO count here in case there is > 1 packet available
 		// (this lets us immediately read more without waiting for an interrupt)
 		fifoCount -= packetSize;
-
 
 		mpu.dmpGetQuaternion(&q, fifoBuffer);
 		mpu.dmpGetGravity(&gravity, &q);
@@ -442,8 +471,8 @@ void loop() {
 		}
 
 
-		//906 is low when plugged into batteries, about 3.55 v per cell
-		disc_voltage = disc_voltage * .97 + analogRead(23) * .03;
+
+
 
 		//send  voltage  mode  index  width cpu-load
 
@@ -547,6 +576,13 @@ void loop() {
 		}
 
 		LEDS.show();
+
+		//906 * 64 is low when plugged into batteries, about 3.55 v per cell
+		voltage = voltage * .95 + .05 * (((uint16_t)adc->analogReadContinuous(ADC_0)) / 4083.375); //voltage
+
+		//temp sensor from https://github.com/manitou48/teensy3/blob/master/chiptemp.pde
+		temperature = temperature * .95 + .05 * (25 - (((uint16_t)adc->analogReadContinuous(ADC_1)) - 38700) / -35.7); //temp in C
+	
 	}
 }
 
@@ -658,3 +694,6 @@ CHSV map_hsv(uint8_t input, uint8_t in_min, uint8_t in_max, CHSV* out_min, CHSV*
 		(input - in_min) * (out_max->s - out_min->s) / (in_max - in_min) + out_min->s, \
 		(input - in_min) * (out_max->v - out_min->v) / (in_max - in_min) + out_min->v);
 }
+
+
+

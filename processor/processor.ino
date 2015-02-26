@@ -15,6 +15,7 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
+#include <ADC.h>
 
 typedef struct {
 	boolean fresh;
@@ -119,7 +120,7 @@ typedef struct {
 #define GLOVE_DEADZONE 3000  //30 degrees
 #define GLOVE_MAXIMUM 30000 //90 degrees
 
-#define OLED_DC     17
+#define OLED_DC     18
 #define OLED_CS     22
 #define OLED_RESET  19
 Adafruit_SSD1306 display(OLED_DC, OLED_RESET, OLED_CS);
@@ -147,7 +148,10 @@ uint8_t incoming1_raw_buffer[INCOMING1_BUFFER_SIZE];
 uint8_t incoming1_index = 0;
 uint8_t incoming1_decoded_buffer[INCOMING1_BUFFER_SIZE];
 
-AudioInputAnalog         adc1(A9);
+
+ADC *adc = new ADC(); // adc object
+
+AudioInputAnalog         adc1(A9);  //A9 is on ADC0
 AudioAnalyzeFFT256       fft256_1;
 AudioConnection          patchCord1(adc1, fft256_1);
 
@@ -215,12 +219,21 @@ void setup() {
 	Serial2.begin(115200);  //Xbee	
 	Serial3.begin(115200);  //BT
 
-	pinMode(A4, INPUT); //audio input
+	//pinMode(A9, INPUT); //audio input
 
 	AudioMemory(4);
 	fft256_1.windowFunction(AudioWindowHanning256);
 	fft256_1.averageTogether(4);
 
+
+	pinMode(A3, INPUT);//A3 is on ADC1
+
+	adc->setReference(ADC_REF_INTERNAL, ADC_1); //change all 3.3 to 1.2 if you change the reference
+	adc->setAveraging(1, ADC_1); // set number of averages
+	adc->setResolution(16, ADC_1); // set bits of resolution
+	adc->setConversionSpeed(ADC_HIGH_SPEED, ADC_1); // change the conversion speed
+	adc->setSamplingSpeed(ADC_HIGH_SPEED, ADC_1); // change the sampling speed
+	
 }
 
 //HUD locations
@@ -244,6 +257,11 @@ void setup() {
 #define static_menu_location_y 10
 
 void loop() {
+
+
+
+	
+
 
 	fpscount++;
 
@@ -526,6 +544,8 @@ void loop() {
 
 	if (YPRdisplay.check()){
 
+	
+
 		display.reinit();
 
 		if (0){
@@ -556,7 +576,18 @@ void loop() {
 
 
 	if (FPSdisplay.check()){
-		Serial.println(fpscount);
+
+		long int start = micros();
+		if (adc->isComplete(ADC_1)){
+
+	
+
+			adc->startContinuous(38, ADC_1);
+		}
+		Serial.println(micros() - start);
+
+		
+
 		fpscount = 0;
 		//cpu_usage = 100 - (idle_microseconds / 10000);
 		//local_packets_out_per_second_1 = local_packets_out_counter_1;
