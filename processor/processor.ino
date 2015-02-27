@@ -259,58 +259,6 @@ void setup() {
 void loop() {
 
 
-	if (YPRdisplay.check()){
-		
-
-		//startContinuous is relatively slow, expect to take 2-3ms!  cant be avoided when switching back and forth...
-		//might remove the temp sensor if its a problem.
-		switch (adc1_mode){
-		case 0:
-			voltage = voltage * .95 + .05 * (((uint16_t)adc->analogReadContinuous(ADC_1)) / 4083.375); //voltage
-			adc->stopContinuous(ADC_1);
-			adc->setReference(ADC_REF_INTERNAL, ADC_1);
-			adc->startContinuous(38, ADC_1);
-			adc1_mode = 1;
-			break;
-		case 1:
-			// temp sensor from https ://github.com/manitou48/teensy3/blob/master/chiptemp.pde
-			temperature = temperature * .95 + .05 * (25 - (((uint16_t)adc->analogReadContinuous(ADC_1)) - 38700) / -35.7); //temp in C
-			adc->stopContinuous(ADC_1);
-			adc->setReference(ADC_REF_EXTERNAL, ADC_1);
-			adc->startContinuous(A3, ADC_1);
-			adc1_mode = 0;
-			break;
-		}
-
-
-		display.reinit();
-
-		if (0){
-			Serial.print("ypr\t");
-			Serial.print(sin(glove1.roll_raw * PI / 18000));
-			Serial.print("ypr\t");
-			Serial.print(glove1.finger1);
-			Serial.print("\t");
-			Serial.print(glove1.yaw_compensated);
-			Serial.print("\t");
-			Serial.print(glove1.pitch_compensated);
-			Serial.print("\t");
-			Serial.print(glove1.roll_compensated);
-			Serial.print("\t");
-			Serial.print(glove1.yaw_raw);
-			Serial.print("\t");
-			Serial.print(glove1.pitch_raw);
-			Serial.print("\t");
-			Serial.print(glove1.roll_raw);
-			Serial.print("\t");
-			Serial.print(glove1.yaw_offset);
-			Serial.print("\t");
-			Serial.print(glove1.pitch_offset);
-			Serial.print("\t");
-			Serial.println(glove1.roll_offset);
-		}
-	}
-
 
 	if (FPSdisplay.check()){
 		Serial.print(fpscount);
@@ -707,6 +655,59 @@ void loop() {
 		}
 	}
 	SerialUpdate();
+
+
+
+	if (YPRdisplay.check()){
+
+		long int start_time = micros();
+		switch (adc1_mode){
+		case 0:
+			voltage = voltage * .95 + .05 * (((uint16_t)adc->analogReadContinuous(ADC_1)) / 4083.375); //voltage
+			adc->stopContinuous(ADC_1);
+			adc->setReference(ADC_REF_INTERNAL, ADC_1);  //modified this to remove calibration, drops time from 2ms to ~2ns
+			adc->startContinuous(38, ADC_1);
+			adc1_mode = 1;
+			break;
+		case 1:
+			// temp sensor from https ://github.com/manitou48/teensy3/blob/master/chiptemp.pde
+			temperature = temperature * .95 + .05 * (25 - (((uint16_t)adc->analogReadContinuous(ADC_1)) - 38700) / -35.7); //temp in C
+			adc->stopContinuous(ADC_1);
+			adc->setReference(ADC_REF_EXTERNAL, ADC_1);  //modified this to remove calibration
+			adc->startContinuous(A3, ADC_1);
+			adc1_mode = 0;
+			break;
+		}
+		Serial.println(micros() - start_time);
+
+		//blindly keep re-initing the screen for hot plug!
+		display.reinit();
+
+		if (0){
+			Serial.print("ypr\t");
+			Serial.print(sin(glove1.roll_raw * PI / 18000));
+			Serial.print("ypr\t");
+			Serial.print(glove1.finger1);
+			Serial.print("\t");
+			Serial.print(glove1.yaw_compensated);
+			Serial.print("\t");
+			Serial.print(glove1.pitch_compensated);
+			Serial.print("\t");
+			Serial.print(glove1.roll_compensated);
+			Serial.print("\t");
+			Serial.print(glove1.yaw_raw);
+			Serial.print("\t");
+			Serial.print(glove1.pitch_raw);
+			Serial.print("\t");
+			Serial.print(glove1.roll_raw);
+			Serial.print("\t");
+			Serial.print(glove1.yaw_offset);
+			Serial.print("\t");
+			Serial.print(glove1.pitch_offset);
+			Serial.print("\t");
+			Serial.println(glove1.roll_offset);
+		}
+	}
 }
 
 boolean visible_menu(uint8_t x, uint8_t y){

@@ -291,7 +291,7 @@ void ADC_Module::setReference(uint8_t type)
         *ADC_SC2_ref = 0; // uses bitband: atomic
 	}
 
-    calibrate();
+    //calibrate();
 }
 
 
