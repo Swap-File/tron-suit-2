@@ -128,7 +128,8 @@ Adafruit_SSD1306 display(OLED_DC, OLED_RESET, OLED_CS);
 uint8_t fftmode = 2;
 int mask_mode = 0;
 uint8_t menu_mode = 1;
-
+double  temperature = 0.0;
+double  voltage = 0.0;
 char sms_message[160];
 int16_t sms_text_ending_pos = 0; //160 * 5 max length
 int16_t sms_scroll_pos = 0;
@@ -155,8 +156,8 @@ AudioInputAnalog         adc1(A9);  //A9 is on ADC0
 AudioAnalyzeFFT256       fft256_1;
 AudioConnection          patchCord1(adc1, fft256_1);
 
-#define NUM_LEDS_PER_STRIP 128
-#define NUM_STRIPS 8
+#define NUM_LEDS_PER_STRIP 130 //longest strip is helmet, 128 LEDS + 2 indicators internal
+#define NUM_STRIPS 8 //must be 8, even though only 6 are used
 CRGB actual_output[NUM_STRIPS * NUM_LEDS_PER_STRIP];
 CRGB target_output[NUM_STRIPS * NUM_LEDS_PER_STRIP];
 
@@ -183,7 +184,10 @@ Metro ScrollSpeed = Metro(40);
 Metro GloveSend = Metro(10);
 Metro DiscSend = Metro(100);
 
+uint8_t adc1_mode = 0;// round robin poll sensors
 void setup() {
+
+
 
 	strcpy(sms_message, "TESTING TEXT MESSAGE");
 
@@ -227,13 +231,9 @@ void setup() {
 
 
 	pinMode(A3, INPUT);//A3 is on ADC1
+	adc->setAveraging(32, ADC_1);
+	adc->setResolution(16, ADC_1);
 
-	adc->setReference(ADC_REF_INTERNAL, ADC_1); //change all 3.3 to 1.2 if you change the reference
-	adc->setAveraging(1, ADC_1); // set number of averages
-	adc->setResolution(16, ADC_1); // set bits of resolution
-	adc->setConversionSpeed(ADC_HIGH_SPEED, ADC_1); // change the conversion speed
-	adc->setSamplingSpeed(ADC_HIGH_SPEED, ADC_1); // change the sampling speed
-	
 }
 
 //HUD locations
@@ -259,11 +259,77 @@ void setup() {
 void loop() {
 
 
+	if (YPRdisplay.check()){
+		
 
-	
+		//startContinuous is relatively slow, expect to take 2-3ms!  cant be avoided when switching back and forth...
+		//might remove the temp sensor if its a problem.
+		switch (adc1_mode){
+		case 0:
+			voltage = voltage * .95 + .05 * (((uint16_t)adc->analogReadContinuous(ADC_1)) / 4083.375); //voltage
+			adc->stopContinuous(ADC_1);
+			adc->setReference(ADC_REF_INTERNAL, ADC_1);
+			adc->startContinuous(38, ADC_1);
+			adc1_mode = 1;
+			break;
+		case 1:
+			// temp sensor from https ://github.com/manitou48/teensy3/blob/master/chiptemp.pde
+			temperature = temperature * .95 + .05 * (25 - (((uint16_t)adc->analogReadContinuous(ADC_1)) - 38700) / -35.7); //temp in C
+			adc->stopContinuous(ADC_1);
+			adc->setReference(ADC_REF_EXTERNAL, ADC_1);
+			adc->startContinuous(A3, ADC_1);
+			adc1_mode = 0;
+			break;
+		}
 
 
-	fpscount++;
+		display.reinit();
+
+		if (0){
+			Serial.print("ypr\t");
+			Serial.print(sin(glove1.roll_raw * PI / 18000));
+			Serial.print("ypr\t");
+			Serial.print(glove1.finger1);
+			Serial.print("\t");
+			Serial.print(glove1.yaw_compensated);
+			Serial.print("\t");
+			Serial.print(glove1.pitch_compensated);
+			Serial.print("\t");
+			Serial.print(glove1.roll_compensated);
+			Serial.print("\t");
+			Serial.print(glove1.yaw_raw);
+			Serial.print("\t");
+			Serial.print(glove1.pitch_raw);
+			Serial.print("\t");
+			Serial.print(glove1.roll_raw);
+			Serial.print("\t");
+			Serial.print(glove1.yaw_offset);
+			Serial.print("\t");
+			Serial.print(glove1.pitch_offset);
+			Serial.print("\t");
+			Serial.println(glove1.roll_offset);
+		}
+	}
+
+
+	if (FPSdisplay.check()){
+		Serial.print(fpscount);
+		Serial.print(" ");
+		Serial.print(voltage);
+		Serial.print(" ");
+		Serial.println(temperature);
+
+		fpscount = 0;
+		//cpu_usage = 100 - (idle_microseconds / 10000);
+		//local_packets_out_per_second_1 = local_packets_out_counter_1;
+		//local_packets_in_per_second_1 = local_packets_in_counter_1;
+		//idle_microseconds = 0;
+		// local_packets_out_counter_1 = 0;
+		// local_packets_in_counter_1 = 0;
+	}
+
+
+
 
 	if (glove1.finger2 == 0 || glove1.finger3 == 0){
 		if (glove1.finger2 == 0){
@@ -327,21 +393,21 @@ void loop() {
 	//most boxes are widt
 	//draw the boxes are 18x10, thats 16x8 + the boarder pixels
 
-		//draw the menu first for masking purposes
-		display.drawRect(menu_location_x - 1, menu_location_y - 1, 18, 10, WHITE);
+	//draw the menu first for masking purposes
+	display.drawRect(menu_location_x - 1, menu_location_y - 1, 18, 10, WHITE);
 
-		display.setCursor(menu_location_x + scroll_pos_x + scroll_pos_x_offset, menu_location_y + scroll_pos_y);
-		display.print(menu_mode);
-		menu_text_ending_pos = display.getCursorX(); //save menu text length for elsewhere
-		//black out the rest!  probably dont need full width... 
-		display.fillRect(menu_location_x - 1, menu_location_y - 1 - 10, display.width() - (menu_location_x - 1), 10, BLACK);
-		display.fillRect(menu_location_x - 1, menu_location_y - 1 + 10, display.width() - (menu_location_x - 1), 10, BLACK);
-		display.fillRect(menu_location_x - 1 + 18, menu_location_y - 1, display.width() - (menu_location_x - 1 + 18), 10, BLACK);
+	display.setCursor(menu_location_x + scroll_pos_x + scroll_pos_x_offset, menu_location_y + scroll_pos_y);
+	display.print(menu_mode);
+	menu_text_ending_pos = display.getCursorX(); //save menu text length for elsewhere
+	//black out the rest!  probably dont need full width... 
+	display.fillRect(menu_location_x - 1, menu_location_y - 1 - 10, display.width() - (menu_location_x - 1), 10, BLACK);
+	display.fillRect(menu_location_x - 1, menu_location_y - 1 + 10, display.width() - (menu_location_x - 1), 10, BLACK);
+	display.fillRect(menu_location_x - 1 + 18, menu_location_y - 1, display.width() - (menu_location_x - 1 + 18), 10, BLACK);
 
-		//staticmode
-		display.drawRect(static_menu_location_x - 1, static_menu_location_y - 1, 35, 10, WHITE);
-		display.setCursor(static_menu_location_x, static_menu_location_y);
-		display.print(menu_mode);
+	//staticmode
+	display.drawRect(static_menu_location_x - 1, static_menu_location_y - 1, 35, 10, WHITE);
+	display.setCursor(static_menu_location_x, static_menu_location_y);
+	display.print(menu_mode);
 
 	//hand display dots - its important to always know where your hands are.
 	display.drawRect(hand_location_x - 1, hand_location_y - 1, 18, 10, WHITE);
@@ -490,7 +556,7 @@ void loop() {
 
 	if (GloveSend.check()){
 
-		uint8_t raw_buffer[14];
+		uint8_t raw_buffer[15];
 
 		raw_buffer[0] = 0;
 		raw_buffer[1] = 255;
@@ -498,7 +564,7 @@ void loop() {
 		raw_buffer[3] = 128;
 		raw_buffer[4] = 255;
 		raw_buffer[5] = 255;
-		raw_buffer[6] = disc0.packet_sequence_number ;
+		raw_buffer[6] = disc0.packet_sequence_number;
 		raw_buffer[7] = disc0.packet_sequence_number;
 		raw_buffer[8] = 8;
 		raw_buffer[9] = 8;
@@ -510,9 +576,9 @@ void loop() {
 		if (disc0.packet_sequence_number > 29){
 			disc0.packet_sequence_number = 0;
 		}
-		uint8_t encoded_buffer[14];
+		uint8_t encoded_buffer[15];
 		uint8_t encoded_size = COBSencode(raw_buffer, 14, encoded_buffer);
-	
+
 		Serial2.write(encoded_buffer, encoded_size);
 		Serial2.write(0x00);
 
@@ -542,60 +608,7 @@ void loop() {
 		}
 	}
 
-	if (YPRdisplay.check()){
 
-	
-
-		display.reinit();
-
-		if (0){
-			Serial.print("ypr\t");
-			Serial.print(sin(glove1.roll_raw * PI / 18000));
-			Serial.print("ypr\t");
-			Serial.print(glove1.finger1);
-			Serial.print("\t");
-			Serial.print(glove1.yaw_compensated);
-			Serial.print("\t");
-			Serial.print(glove1.pitch_compensated);
-			Serial.print("\t");
-			Serial.print(glove1.roll_compensated);
-			Serial.print("\t");
-			Serial.print(glove1.yaw_raw);
-			Serial.print("\t");
-			Serial.print(glove1.pitch_raw);
-			Serial.print("\t");
-			Serial.print(glove1.roll_raw);
-			Serial.print("\t");
-			Serial.print(glove1.yaw_offset);
-			Serial.print("\t");
-			Serial.print(glove1.pitch_offset);
-			Serial.print("\t");
-			Serial.println(glove1.roll_offset);
-		}
-	}
-
-
-	if (FPSdisplay.check()){
-
-		long int start = micros();
-		if (adc->isComplete(ADC_1)){
-
-	
-
-			adc->startContinuous(38, ADC_1);
-		}
-		Serial.println(micros() - start);
-
-		
-
-		fpscount = 0;
-		//cpu_usage = 100 - (idle_microseconds / 10000);
-		//local_packets_out_per_second_1 = local_packets_out_counter_1;
-		//local_packets_in_per_second_1 = local_packets_in_counter_1;
-		//idle_microseconds = 0;
-		// local_packets_out_counter_1 = 0;
-		// local_packets_in_counter_1 = 0;
-	}
 
 
 	if (fft256_1.available()) {
@@ -979,6 +992,7 @@ void readglove(void * temp){
 	else{
 		current_glove->finger1_in_progress = false;
 	}
+	fpscount++;
 }
 
 
@@ -1121,3 +1135,4 @@ void onPacket1(const uint8_t* buffer, size_t size)
 		}
 	}
 }
+

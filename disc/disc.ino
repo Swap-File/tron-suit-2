@@ -132,16 +132,12 @@ void setup() {
 	//battery meter pin
 	pinMode(A9, INPUT);
 	adc->setReference(ADC_REF_EXTERNAL, ADC_0);
-	adc->setConversionSpeed(ADC_VERY_LOW_SPEED, ADC_0);
-	adc->setSamplingSpeed(ADC_VERY_LOW_SPEED, ADC_0);
 	adc->setAveraging(32, ADC_0);
 	adc->setResolution(16, ADC_0);
 	adc->startContinuous(A9, ADC_0);
 
 	//temp sensor
 	adc->setReference(ADC_REF_INTERNAL, ADC_1);
-	adc->setConversionSpeed(ADC_VERY_LOW_SPEED, ADC_1);
-	adc->setSamplingSpeed(ADC_VERY_LOW_SPEED, ADC_1);
 	adc->setAveraging(32, ADC_1);
 	adc->setResolution(16, ADC_1);
 	adc->startContinuous(38, ADC_1);
