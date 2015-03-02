@@ -183,6 +183,7 @@ Metro YPRdisplay = Metro(100);
 Metro ScrollSpeed = Metro(40);
 Metro GloveSend = Metro(10);
 Metro DiscSend = Metro(100);
+Metro LEDdisplay = Metro(10);
 
 uint8_t adc1_mode = 0;// round robin poll sensors
 void setup() {
@@ -263,10 +264,10 @@ void loop() {
 	if (FPSdisplay.check()){
 		Serial.print(fpscount);
 		Serial.print(" ");
-		Serial.print(voltage);
+		Serial.print(serial1stats.packets_out_per_second);
 		Serial.print(" ");
 		Serial.println(temperature);
-
+		serial1stats.packets_out_per_second = 0;
 		fpscount = 0;
 		//cpu_usage = 100 - (idle_microseconds / 10000);
 		//local_packets_out_per_second_1 = local_packets_out_counter_1;
@@ -492,11 +493,12 @@ void loop() {
 		}
 	}
 
+	if (LEDdisplay.check()){
+		//show it all
+		display.display();
 
-	//show it all
-	display.display();
-
-	LEDS.show();
+		LEDS.show();
+	}
 
 	if (DiscSend.check()){
 		disc0.packet_sequence_number++;
@@ -660,7 +662,7 @@ void loop() {
 
 	if (YPRdisplay.check()){
 
-		long int start_time = micros();
+	
 		switch (adc1_mode){
 		case 0:
 			voltage = voltage * .95 + .05 * (((uint16_t)adc->analogReadContinuous(ADC_1)) / 4083.375); //voltage
@@ -678,7 +680,7 @@ void loop() {
 			adc1_mode = 0;
 			break;
 		}
-		Serial.println(micros() - start_time);
+
 
 		//blindly keep re-initing the screen for hot plug!
 		display.reinit();

@@ -246,7 +246,10 @@ void loop() {
 			packets_in_counter = 0;
 			packets_out_per_second = packets_out_counter;
 			packets_out_counter = 0;
-
+			Serial.print(packets_in_per_second);
+			Serial.print(" ");
+			Serial.print(packets_out_per_second);
+			Serial.print(" ");
 			Serial.print(cpu_usage);
 			Serial.print(" ");
 			Serial.println(disc_mode);
@@ -469,20 +472,6 @@ void loop() {
 
 
 
-
-		//send  voltage  mode  index  width cpu-load
-
-		byte raw_buffer[35];
-
-		//raw_buffer[3] = reported_disc_outer_mode;
-		//raw_buffer[4] = reported_disc_index;
-		//raw_buffer[5] = reported_disc_width;
-		raw_buffer[6] = OneWire::crc8(raw_buffer, 5);
-		uint8_t encoded_buffer[8];  //one extra to hold cobs data
-		uint8_t encoded_size = COBSencode(raw_buffer, 7, encoded_buffer);
-		Serial1.write(encoded_buffer, encoded_size);
-		Serial1.write(0x00);
-
 		// blink LED to indicate activity
 		blinkState++;
 		digitalWrite(LED_PIN, bitRead(blinkState, 2));
@@ -636,6 +625,28 @@ void onPacket(const uint8_t* buffer, size_t size)
 			Serial.println("crc");
 		}
 		else{
+
+			//send reply
+
+			if (packets_out_counter < 255){
+				packets_out_counter++;
+			}
+
+			//send  voltage  mode  index  width cpu-load
+
+			byte raw_buffer[35];
+
+			//raw_buffer[3] = reported_disc_outer_mode;
+			//raw_buffer[4] = reported_disc_index;
+			//raw_buffer[5] = reported_disc_width;
+			raw_buffer[6] = OneWire::crc8(raw_buffer, 5);
+			uint8_t encoded_buffer[8];  //one extra to hold cobs data
+			uint8_t encoded_size = COBSencode(raw_buffer, 7, encoded_buffer);
+			Serial1.write(encoded_buffer, encoded_size);
+		    Serial1.write(0x00);
+
+
+
 
 			//increment packet stats counter
 			if (packets_in_counter < 255){
