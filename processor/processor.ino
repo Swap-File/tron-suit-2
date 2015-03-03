@@ -567,8 +567,8 @@ void loop() {
 		raw_buffer[7] = disc0.packet_sequence_number;
 		raw_buffer[8] = 8;
 		raw_buffer[9] = 8;
-		raw_buffer[10] = 0;
-		raw_buffer[11] = 0;
+		raw_buffer[10] = disc0.packet_sequence_number;
+		raw_buffer[11] = 0x10;
 		raw_buffer[12] = disc0.packet_sequence_number;
 		raw_buffer[13] = OneWire::crc8(raw_buffer, 12);
 

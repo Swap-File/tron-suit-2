@@ -28,6 +28,7 @@ ADC *adc = new ADC(); // adc object
 #define NUM_STRIPS 8
 CRGB actual_output[NUM_STRIPS * NUM_LEDS_PER_STRIP];
 CHSV target_output[NUM_STRIPS * NUM_LEDS_PER_STRIP];
+boolean dimmable[NUM_STRIPS * NUM_LEDS_PER_STRIP];
 
 uint8_t disc_mode = 2;
 uint8_t effect_mode = 0x10;
@@ -40,7 +41,6 @@ boolean opening_inner = false;
 boolean opening_outer = false;
 uint8_t opening_inner_index = 0;
 uint8_t opening_outer_index = 0;
-
 
 uint8_t flow_offset = 0;
 uint8_t saved_outer_index_acceleration = 0;
@@ -66,8 +66,12 @@ CHSV outer_streaming[17];
 //effect mode 2 variables
 uint8_t inner_offset = 0;
 uint8_t outer_offset = 0;
-uint8_t inner_magnitude = 16;
-uint8_t outer_magnitude = 16;
+uint8_t inner_magnitude_displayed = 16;
+uint8_t outer_magnitude_displayed = 16;
+uint8_t inner_index = 16;
+uint8_t outer_index = 16;
+uint8_t inner_magnitude_requested = 16;
+uint8_t outer_magnitude_requested = 16;
 
 //serial com data
 #define INCOMING_BUFFER_SIZE 128
@@ -222,6 +226,7 @@ void setup() {
 	for (int i = 0; i < NUM_STRIPS * NUM_LEDS_PER_STRIP; i++) {
 		actual_output[i] = CRGB(0, 0, 0);
 		target_output[i] = CHSV(0, 0, 0);
+		dimmable[i] = false;
 	}
 
 	LEDS.show();
@@ -253,20 +258,18 @@ void loop() {
 			Serial.print(cpu_usage);
 			Serial.print(" ");
 			Serial.println(disc_mode);
-
 			Serial.print("Voltage: ");
-
 			Serial.println(voltage);
 			Serial.print("Temp in C: ");
-
-
 			Serial.println(temperature);
 
 		}
 
+		/* Increment flow via timer
 		if (flow_speed.check()){
-			//increment_flow();
+			increment_flow();
 		}
+		*/
 
 		SerialUpdate();
 
@@ -277,6 +280,7 @@ void loop() {
 		color2_outer = bitRead(effect_mode, 3) ? &color2 : &color1;
 
 		if (idle_start_timer == 0){
+			sendPacket();
 			idle_start_timer = micros();
 		}
 	}
@@ -344,8 +348,8 @@ void loop() {
 			temp = temp - 29;
 		}
 
-		int inner_index = ((int)floor((temp + 0.5) + 30)) % 30;
-		int outer_index = ((29 - inner_index) + 32) % 30;
+		inner_index = ((int)floor((temp + 0.5) + 30)) % 30;
+		outer_index = ((29 - inner_index) + 32) % 30;
 
 		//instant accel mag
 		double xy_accel_magnitude = sqrt((long)aaReal.x*aaReal.x + aaReal.y*aaReal.y);
@@ -364,8 +368,8 @@ void loop() {
 		}
 
 		if (disc_mode == 0 && opening_outer == false){
-			inner_magnitude = 0;
-			outer_magnitude = 0;
+			inner_magnitude_displayed = 0;
+			outer_magnitude_displayed = 0;
 
 			if (xy_accel_magnitude > 4000){
 				outer_opening_time = millis();
@@ -378,7 +382,7 @@ void loop() {
 
 		if (disc_mode == 1 && opening_inner == false && cooldowncomplete){
 
-			inner_magnitude = 0;
+			inner_magnitude_displayed = 0;
 
 			if (xy_accel_magnitude > 4000){
 				inner_opening_time = millis();
@@ -396,7 +400,7 @@ void loop() {
 			int location = map(millis() - outer_opening_time, 0, 500, 0, 16);
 
 			if (location < 16){
-				outer_magnitude = location;
+				outer_magnitude_displayed = location;
 			}
 			else {
 				opening_outer = false;
@@ -410,7 +414,7 @@ void loop() {
 			int location = map(millis() - inner_opening_time, 0, 500, 0, 16);
 
 			if (location < 16){
-				inner_magnitude = location;
+				inner_magnitude_displayed = location;
 			}
 			else {
 				disc_mode = 2;
@@ -441,8 +445,8 @@ void loop() {
 			if (xy_accel_magnitude > 3000){
 				uint8_t magnitude_temp = constrain(map(xy_accel_magnitude, 3000, 10000, 1, 10), 1, 10);
 
-				inner_magnitude = magnitude_temp;
-				outer_magnitude = magnitude_temp;
+				inner_magnitude_displayed = magnitude_temp;
+				outer_magnitude_displayed = magnitude_temp;
 
 				if ((saved_inner_index_acceleration + 1) % 30 == inner_index_acceleration){
 					color1_outer->hue = color1_outer->hue + 1;
@@ -459,17 +463,14 @@ void loop() {
 			else{
 				uint8_t magnitude_temp = constrain(map(saved_xy_accel_magnitude_smoothed, 3000, 10000, 1, 10), 1, 10);
 
-				inner_magnitude = magnitude_temp;
-				outer_magnitude = magnitude_temp;
+				inner_magnitude_displayed = magnitude_temp;
+				outer_magnitude_displayed = magnitude_temp;
 			}
-
 
 			inner_index = saved_inner_index_acceleration;
 			outer_index = saved_outer_index_acceleration;
 
 		}
-
-
 
 
 		// blink LED to indicate activity
@@ -480,32 +481,37 @@ void loop() {
 		for (int pixel_index = 0; pixel_index <= 16; pixel_index++) {
 
 			//set outer LEDs
-			if (pixel_index <= outer_magnitude && pixel_index > 0){
+			if (pixel_index <= outer_magnitude_displayed && pixel_index > 0){
 				//set pixels
 
 				//streaming input render
 				int absolute_LED_index;
 				CHSV LED_color = outer_streaming[(pixel_index + streaming_index) % 17];
 
-				absolute_LED_index = (outer_index + pixel_index + outer_offset - 1 + 60) % 30;
-				target_output[120 + absolute_LED_index] = LED_color;
+				absolute_LED_index = 120 + ((outer_index + pixel_index + outer_offset - 1 + 60) % 30);
+				target_output[absolute_LED_index] = LED_color;
+				dimmable[absolute_LED_index] = last_packet_sequence_number == pixel_index ? false : true;
 
-				absolute_LED_index = (outer_index - pixel_index + outer_offset + 1 + 60) % 30;
-				target_output[120 + absolute_LED_index] = LED_color;
+				absolute_LED_index = 120 + ((outer_index - pixel_index + outer_offset + 1 + 60) % 30);
+				target_output[absolute_LED_index] = LED_color;
+				dimmable[absolute_LED_index] = last_packet_sequence_number == pixel_index ? false : true;
+
 			}
 			else{
 				//clear unused pixels
 				int absolute_LED_index;
 
-				absolute_LED_index = (outer_index + pixel_index + outer_offset - 1 + 60) % 30;
-				target_output[120 + absolute_LED_index] = CHSV(0, 0, 0);
+				absolute_LED_index = 120 + ((outer_index + pixel_index + outer_offset - 1 + 60) % 30);
+				target_output[absolute_LED_index] = CHSV(0, 0, 0);
+				dimmable[absolute_LED_index] =  true;
 
-				absolute_LED_index = (outer_index - pixel_index + outer_offset + 1 + 60) % 30;
-				target_output[120 + absolute_LED_index] = CHSV(0, 0, 0);
+				absolute_LED_index = 120 + ((outer_index - pixel_index + outer_offset + 1 + 60) % 30);
+				target_output[absolute_LED_index] = CHSV(0, 0, 0);
+				dimmable[absolute_LED_index] = true;
 			}
 
 			//set inner LEDs
-			if (pixel_index <= inner_magnitude && pixel_index > 0){
+			if (pixel_index <= inner_magnitude_displayed && pixel_index > 0){
 				//set pixels
 
 				//streaming input render
@@ -514,9 +520,12 @@ void loop() {
 
 				absolute_LED_index = (inner_index + pixel_index + inner_offset - 1 + 60) % 30;
 				target_output[absolute_LED_index] = LED_color;
+				dimmable[absolute_LED_index] = last_packet_sequence_number == pixel_index ? false : true;
 
 				absolute_LED_index = (inner_index - pixel_index + inner_offset + 1 + 60) % 30;
 				target_output[absolute_LED_index] = LED_color;
+				dimmable[absolute_LED_index] = last_packet_sequence_number == pixel_index ? false : true;
+
 			}
 			else{
 				//clear unused pixels
@@ -524,39 +533,39 @@ void loop() {
 
 				absolute_LED_index = (inner_index + pixel_index + inner_offset - 1 + 60) % 30;
 				target_output[absolute_LED_index] = CHSV(0, 0, 0);
+				dimmable[absolute_LED_index] = true;
 
 				absolute_LED_index = (outer_index - pixel_index + inner_offset + 1 + 60) % 30;
 				target_output[absolute_LED_index] = CHSV(0, 0, 0);
+				dimmable[absolute_LED_index] = true;
+
 			}
 		}
 
 
-		//Blurring Code
+		//Linear Blurring & Dimming Code
 		for (int i = 0; i < NUM_STRIPS * NUM_LEDS_PER_STRIP; i++) {
 
 			//convert HSV to RGB
-			CRGB temp = target_output[i];
+			CRGB temp_rgb = target_output[i];
 
-			//if shutting off a LED, do so immediately
-			if (temp == CRGB(0, 0, 0)){
-				actual_output[i] = temp;
-				//if turning on a LED, do so immediately
+			//set fade based on mode	
+			bitRead(effect_mode, 6) && dimmable[i] ? temp_rgb.fadeLightBy(fade_level) : temp_rgb.fadeToBlackBy(fade_level);
+
+			//if shutting off or turning on a LED, do so immediately
+			if (temp_rgb == CRGB(0, 0, 0) || actual_output[i] == CRGB(0, 0, 0)){
+				actual_output[i] = temp_rgb;
 			}
-			else if (actual_output[i] == CRGB(0, 0, 0)){
-				actual_output[i] = temp;
-			}
-			//if changing a LED, blend
+			//if changing a LED, blur
 			else{
-				if (actual_output[i].r < temp.r) temp.r = min(actual_output[i].r + blur_rate, temp.r);
-				if (actual_output[i].r > temp.r) temp.r = max(actual_output[i].r - blur_rate, temp.r);
+				if (actual_output[i].r < temp_rgb.r) temp_rgb.r = min(actual_output[i].r + blur_rate, temp_rgb.r);
+				if (actual_output[i].r > temp_rgb.r) temp_rgb.r = max(actual_output[i].r - blur_rate, temp_rgb.r);
 
-				if (actual_output[i].g < temp.g) temp.g = min(actual_output[i].g + blur_rate, temp.g);
-				if (actual_output[i].g > temp.g) temp.g = max(actual_output[i].g - blur_rate, temp.g);
+				if (actual_output[i].g < temp_rgb.g) temp_rgb.g = min(actual_output[i].g + blur_rate, temp_rgb.g);
+				if (actual_output[i].g > temp_rgb.g) temp_rgb.g = max(actual_output[i].g - blur_rate, temp_rgb.g);
 
-				if (actual_output[i].b < temp.b) temp.b = min(actual_output[i].b + blur_rate, temp.b);
-				if (actual_output[i].b > temp.b) temp.b = max(actual_output[i].b - blur_rate, temp.b);
-
-				actual_output[i] = temp;
+				if (actual_output[i].b < temp_rgb.b) temp_rgb.b = min(actual_output[i].b + blur_rate, temp_rgb.b);
+				if (actual_output[i].b > temp_rgb.b) temp_rgb.b = max(actual_output[i].b - blur_rate, temp_rgb.b);
 			}
 		}
 
@@ -567,7 +576,6 @@ void loop() {
 
 		//temp sensor from https://github.com/manitou48/teensy3/blob/master/chiptemp.pde
 		temperature = temperature * .95 + .05 * (25 - (((uint16_t)adc->analogReadContinuous(ADC_1)) - 38700) / -35.7); //temp in C
-	
 	}
 }
 
@@ -585,7 +593,7 @@ void SerialUpdate(void){
 
 			//check length of decoded data (cleans up a series of 0x00 bytes)
 			if (decoded_length > 0){
-				onPacket(incoming_decoded_buffer, decoded_length);
+				receivePacket(incoming_decoded_buffer, decoded_length);
 			}
 
 			//reset index
@@ -599,7 +607,35 @@ void SerialUpdate(void){
 	}
 }
 
-void onPacket(const uint8_t* buffer, size_t size)
+void sendPacket(){
+	//send reply
+
+	byte raw_buffer[11];
+	raw_buffer[0] = inner_index;
+	raw_buffer[1] = inner_magnitude_displayed;
+	raw_buffer[2] = disc_mode; //add disc_mode and indicator together
+	raw_buffer[3] = packets_in_per_second;
+	raw_buffer[4] = packets_out_per_second;
+	raw_buffer[5] = cpu_usage;
+	raw_buffer[6] = (uint8_t)(voltage * 100);
+	raw_buffer[7] = (uint8_t)(temperature * 100);
+	raw_buffer[8] = crc_error;
+	raw_buffer[9] = framing_error;
+
+	raw_buffer[10] = OneWire::crc8(raw_buffer, 9);
+
+	uint8_t encoded_buffer[12];  //one extra to hold cobs data
+	uint8_t encoded_size = COBSencode(raw_buffer, 11, encoded_buffer);
+	Serial1.write(encoded_buffer, encoded_size);
+	Serial1.write(0x00);
+
+	if (packets_out_counter < 255){
+		packets_out_counter++;
+	}
+
+}
+
+void receivePacket(const uint8_t* buffer, size_t size)
 {
 	//format of packet is
 	//H-0 S-0 V-0 H-1 S-1 V-1 INNER-INDEX-OFFSET INNER-MAGNITUDE OUTER-INDEX-OFFSET OUTER-MAGNITUDE
@@ -611,42 +647,19 @@ void onPacket(const uint8_t* buffer, size_t size)
 	//0 - 3 are color mapping
 	//4 is flow direction inner
 	//5 could be pulsing on and off?
+	//6 fade to black funct or not?
 
 	//check for framing errors
 	if (size != 14){
 		framing_error++;
-		Serial.println(framing_error);
 	}
 	else{
 		//check for crc errors
 		byte crc = OneWire::crc8(buffer, size - 2);
 		if (crc != buffer[size - 1]){
 			crc_error++;
-			Serial.println("crc");
 		}
 		else{
-
-			//send reply
-
-			if (packets_out_counter < 255){
-				packets_out_counter++;
-			}
-
-			//send  voltage  mode  index  width cpu-load
-
-			byte raw_buffer[35];
-
-			//raw_buffer[3] = reported_disc_outer_mode;
-			//raw_buffer[4] = reported_disc_index;
-			//raw_buffer[5] = reported_disc_width;
-			raw_buffer[6] = OneWire::crc8(raw_buffer, 5);
-			uint8_t encoded_buffer[8];  //one extra to hold cobs data
-			uint8_t encoded_size = COBSencode(raw_buffer, 7, encoded_buffer);
-			Serial1.write(encoded_buffer, encoded_size);
-		    Serial1.write(0x00);
-
-
-
 
 			//increment packet stats counter
 			if (packets_in_counter < 255){
@@ -659,8 +672,8 @@ void onPacket(const uint8_t* buffer, size_t size)
 			inner_offset = ((uint8_t)buffer[6]) % 30;
 			outer_offset = ((uint8_t)buffer[7]) % 30;
 
-			inner_magnitude = ((uint8_t)buffer[8]) % 17;
-			outer_magnitude = ((uint8_t)buffer[9]) % 17;
+			inner_magnitude_requested = ((uint8_t)buffer[8]) % 17;
+			outer_magnitude_requested = ((uint8_t)buffer[9]) % 17;
 
 			fade_level = buffer[10];
 
