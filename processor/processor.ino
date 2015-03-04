@@ -17,6 +17,8 @@
 
 #include <ADC.h>
 
+boolean flow_direction_positive = true;
+
 typedef struct {
 	boolean fresh;
 	boolean finger1_in_progress;
@@ -116,6 +118,13 @@ typedef struct {
 	uint8_t crc_errors;
 
 } SERIALSTATS;
+
+
+CHSV color1 = CHSV(0, 255, 255);
+CHSV color2 = CHSV(64, 255, 255);
+
+int8_t flow_offset = 0;
+
 
 #define GLOVE_DEADZONE 3000  //30 degrees
 #define GLOVE_MAXIMUM 30000 //90 degrees
@@ -550,26 +559,38 @@ void loop() {
 	}
 
 	if (DiscSend.check()){
+
+		//bounce flow_offet between 0 and 16
+		if (flow_offset == 0)		flow_direction_positive = true;
+		else if (flow_offset == 16)	flow_direction_positive = false;
+
+		flow_direction_positive ? flow_offset++ : flow_offset--;
+
+		//calculate current pixels and add to array
+		disc0.color1 = map_hsv(flow_offset, 0, 16, &color1, &color2);
+		disc0.color2 = map_hsv(flow_offset, 0, 16, &color1, &color2);
+
 		disc0.packet_sequence_number++;
+		disc0.fade_level++;
 	}
 
 	if (GloveSend.check()){
 
 		uint8_t raw_buffer[15];
 
-		raw_buffer[0] = 0;
-		raw_buffer[1] = 255;
-		raw_buffer[2] = 255;
-		raw_buffer[3] = 128;
-		raw_buffer[4] = 255;
-		raw_buffer[5] = 255;
-		raw_buffer[6] = disc0.packet_sequence_number;
-		raw_buffer[7] = disc0.packet_sequence_number;
-		raw_buffer[8] = 8;
-		raw_buffer[9] = 8;
-		raw_buffer[10] = disc0.packet_sequence_number;
-		raw_buffer[11] = 0x10;
-		raw_buffer[12] = disc0.packet_sequence_number;
+		raw_buffer[0] = disc0.color1.h;
+		raw_buffer[1] = disc0.color1.s;
+		raw_buffer[2] = disc0.color1.v;
+		raw_buffer[3] = disc0.color2.h;
+		raw_buffer[4] = disc0.color2.s;
+		raw_buffer[5] = disc0.color2.v;
+		raw_buffer[6] = 0;
+		raw_buffer[7] = 0;
+		raw_buffer[8] = 15;
+		raw_buffer[9] = 15;
+		raw_buffer[10] = disc0.fade_level;  //fade
+		raw_buffer[11] = 0x00;  //mode
+		raw_buffer[12] = disc0.packet_sequence_number;  //sequence
 		raw_buffer[13] = OneWire::crc8(raw_buffer, 12);
 
 		if (disc0.packet_sequence_number > 29){
@@ -1135,3 +1156,9 @@ void onPacket1(const uint8_t* buffer, size_t size)
 	}
 }
 
+CHSV map_hsv(uint8_t input, uint8_t in_min, uint8_t in_max, CHSV* out_min, CHSV* out_max){
+	return CHSV(
+		(input - in_min) * (out_max->h - out_min->h) / (in_max - in_min) + out_min->h, \
+		(input - in_min) * (out_max->s - out_min->s) / (in_max - in_min) + out_min->s, \
+		(input - in_min) * (out_max->v - out_min->v) / (in_max - in_min) + out_min->v);
+}

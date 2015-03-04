@@ -50,22 +50,24 @@ uint8_t saved_inner_index_acceleration = 0;
 CHSV color1 = CHSV(128, 255, 255);
 CHSV color2 = CHSV(0, 255, 255);
 
-//pointers to colors, set by effect modes
-CHSV *color1_inner;
-CHSV *color2_inner;
-CHSV *color1_outer;
-CHSV *color2_outer;
 
 const uint8_t blur_rate = 2;
 
 //buffers to hold data as it streams in
-int8_t streaming_index = 0;
-CHSV inner_streaming[17];
-CHSV outer_streaming[17];
+int8_t stream_head = 0;
+CHSV color1_streaming[16];
+CHSV color2_streaming[16];
+
+
+
+//pointers to colors, set by effect modes
+CHSV *outer_stream = color2_streaming;
+CHSV *inner_stream = color1_streaming;
+
 
 //effect mode 2 variables
-uint8_t inner_offset = 0;
-uint8_t outer_offset = 0;
+uint8_t inner_offset_requested = 0;
+uint8_t outer_offset_requested = 0;
 uint8_t inner_magnitude_displayed = 16;
 uint8_t outer_magnitude_displayed = 16;
 uint8_t inner_index = 16;
@@ -82,10 +84,6 @@ uint8_t last_packet_sequence_number = 0;
 
 //fps display and debug
 Metro FPSdisplay = Metro(1000);
-
-//self testing code
-Metro flow_speed = Metro(100);
-boolean flow_direction_positive = true;
 
 uint32_t cooldown = 0;
 
@@ -215,18 +213,17 @@ void setup() {
 
 
 	//wipe and then put a single color in the streaming buffer for debug
-	for (int i = 0; i < 17; i++) {
-		inner_streaming[i] = CHSV(0, 0, 0);
-		outer_streaming[i] = CHSV(0, 0, 0);
+	for (int i = 0; i < 16; i++) {
+		color2_streaming[i] = CHSV(0, 0, 0);
+		color1_streaming[i] = CHSV(0, 0, 0);
 	}
-	outer_streaming[0] = CHSV(0, 255, 255);
 
 	//start the leds
 	LEDS.addLeds<OCTOWS2811>(actual_output, NUM_LEDS_PER_STRIP);
 	for (int i = 0; i < NUM_STRIPS * NUM_LEDS_PER_STRIP; i++) {
 		actual_output[i] = CRGB(0, 0, 0);
 		target_output[i] = CHSV(0, 0, 0);
-		dimmable[i] = false;
+		dimmable[i] = true;
 	}
 
 	LEDS.show();
@@ -267,20 +264,19 @@ void loop() {
 
 		/* Increment flow via timer
 		if (flow_speed.check()){
-			increment_flow();
+		increment_stream();
 		}
 		*/
 
 		SerialUpdate();
 
 		//set color modes from data
-		color1_inner = bitRead(effect_mode, 0) ? &color1 : &color2;
-		color1_outer = bitRead(effect_mode, 1) ? &color1 : &color2;
-		color2_inner = bitRead(effect_mode, 2) ? &color2 : &color1;
-		color2_outer = bitRead(effect_mode, 3) ? &color2 : &color1;
+		outer_stream = bitRead(effect_mode, 0) ? color1_streaming : color2_streaming;
+		inner_stream = bitRead(effect_mode, 1) ? color2_streaming : color1_streaming;
+
 
 		if (idle_start_timer == 0){
-			sendPacket();
+
 			idle_start_timer = micros();
 		}
 	}
@@ -436,11 +432,22 @@ void loop() {
 		}
 
 		if (disc_mode == 2){
-			//inner_magnitude = 16;
-			//outer_magnitude = 16;
+			inner_magnitude_displayed = inner_magnitude_requested;
+			outer_magnitude_displayed = outer_magnitude_requested;
 		}
 
 		if (disc_mode == 3){
+
+			//maybe adjust the effect for range 
+			//stuff the streaming buffers with color data
+			for (uint8_t current_pixel = 0; current_pixel < 16; current_pixel++) {
+
+				//check the 0-15 thing?
+				CHSV temp = CHSV(0, 0, 0);
+				color1_streaming[stream_head] = map_hsv(current_pixel, 0, 15, &color1, &temp);
+				color2_streaming[stream_head] = map_hsv(current_pixel, 0, 15, &color2, &temp);
+
+			}
 
 			if (xy_accel_magnitude > 3000){
 				uint8_t magnitude_temp = constrain(map(xy_accel_magnitude, 3000, 10000, 1, 10), 1, 10);
@@ -448,14 +455,6 @@ void loop() {
 				inner_magnitude_displayed = magnitude_temp;
 				outer_magnitude_displayed = magnitude_temp;
 
-				if ((saved_inner_index_acceleration + 1) % 30 == inner_index_acceleration){
-					color1_outer->hue = color1_outer->hue + 1;
-
-				}
-				if (saved_inner_index_acceleration == (inner_index_acceleration + 1) % 30){
-					color1_outer->hue = color1_outer->hue - 1;
-
-				}
 				saved_inner_index_acceleration = inner_index_acceleration;
 				saved_outer_index_acceleration = outer_index_acceleration;
 				saved_xy_accel_magnitude_smoothed = xy_accel_magnitude_smoothed;
@@ -470,90 +469,87 @@ void loop() {
 			inner_index = saved_inner_index_acceleration;
 			outer_index = saved_outer_index_acceleration;
 
+
 		}
-
-
+		
 		// blink LED to indicate activity
 		blinkState++;
 		digitalWrite(LED_PIN, bitRead(blinkState, 2));
 
 		//polar rendering
-		for (int pixel_index = 0; pixel_index <= 16; pixel_index++) {
+		//renders for 16 pixels - each pixel is mirrored on either side of disc
+		//pixel 1 and 16 overlaps - pixel 0 is off
+		for (uint8_t current_pixel = 0; current_pixel < 17; current_pixel++) {
+
+			//set inner 30 LEDs
+			if (current_pixel > 0 && current_pixel <= inner_magnitude_displayed){
+
+				//streaming input render
+				int absolute_LED_index;
+				CHSV LED_color = inner_stream [(current_pixel - 1 + stream_head) % 16];
+
+				absolute_LED_index =((60 + inner_index + (current_pixel - 1) + inner_offset_requested) % 30);
+				target_output[absolute_LED_index] = LED_color;
+				dimmable[absolute_LED_index] = last_packet_sequence_number == current_pixel ? false : true;
+
+				absolute_LED_index = ((60 + inner_index - ((current_pixel - 1) + inner_offset_requested)) % 30);
+				target_output[absolute_LED_index] = LED_color;
+				dimmable[absolute_LED_index] = last_packet_sequence_number == current_pixel ? false : true;
+
+			}
+			else{
+				//clear unused pixels
+				int absolute_LED_index;
+
+				absolute_LED_index = ((60 + inner_index + (current_pixel - 1) + inner_offset_requested) % 30);
+				target_output[absolute_LED_index] = CHSV(0, 0, 0);
+				dimmable[absolute_LED_index] =true;
+
+				absolute_LED_index =  ((60 + inner_index - ((current_pixel - 1) + inner_offset_requested)) % 30);
+				target_output[absolute_LED_index] = CHSV(0, 0, 0);	
+				dimmable[absolute_LED_index] =  true;
+	
+			}
 
 			//set outer LEDs
-			if (pixel_index <= outer_magnitude_displayed && pixel_index > 0){
-				//set pixels
+			if (current_pixel > 0 && current_pixel <= outer_magnitude_displayed){
 
 				//streaming input render
 				int absolute_LED_index;
-				CHSV LED_color = outer_streaming[(pixel_index + streaming_index) % 17];
+				CHSV LED_color = outer_stream[(current_pixel - 1 + stream_head) % 16];
 
-				absolute_LED_index = 120 + ((outer_index + pixel_index + outer_offset - 1 + 60) % 30);
+				absolute_LED_index = 120 + ((60 + outer_index + (current_pixel - 1) + outer_offset_requested) % 30);
 				target_output[absolute_LED_index] = LED_color;
-				dimmable[absolute_LED_index] = last_packet_sequence_number == pixel_index ? false : true;
+				dimmable[absolute_LED_index] = last_packet_sequence_number == current_pixel ? false : true;
 
-				absolute_LED_index = 120 + ((outer_index - pixel_index + outer_offset + 1 + 60) % 30);
+				absolute_LED_index = 120 + ((60 + outer_index - ((current_pixel - 1) + outer_offset_requested)) % 30);
 				target_output[absolute_LED_index] = LED_color;
-				dimmable[absolute_LED_index] = last_packet_sequence_number == pixel_index ? false : true;
+				dimmable[absolute_LED_index] = last_packet_sequence_number == current_pixel ? false : true;
 
 			}
 			else{
 				//clear unused pixels
 				int absolute_LED_index;
 
-				absolute_LED_index = 120 + ((outer_index + pixel_index + outer_offset - 1 + 60) % 30);
-				target_output[absolute_LED_index] = CHSV(0, 0, 0);
-				dimmable[absolute_LED_index] =  true;
-
-				absolute_LED_index = 120 + ((outer_index - pixel_index + outer_offset + 1 + 60) % 30);
-				target_output[absolute_LED_index] = CHSV(0, 0, 0);
-				dimmable[absolute_LED_index] = true;
-			}
-
-			//set inner LEDs
-			if (pixel_index <= inner_magnitude_displayed && pixel_index > 0){
-				//set pixels
-
-				//streaming input render
-				int absolute_LED_index;
-				CHSV LED_color = inner_streaming[(pixel_index + streaming_index) % 17];
-
-				absolute_LED_index = (inner_index + pixel_index + inner_offset - 1 + 60) % 30;
-				target_output[absolute_LED_index] = LED_color;
-				dimmable[absolute_LED_index] = last_packet_sequence_number == pixel_index ? false : true;
-
-				absolute_LED_index = (inner_index - pixel_index + inner_offset + 1 + 60) % 30;
-				target_output[absolute_LED_index] = LED_color;
-				dimmable[absolute_LED_index] = last_packet_sequence_number == pixel_index ? false : true;
-
-			}
-			else{
-				//clear unused pixels
-				int absolute_LED_index;
-
-				absolute_LED_index = (inner_index + pixel_index + inner_offset - 1 + 60) % 30;
+				absolute_LED_index = 120 + ((60 + outer_index + (current_pixel - 1) + outer_offset_requested) % 30);
 				target_output[absolute_LED_index] = CHSV(0, 0, 0);
 				dimmable[absolute_LED_index] = true;
 
-				absolute_LED_index = (outer_index - pixel_index + inner_offset + 1 + 60) % 30;
+				absolute_LED_index = 120 + ((60 + outer_index - ((current_pixel - 1) + outer_offset_requested)) % 30);
 				target_output[absolute_LED_index] = CHSV(0, 0, 0);
 				dimmable[absolute_LED_index] = true;
-
 			}
 		}
-
 
 		//Linear Blurring & Dimming Code
 		for (int i = 0; i < NUM_STRIPS * NUM_LEDS_PER_STRIP; i++) {
 
 			//convert HSV to RGB
 			CRGB temp_rgb = target_output[i];
-
-			//set fade based on mode	
-			bitRead(effect_mode, 6) && dimmable[i] ? temp_rgb.fadeLightBy(fade_level) : temp_rgb.fadeToBlackBy(fade_level);
+			if (dimmable[i]) temp_rgb.fadeToBlackBy(fade_level);
 
 			//if shutting off or turning on a LED, do so immediately
-			if (temp_rgb == CRGB(0, 0, 0) || actual_output[i] == CRGB(0, 0, 0)){
+			if ((temp_rgb == CRGB(0, 0, 0) || actual_output[i] == CRGB(0, 0, 0)) || 1==1  ){
 				actual_output[i] = temp_rgb;
 			}
 			//if changing a LED, blur
@@ -566,6 +562,8 @@ void loop() {
 
 				if (actual_output[i].b < temp_rgb.b) temp_rgb.b = min(actual_output[i].b + blur_rate, temp_rgb.b);
 				if (actual_output[i].b > temp_rgb.b) temp_rgb.b = max(actual_output[i].b - blur_rate, temp_rgb.b);
+
+				actual_output[i] = temp_rgb;
 			}
 		}
 
@@ -576,8 +574,10 @@ void loop() {
 
 		//temp sensor from https://github.com/manitou48/teensy3/blob/master/chiptemp.pde
 		temperature = temperature * .95 + .05 * (25 - (((uint16_t)adc->analogReadContinuous(ADC_1)) - 38700) / -35.7); //temp in C
+
 	}
 }
+
 
 void SerialUpdate(void){
 	while (Serial1.available()){
@@ -644,10 +644,10 @@ void receivePacket(const uint8_t* buffer, size_t size)
 	//Packet index can double as pulse beam
 
 	//mode bits
-	//0 - 3 are color mapping
+	//0 & 1 are color mapping
 	//4 is flow direction inner
 	//5 could be pulsing on and off?
-	//6 fade to black funct or not?
+
 
 	//check for framing errors
 	if (size != 14){
@@ -666,46 +666,63 @@ void receivePacket(const uint8_t* buffer, size_t size)
 				packets_in_counter++;
 			}
 
+			//sendPacket();
+
 			color1 = CHSV(buffer[0], buffer[1], buffer[2]);
 			color2 = CHSV(buffer[3], buffer[4], buffer[5]);
 
-			inner_offset = ((uint8_t)buffer[6]) % 30;
-			outer_offset = ((uint8_t)buffer[7]) % 30;
+			inner_offset_requested = ((uint8_t)buffer[6]) % 30;
+			outer_offset_requested = ((uint8_t)buffer[7]) % 30;
 
 			inner_magnitude_requested = ((uint8_t)buffer[8]) % 17;
 			outer_magnitude_requested = ((uint8_t)buffer[9]) % 17;
 
 			fade_level = buffer[10];
-
 			effect_mode = buffer[11];
 
 			if (last_packet_sequence_number != buffer[12]){
 				last_packet_sequence_number = buffer[12];
-				increment_flow();
+				increment_stream();
 			}
 		}
 	}
 }
 
-void increment_flow(){
+void increment_stream(){
+	//don't update the streams with incoming data if in mode 3 for smooth exit
+	if (disc_mode != 3){
+		//sender MUST change to std stream direction when disc enters mode 3 or exit from mode will look odd
+		boolean invert_stream_direction = bitRead(effect_mode, 4);
 
-	//bounce flow_offet between 0 and 16
-	if (flow_offset == 0)		flow_direction_positive = true;
-	else if (flow_offset == 16)	flow_direction_positive = false;
+		//adjust indexes based on direction
+		invert_stream_direction ? stream_head++ : stream_head--;
 
-	flow_direction_positive ? flow_offset++ : flow_offset--;
+		//wrap index
+		stream_head = (stream_head + 16) % 16;
 
-	//calculate current pixels and add to array
-	outer_streaming[streaming_index] = map_hsv(flow_offset, 0, 16, color1_outer, color2_outer);
-	inner_streaming[streaming_index] = map_hsv(flow_offset, 0, 16, color1_inner, color2_inner);
 
-	//adjust indexes based on mode
-	bitRead(effect_mode, 4) ? streaming_index-- : streaming_index++;
+		Serial.print("loading ");
+		Serial.print(stream_head);
+		Serial.print(" h " );
+		Serial.print(color1.h);
+		Serial.print(" s ");
+		Serial.print(color1.s);
+		Serial.print(" v ");
+		Serial.println(color1.v);
 
-	//wrap index
-	if (streaming_index > 16)		streaming_index = 0;
-	else if (streaming_index < 0)	streaming_index = 16;
+		//add to head or tail of streaming array based on direction
+		if (invert_stream_direction){
+			color1_streaming[stream_head] = color1;
+			color2_streaming[stream_head] = color2;
+		}
+		else{
+			uint8_t stream_tail = (stream_head + 15) % 16;
+			color1_streaming[stream_tail] = color1;
+			color2_streaming[stream_tail] = color2;
 
+				
+		}
+	}
 }
 
 CHSV map_hsv(uint8_t input, uint8_t in_min, uint8_t in_max, CHSV* out_min, CHSV* out_max){
