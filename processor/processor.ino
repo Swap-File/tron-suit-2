@@ -107,6 +107,7 @@ typedef struct {
 	uint8_t requested_mode;
 
 	uint8_t packet_sequence_number;
+	uint8_t packet_beam;
 
 } DISC;
 
@@ -192,6 +193,7 @@ Metro YPRdisplay = Metro(100);
 Metro ScrollSpeed = Metro(40);
 Metro GloveSend = Metro(10);
 Metro DiscSend = Metro(100);
+Metro DiscSend2 = Metro(10);
 Metro LEDdisplay = Metro(10);
 
 uint8_t adc1_mode = 0;// round robin poll sensors
@@ -569,14 +571,18 @@ void loop() {
 		//calculate current pixels and add to array
 		disc0.color1 = map_hsv(flow_offset, 0, 16, &color1, &color2);
 		disc0.color2 = map_hsv(flow_offset, 0, 16, &color1, &color2);
-
-		disc0.packet_sequence_number++;
 		disc0.fade_level++;
+		disc0.packet_sequence_number++;
+		
+	}
+	if (DiscSend2.check()){
+		
+		disc0.packet_beam--;
 	}
 
 	if (GloveSend.check()){
 
-		uint8_t raw_buffer[15];
+		uint8_t raw_buffer[14];
 
 		raw_buffer[0] = disc0.color1.h;
 		raw_buffer[1] = disc0.color1.s;
@@ -586,18 +592,19 @@ void loop() {
 		raw_buffer[5] = disc0.color2.v;
 		raw_buffer[6] = 0;
 		raw_buffer[7] = 0;
-		raw_buffer[8] = 15;
-		raw_buffer[9] = 15;
-		raw_buffer[10] = disc0.fade_level;  //fade
+		raw_buffer[8] = 16;
+		raw_buffer[9] = 16;
+		raw_buffer[10] = 128; //disc0.fade_level;  //fade
 		raw_buffer[11] = 0x00;  //mode
 		raw_buffer[12] = disc0.packet_sequence_number;  //sequence
-		raw_buffer[13] = OneWire::crc8(raw_buffer, 12);
+		raw_buffer[13] = disc0.packet_beam;  //sequence
+		raw_buffer[14] = OneWire::crc8(raw_buffer, 13);
 
 		if (disc0.packet_sequence_number > 29){
 			disc0.packet_sequence_number = 0;
 		}
-		uint8_t encoded_buffer[15];
-		uint8_t encoded_size = COBSencode(raw_buffer, 14, encoded_buffer);
+		uint8_t encoded_buffer[16];
+		uint8_t encoded_size = COBSencode(raw_buffer, 15, encoded_buffer);
 
 		Serial2.write(encoded_buffer, encoded_size);
 		Serial2.write(0x00);

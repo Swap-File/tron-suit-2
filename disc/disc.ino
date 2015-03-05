@@ -33,7 +33,7 @@ boolean dimmable[NUM_STRIPS * NUM_LEDS_PER_STRIP];
 uint8_t disc_mode = 2;
 uint8_t effect_mode = 0x10;
 uint8_t fade_level = 0;
-
+uint8_t  packet_beam = 0;
 //pacman opening data
 uint32_t inner_opening_time = 0;
 uint32_t outer_opening_time = 0;
@@ -71,7 +71,7 @@ uint8_t outer_offset_requested = 0;
 uint8_t inner_magnitude_displayed = 16;
 uint8_t outer_magnitude_displayed = 16;
 uint8_t inner_index = 16;
-uint8_t outer_index = 16;
+int8_t outer_index = 16;
 uint8_t inner_magnitude_requested = 16;
 uint8_t outer_magnitude_requested = 16;
 
@@ -262,18 +262,11 @@ void loop() {
 
 		}
 
-		/* Increment flow via timer
-		if (flow_speed.check()){
-		increment_stream();
-		}
-		*/
-
 		SerialUpdate();
 
 		//set color modes from data
 		outer_stream = bitRead(effect_mode, 0) ? color1_streaming : color2_streaming;
 		inner_stream = bitRead(effect_mode, 1) ? color2_streaming : color1_streaming;
-
 
 		if (idle_start_timer == 0){
 
@@ -481,34 +474,33 @@ void loop() {
 		//pixel 1 and 16 overlaps - pixel 0 is off
 		for (uint8_t current_pixel = 0; current_pixel < 17; current_pixel++) {
 
-			//set inner 30 LEDs
+			//set inner LEDs
 			if (current_pixel > 0 && current_pixel <= inner_magnitude_displayed){
 
 				//streaming input render
 				int absolute_LED_index;
-				CHSV LED_color = inner_stream [(current_pixel - 1 + stream_head) % 16];
+				CHSV LED_color = inner_stream[(current_pixel + 14 + stream_head) % 16];
 
-				absolute_LED_index =((60 + inner_index + (current_pixel - 1) + inner_offset_requested) % 30);
+				absolute_LED_index = ((30 + inner_index + (current_pixel - 1) + inner_offset_requested) % 30);
 				target_output[absolute_LED_index] = LED_color;
-				dimmable[absolute_LED_index] = last_packet_sequence_number == current_pixel ? false : true;
+				dimmable[absolute_LED_index] = packet_beam == current_pixel ? false : true;
 
-				absolute_LED_index = ((60 + inner_index - ((current_pixel - 1) + inner_offset_requested)) % 30);
+				absolute_LED_index =  ((30 + inner_index - (current_pixel - 1) + inner_offset_requested) % 30);
 				target_output[absolute_LED_index] = LED_color;
-				dimmable[absolute_LED_index] = last_packet_sequence_number == current_pixel ? false : true;
+				dimmable[absolute_LED_index] = packet_beam == current_pixel ? false : true;
 
 			}
 			else{
 				//clear unused pixels
 				int absolute_LED_index;
 
-				absolute_LED_index = ((60 + inner_index + (current_pixel - 1) + inner_offset_requested) % 30);
+				absolute_LED_index =  ((30 + inner_index + (current_pixel - 1) + inner_offset_requested) % 30);
 				target_output[absolute_LED_index] = CHSV(0, 0, 0);
-				dimmable[absolute_LED_index] =true;
+				dimmable[absolute_LED_index] = true;
 
-				absolute_LED_index =  ((60 + inner_index - ((current_pixel - 1) + inner_offset_requested)) % 30);
-				target_output[absolute_LED_index] = CHSV(0, 0, 0);	
-				dimmable[absolute_LED_index] =  true;
-	
+				absolute_LED_index =  ((30 + inner_index - (current_pixel - 1) + inner_offset_requested) % 30);
+				target_output[absolute_LED_index] = CHSV(0, 0, 0);
+				dimmable[absolute_LED_index] = true;
 			}
 
 			//set outer LEDs
@@ -516,26 +508,26 @@ void loop() {
 
 				//streaming input render
 				int absolute_LED_index;
-				CHSV LED_color = outer_stream[(current_pixel - 1 + stream_head) % 16];
+				CHSV LED_color = outer_stream[(current_pixel + 14 + stream_head) % 16];
 
-				absolute_LED_index = 120 + ((60 + outer_index + (current_pixel - 1) + outer_offset_requested) % 30);
+				absolute_LED_index = 120 + ((30 + outer_index + (current_pixel - 1) + outer_offset_requested) % 30);
 				target_output[absolute_LED_index] = LED_color;
-				dimmable[absolute_LED_index] = last_packet_sequence_number == current_pixel ? false : true;
+				dimmable[absolute_LED_index] = packet_beam == current_pixel ? false : true;
 
-				absolute_LED_index = 120 + ((60 + outer_index - ((current_pixel - 1) + outer_offset_requested)) % 30);
+				absolute_LED_index = 120 + ((30 + outer_index - (current_pixel - 1) + outer_offset_requested) % 30);
 				target_output[absolute_LED_index] = LED_color;
-				dimmable[absolute_LED_index] = last_packet_sequence_number == current_pixel ? false : true;
+				dimmable[absolute_LED_index] = packet_beam == current_pixel ? false : true;
 
 			}
 			else{
 				//clear unused pixels
 				int absolute_LED_index;
 
-				absolute_LED_index = 120 + ((60 + outer_index + (current_pixel - 1) + outer_offset_requested) % 30);
+				absolute_LED_index = 120 + ((30 + outer_index + (current_pixel - 1) + outer_offset_requested) % 30);
 				target_output[absolute_LED_index] = CHSV(0, 0, 0);
 				dimmable[absolute_LED_index] = true;
 
-				absolute_LED_index = 120 + ((60 + outer_index - ((current_pixel - 1) + outer_offset_requested)) % 30);
+				absolute_LED_index = 120 + ((30 + outer_index - (current_pixel - 1) + outer_offset_requested) % 30);
 				target_output[absolute_LED_index] = CHSV(0, 0, 0);
 				dimmable[absolute_LED_index] = true;
 			}
@@ -549,7 +541,7 @@ void loop() {
 			if (dimmable[i]) temp_rgb.fadeToBlackBy(fade_level);
 
 			//if shutting off or turning on a LED, do so immediately
-			if ((temp_rgb == CRGB(0, 0, 0) || actual_output[i] == CRGB(0, 0, 0)) || 1==1  ){
+			if ((temp_rgb == CRGB(0, 0, 0) || actual_output[i] == CRGB(0, 0, 0)) || !dimmable[i]){
 				actual_output[i] = temp_rgb;
 			}
 			//if changing a LED, blur
@@ -650,7 +642,7 @@ void receivePacket(const uint8_t* buffer, size_t size)
 
 
 	//check for framing errors
-	if (size != 14){
+	if (size != 15){
 		framing_error++;
 	}
 	else{
@@ -684,6 +676,7 @@ void receivePacket(const uint8_t* buffer, size_t size)
 				last_packet_sequence_number = buffer[12];
 				increment_stream();
 			}
+			packet_beam = buffer[13];
 		}
 	}
 }
@@ -699,16 +692,6 @@ void increment_stream(){
 
 		//wrap index
 		stream_head = (stream_head + 16) % 16;
-
-
-		Serial.print("loading ");
-		Serial.print(stream_head);
-		Serial.print(" h " );
-		Serial.print(color1.h);
-		Serial.print(" s ");
-		Serial.print(color1.s);
-		Serial.print(" v ");
-		Serial.println(color1.v);
 
 		//add to head or tail of streaming array based on direction
 		if (invert_stream_direction){
