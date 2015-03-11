@@ -193,7 +193,7 @@ Metro YPRdisplay = Metro(100);
 Metro ScrollSpeed = Metro(40);
 Metro GloveSend = Metro(10);
 Metro DiscSend = Metro(100);
-Metro DiscSend2 = Metro(10);
+Metro DiscSend2 = Metro(20);
 Metro LEDdisplay = Metro(10);
 
 uint8_t adc1_mode = 0;// round robin poll sensors

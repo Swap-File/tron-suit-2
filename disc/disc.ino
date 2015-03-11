@@ -27,8 +27,9 @@ ADC *adc = new ADC(); // adc object
 #define NUM_LEDS_PER_STRIP 30
 #define NUM_STRIPS 8
 CRGB actual_output[NUM_STRIPS * NUM_LEDS_PER_STRIP];
-CHSV target_output[NUM_STRIPS * NUM_LEDS_PER_STRIP];
-boolean dimmable[NUM_STRIPS * NUM_LEDS_PER_STRIP];
+
+#define DISC_MODE_SWIPE 3
+#define DISC_MODE_OFF 0
 
 uint8_t disc_mode = 2;
 uint8_t effect_mode = 0x10;
@@ -50,7 +51,6 @@ uint8_t saved_inner_index_acceleration = 0;
 CHSV color1 = CHSV(128, 255, 255);
 CHSV color2 = CHSV(0, 255, 255);
 
-
 const uint8_t blur_rate = 2;
 
 //buffers to hold data as it streams in
@@ -68,8 +68,8 @@ CHSV *inner_stream = color1_streaming;
 //effect mode 2 variables
 uint8_t inner_offset_requested = 0;
 uint8_t outer_offset_requested = 0;
-uint8_t inner_magnitude_displayed = 16;
-uint8_t outer_magnitude_displayed = 16;
+uint8_t inner_magnitude_displayed = 0;
+uint8_t outer_magnitude_displayed = 0;
 uint8_t inner_index = 16;
 int8_t outer_index = 16;
 uint8_t inner_magnitude_requested = 16;
@@ -92,15 +92,15 @@ uint8_t cpu_usage = 0;
 uint32_t idle_microseconds = 0;
 uint8_t crc_error = 0;
 uint8_t framing_error = 0;
-double temperature = 0.0;
-double voltage = 24.0;
+float temperature = 0.0;
+float voltage = 24.0;
 uint8_t packets_in_counter = 0;  //counts up
 uint8_t packets_in_per_second = 0; //saves the value
 uint8_t packets_out_counter = 0;  //counts up
 uint8_t packets_out_per_second = 0; //saves the value
 
-double xy_accel_magnitude_smoothed = 0;
-double saved_xy_accel_magnitude_smoothed = 0;
+float xy_accel_magnitude_smoothed = 0;
+float saved_xy_accel_magnitude_smoothed = 0;
 
 //start voltage at full
 uint16_t disc_voltage = 1024;
@@ -222,8 +222,6 @@ void setup() {
 	LEDS.addLeds<OCTOWS2811>(actual_output, NUM_LEDS_PER_STRIP);
 	for (int i = 0; i < NUM_STRIPS * NUM_LEDS_PER_STRIP; i++) {
 		actual_output[i] = CRGB(0, 0, 0);
-		target_output[i] = CHSV(0, 0, 0);
-		dimmable[i] = true;
 	}
 
 	LEDS.show();
@@ -240,6 +238,8 @@ void loop() {
 
 	// wait for MPU interrupt or extra packet(s) available
 	while (!mpuInterrupt && fifoCount < packetSize) {
+
+
 
 		if (FPSdisplay.check()){
 			cpu_usage = 100 - (idle_microseconds / 10000);
@@ -259,8 +259,13 @@ void loop() {
 			Serial.println(voltage);
 			Serial.print("Temp in C: ");
 			Serial.println(temperature);
-
+			Serial.print(fade_level);
+			Serial.print("  ");
+			Serial.println(packet_beam);
+			outer_magnitude_displayed = 16;
+			if (outer_magnitude_displayed > 32) outer_magnitude_displayed = 0;
 		}
+
 
 		SerialUpdate();
 
@@ -328,7 +333,7 @@ void loop() {
 #endif
 
 		//4.77 = (30/2) / PI + 0.5 physical offset
-		double temp = (atan2(gravity.x, gravity.y) * 4.77) + 15;
+		float temp = (atan2(gravity.x, gravity.y) * 4.77) + 15;
 
 		while (temp < 0){
 			temp = temp + 29;
@@ -341,12 +346,12 @@ void loop() {
 		outer_index = ((29 - inner_index) + 32) % 30;
 
 		//instant accel mag
-		double xy_accel_magnitude = sqrt((long)aaReal.x*aaReal.x + aaReal.y*aaReal.y);
+		float xy_accel_magnitude = sqrt((long)aaReal.x*aaReal.x + aaReal.y*aaReal.y);
 
 		//smooth a bit...
 		xy_accel_magnitude_smoothed = xy_accel_magnitude_smoothed * .8 + xy_accel_magnitude * .2;
 
-		double temp2 = (atan2(aaReal.x, aaReal.y) * 4.77) + 15;
+		float temp2 = (atan2(aaReal.x, aaReal.y) * 4.77) + 15;
 		int inner_index_acceleration = ((int)floor((temp2 + 0.5) + 30)) % 30;
 		int outer_index_acceleration = ((29 - inner_index_acceleration) + 32) % 30;
 
@@ -419,17 +424,17 @@ void loop() {
 			}
 
 			if (xy_accel_magnitude > 5000 && cooldowncomplete){
-				disc_mode = 3;
+				disc_mode = DISC_MODE_SWIPE;
 			}
 
 		}
 
 		if (disc_mode == 2){
-			inner_magnitude_displayed = inner_magnitude_requested;
-			outer_magnitude_displayed = outer_magnitude_requested;
+			//inner_magnitude_displayed = inner_magnitude_requested;
+			//outer_magnitude_displayed = outer_magnitude_requested;
 		}
 
-		if (disc_mode == 3){
+		if (disc_mode == DISC_MODE_SWIPE){
 
 			//maybe adjust the effect for range 
 			//stuff the streaming buffers with color data
@@ -464,102 +469,49 @@ void loop() {
 
 
 		}
-		
+
 		// blink LED to indicate activity
 		blinkState++;
 		digitalWrite(LED_PIN, bitRead(blinkState, 2));
 
+		long int start = micros();
 		//polar rendering
 		//renders for 16 pixels - each pixel is mirrored on either side of disc
 		//pixel 1 and 16 overlaps - pixel 0 is off
-		for (uint8_t current_pixel = 0; current_pixel < 17; current_pixel++) {
+		for (uint8_t current_pixel = 0; current_pixel < 16; current_pixel++) {
+			uint8_t absolute_LED_index;
+
+			CHSV* LED_color;
 
 			//set inner LEDs
-			if (current_pixel > 0 && current_pixel <= inner_magnitude_displayed){
+			//streaming input render
+			LED_color = &inner_stream[(current_pixel + stream_head + 15) % 16];
 
-				//streaming input render
-				int absolute_LED_index;
-				CHSV LED_color = inner_stream[(current_pixel + 14 + stream_head) % 16];
+			absolute_LED_index = ((30 + inner_index + current_pixel + inner_offset_requested) % 30);
+			blur_mask_and_output(absolute_LED_index, LED_color, current_pixel, inner_magnitude_displayed);
 
-				absolute_LED_index = ((30 + inner_index + (current_pixel - 1) + inner_offset_requested) % 30);
-				target_output[absolute_LED_index] = LED_color;
-				dimmable[absolute_LED_index] = packet_beam == current_pixel ? false : true;
 
-				absolute_LED_index =  ((30 + inner_index - (current_pixel - 1) + inner_offset_requested) % 30);
-				target_output[absolute_LED_index] = LED_color;
-				dimmable[absolute_LED_index] = packet_beam == current_pixel ? false : true;
+			absolute_LED_index = ((30 + inner_index - current_pixel + inner_offset_requested) % 30);
+			blur_mask_and_output(absolute_LED_index, LED_color, current_pixel, inner_magnitude_displayed);
 
-			}
-			else{
-				//clear unused pixels
-				int absolute_LED_index;
-
-				absolute_LED_index =  ((30 + inner_index + (current_pixel - 1) + inner_offset_requested) % 30);
-				target_output[absolute_LED_index] = CHSV(0, 0, 0);
-				dimmable[absolute_LED_index] = true;
-
-				absolute_LED_index =  ((30 + inner_index - (current_pixel - 1) + inner_offset_requested) % 30);
-				target_output[absolute_LED_index] = CHSV(0, 0, 0);
-				dimmable[absolute_LED_index] = true;
-			}
 
 			//set outer LEDs
-			if (current_pixel > 0 && current_pixel <= outer_magnitude_displayed){
+			//streaming input render
+			LED_color = &outer_stream[(current_pixel + 15 + stream_head) % 16];
 
-				//streaming input render
-				int absolute_LED_index;
-				CHSV LED_color = outer_stream[(current_pixel + 14 + stream_head) % 16];
 
-				absolute_LED_index = 120 + ((30 + outer_index + (current_pixel - 1) + outer_offset_requested) % 30);
-				target_output[absolute_LED_index] = LED_color;
-				dimmable[absolute_LED_index] = packet_beam == current_pixel ? false : true;
+			absolute_LED_index = 120 + ((30 + outer_index + current_pixel + outer_offset_requested) % 30);
+			blur_mask_and_output(absolute_LED_index, LED_color, current_pixel, outer_magnitude_displayed);
 
-				absolute_LED_index = 120 + ((30 + outer_index - (current_pixel - 1) + outer_offset_requested) % 30);
-				target_output[absolute_LED_index] = LED_color;
-				dimmable[absolute_LED_index] = packet_beam == current_pixel ? false : true;
 
-			}
-			else{
-				//clear unused pixels
-				int absolute_LED_index;
+			absolute_LED_index = 120 + ((30 + outer_index - current_pixel + outer_offset_requested) % 30);
+			blur_mask_and_output(absolute_LED_index, LED_color, current_pixel, outer_magnitude_displayed);
 
-				absolute_LED_index = 120 + ((30 + outer_index + (current_pixel - 1) + outer_offset_requested) % 30);
-				target_output[absolute_LED_index] = CHSV(0, 0, 0);
-				dimmable[absolute_LED_index] = true;
-
-				absolute_LED_index = 120 + ((30 + outer_index - (current_pixel - 1) + outer_offset_requested) % 30);
-				target_output[absolute_LED_index] = CHSV(0, 0, 0);
-				dimmable[absolute_LED_index] = true;
-			}
 		}
-
-		//Linear Blurring & Dimming Code
-		for (int i = 0; i < NUM_STRIPS * NUM_LEDS_PER_STRIP; i++) {
-
-			//convert HSV to RGB
-			CRGB temp_rgb = target_output[i];
-			if (dimmable[i]) temp_rgb.fadeToBlackBy(fade_level);
-
-			//if shutting off or turning on a LED, do so immediately
-			if ((temp_rgb == CRGB(0, 0, 0) || actual_output[i] == CRGB(0, 0, 0)) || !dimmable[i]){
-				actual_output[i] = temp_rgb;
-			}
-			//if changing a LED, blur
-			else{
-				if (actual_output[i].r < temp_rgb.r) temp_rgb.r = min(actual_output[i].r + blur_rate, temp_rgb.r);
-				if (actual_output[i].r > temp_rgb.r) temp_rgb.r = max(actual_output[i].r - blur_rate, temp_rgb.r);
-
-				if (actual_output[i].g < temp_rgb.g) temp_rgb.g = min(actual_output[i].g + blur_rate, temp_rgb.g);
-				if (actual_output[i].g > temp_rgb.g) temp_rgb.g = max(actual_output[i].g - blur_rate, temp_rgb.g);
-
-				if (actual_output[i].b < temp_rgb.b) temp_rgb.b = min(actual_output[i].b + blur_rate, temp_rgb.b);
-				if (actual_output[i].b > temp_rgb.b) temp_rgb.b = max(actual_output[i].b - blur_rate, temp_rgb.b);
-
-				actual_output[i] = temp_rgb;
-			}
-		}
+		//Serial.println(micros() - start);
 
 		LEDS.show();
+
 
 		//906 * 64 is low when plugged into batteries, about 3.55 v per cell
 		voltage = voltage * .95 + .05 * (((uint16_t)adc->analogReadContinuous(ADC_0)) / 4083.375); //voltage
@@ -601,6 +553,7 @@ void SerialUpdate(void){
 
 void sendPacket(){
 	//send reply
+
 
 	byte raw_buffer[11];
 	raw_buffer[0] = inner_index;
@@ -658,7 +611,7 @@ void receivePacket(const uint8_t* buffer, size_t size)
 				packets_in_counter++;
 			}
 
-			//sendPacket();
+			sendPacket();
 
 			color1 = CHSV(buffer[0], buffer[1], buffer[2]);
 			color2 = CHSV(buffer[3], buffer[4], buffer[5]);
@@ -683,7 +636,7 @@ void receivePacket(const uint8_t* buffer, size_t size)
 
 void increment_stream(){
 	//don't update the streams with incoming data if in mode 3 for smooth exit
-	if (disc_mode != 3){
+	if (disc_mode != DISC_MODE_SWIPE){
 		//sender MUST change to std stream direction when disc enters mode 3 or exit from mode will look odd
 		boolean invert_stream_direction = bitRead(effect_mode, 4);
 
@@ -703,7 +656,7 @@ void increment_stream(){
 			color1_streaming[stream_tail] = color1;
 			color2_streaming[stream_tail] = color2;
 
-				
+
 		}
 	}
 }
@@ -715,5 +668,42 @@ CHSV map_hsv(uint8_t input, uint8_t in_min, uint8_t in_max, CHSV* out_min, CHSV*
 		(input - in_min) * (out_max->v - out_min->v) / (in_max - in_min) + out_min->v);
 }
 
+void blur_mask_and_output(uint8_t i, CHSV* color, uint8_t current_pixel, uint8_t magnitude){
+
+	//convert HSV to RGB
+	CRGB temp_rgb = *color;
+
+	//crecent masking   0 is all off, 0 to 16 is opening, 16 is all on, 16 to 32 is closing, 32 is all off
+	if (magnitude < 16){  // dont modify full on
+		if (current_pixel >= magnitude) temp_rgb = CRGB(0, 0, 0);  //blank the off area
+		if (magnitude > 1){ //dont modify single pixels
+			if (current_pixel == magnitude-1) temp_rgb.fadeLightBy(32); // feather the edges
+		}
+
+	}if (magnitude > 16){ // dont modify full on
+		if (current_pixel < magnitude-16) temp_rgb = CRGB(0, 0, 0); //blank the off area
+		if (current_pixel < 31){ //don't modify single pixels
+			if (current_pixel == magnitude - 16) temp_rgb.fadeLightBy(32);  //feather the edges
+		}
+	}
+	
+	//turn leds off immediately
+	//dont blur or fade pixels that are turning on
+	//dont blur or fade beam pixels
+	if (packet_beam != current_pixel && color->v != 0){
+
+		temp_rgb.fadeToBlackBy(fade_level); // fade_level
+
+		if (actual_output[i].r < temp_rgb.r) temp_rgb.r = min(actual_output[i].r + blur_rate, temp_rgb.r);
+		else if (actual_output[i].r > temp_rgb.r) temp_rgb.r = max(actual_output[i].r - blur_rate, temp_rgb.r);
+
+		if (actual_output[i].g < temp_rgb.g) temp_rgb.g = min(actual_output[i].g + blur_rate, temp_rgb.g);
+		else if (actual_output[i].g > temp_rgb.g) temp_rgb.g = max(actual_output[i].g - blur_rate, temp_rgb.g);
+
+		if (actual_output[i].b < temp_rgb.b) temp_rgb.b = min(actual_output[i].b + blur_rate, temp_rgb.b);
+		else if (actual_output[i].b > temp_rgb.b) temp_rgb.b = max(actual_output[i].b - blur_rate, temp_rgb.b);
+	}
 
 
+	actual_output[i] = temp_rgb;
+}
