@@ -268,6 +268,14 @@ void setup() {
 #define static_menu_location_x 18
 #define static_menu_location_y 10
 
+
+#define inner_disc_location_x 1
+#define inner_disc_location_y 1
+
+#define outer_disc_location_x 1
+#define outer_disc_location_y 1
+
+
 void loop() {
 
 	if (YPRdisplay.check()){
@@ -573,10 +581,10 @@ void loop() {
 		disc0.color2 = map_hsv(flow_offset, 0, 16, &color1, &color2);
 		disc0.fade_level++;
 		disc0.packet_sequence_number++;
-		
+
 	}
 	if (DiscSend2.check()){
-		
+
 		disc0.packet_beam--;
 	}
 
@@ -1168,4 +1176,112 @@ CHSV map_hsv(uint8_t input, uint8_t in_min, uint8_t in_max, CHSV* out_min, CHSV*
 		(input - in_min) * (out_max->h - out_min->h) / (in_max - in_min) + out_min->h, \
 		(input - in_min) * (out_max->s - out_min->s) / (in_max - in_min) + out_min->s, \
 		(input - in_min) * (out_max->v - out_min->v) / (in_max - in_min) + out_min->v);
+}
+
+
+
+void draw_disc(uint8_t index_offset, uint8_t magnitude , uint8_t x_offset, uint8_t y_offset){
+
+	//draw pointer line
+	display.drawLine(x_offset + 6, y_offset + 5, circle_xcoord(index_offset), circle_ycoord(index_offset), WHITE);
+	display.drawLine(x_offset + 6, y_offset + 4, circle_xcoord(index_offset), circle_ycoord(index_offset), WHITE);
+
+	//draw the circle
+	if (magnitude <= 16){
+		for (uint8_t i = 0; i < 15; i++) {
+			if (i < magnitude){
+				display.drawPixel(circle_xcoord(i), circle_ycoord(i), WHITE);
+				display.drawPixel(circle_xcoord(30 - i), circle_ycoord(30 - i), WHITE);
+			}
+		}
+	}else if (magnitude > 16 &&magnitude <= 32){
+		for (uint8_t i = 0; i < 15; i++) {
+			if (i > (magnitude - 17)){
+				display.drawPixel(circle_xcoord(i), circle_ycoord(i), WHITE);
+				display.drawPixel(circle_xcoord(30 - i), circle_ycoord(30 - i), WHITE);
+			}
+		}
+	}else if (magnitude > 32 && magnitude <= 47){
+		for (uint8_t i = 0; i < 15; i++) {
+			if (i <= magnitude - 32) display.drawPixel(circle_xcoord(i), circle_ycoord(i), WHITE);
+			if (i <= magnitude - 32) display.drawPixel(circle_xcoord(i+15), circle_ycoord(i+15), WHITE);
+		}
+	}else if (magnitude > 47 && magnitude <= 62){
+		for (uint8_t i = 0; i < 15; i++) {
+			if (i > magnitude - 47) display.drawPixel(circle_xcoord(i), circle_ycoord(i), WHITE);
+			if (i > magnitude - 47) display.drawPixel(circle_xcoord(i + 15), circle_ycoord(i + 15), WHITE);
+		}
+	}else if (magnitude > 62 && magnitude <= 77){
+		for (uint8_t i = 0; i < 15; i++) {
+
+		
+		}
+	}
+
+	//blank the beam pixel
+	if (disc0.packet_beam < 17 && disc0.packet_beam > 0 && disc0.fade_level < 255){
+		display.drawPixel(circle_xcoord(disc0.packet_beam), circle_ycoord(disc0.packet_beam), BLACK);
+		display.drawPixel(circle_xcoord(30 - disc0.packet_beam), circle_ycoord(30 - disc0.packet_beam), BLACK);
+	}
+
+}
+		
+	
+
+
+
+uint8_t circle_xcoord(uint8_t circle_index){
+	switch (circle_index){
+	case 6:	case 7:	case 8:	case 9:
+		return 0;
+	case 5:	case 10:
+		return 1;
+	case 11: case 4:
+		return 2;
+	case 12: case 3:
+		return 3;
+	case 2:	case 13:
+		return 4;
+	case 1:	case 14:
+		return 5;
+	case 0:	case 15:
+		return 6;
+	case 16: case 29:
+		return 7;
+	case 17: case 28:
+		return 8;
+	case 18: case 26:
+		return 9;
+	case 19: case 27:
+		return 10;
+	case 20: case 25:
+		return 11;
+	case 21: case 22: case 23: case 24:
+		return 12;
+	}
+}
+
+uint8_t circle_ycoord(uint8_t circle_index){
+	switch (circle_index){
+	case 13: case 14: case 15: case 16: case 17:
+		return 0;
+	case 11: case 12: case 18: case 19:
+		return 1;
+	case 10: case 20:
+		return 2;
+	case 9: case 21:
+		return 3;
+	case 8: case 22:
+		return 4;
+	case 7: case 23:
+		return 5;
+	case 6: case 24:
+		return 6;
+	case 5: case 25:
+		return 7;
+	case 3: case 4: case 26: case 27:
+		return 8;
+	case 0:	case 1: case 2: case 28: case 29:
+		return 9;
+	}
 }

@@ -69,7 +69,7 @@ CHSV *inner_stream = color1_streaming;
 uint8_t inner_offset_requested = 0;
 uint8_t outer_offset_requested = 0;
 uint8_t inner_magnitude_displayed = 0;
-uint8_t outer_magnitude_displayed = 0;
+uint8_t outer_magnitude_displayed = 76;
 uint8_t inner_index = 16;
 int8_t outer_index = 16;
 uint8_t inner_magnitude_requested = 16;
@@ -259,13 +259,23 @@ void loop() {
 			Serial.println(voltage);
 			Serial.print("Temp in C: ");
 			Serial.println(temperature);
-			Serial.print(fade_level);
+			Serial.print(outer_magnitude_displayed);
 			Serial.print("  ");
 			Serial.println(packet_beam);
-			outer_magnitude_displayed = 16;
-			if (outer_magnitude_displayed > 32) outer_magnitude_displayed = 0;
+
+
+
+
+
 		}
 
+		if (Serial.available()) {
+			outer_magnitude_displayed++;
+			while (Serial.available()){
+				Serial.read();
+			}
+		}
+		if (outer_magnitude_displayed > 92) outer_magnitude_displayed = 0;
 
 		SerialUpdate();
 
@@ -488,29 +498,31 @@ void loop() {
 			LED_color = &inner_stream[(current_pixel + stream_head + 15) % 16];
 
 			absolute_LED_index = ((30 + inner_index + current_pixel + inner_offset_requested) % 30);
-			blur_mask_and_output(absolute_LED_index, LED_color, current_pixel, inner_magnitude_displayed);
+			blur_mask_and_output(absolute_LED_index, LED_color, current_pixel, inner_magnitude_displayed, 0);
 
 
 			absolute_LED_index = ((30 + inner_index - current_pixel + inner_offset_requested) % 30);
-			blur_mask_and_output(absolute_LED_index, LED_color, current_pixel, inner_magnitude_displayed);
+			blur_mask_and_output(absolute_LED_index, LED_color, current_pixel, inner_magnitude_displayed, 1);
 
 
 			//set outer LEDs
 			//streaming input render
-			LED_color = &outer_stream[(current_pixel + 15 + stream_head) % 16];
+			LED_color = &outer_stream[(current_pixel + stream_head + 15) % 16];
 
 
 			absolute_LED_index = 120 + ((30 + outer_index + current_pixel + outer_offset_requested) % 30);
-			blur_mask_and_output(absolute_LED_index, LED_color, current_pixel, outer_magnitude_displayed);
+			blur_mask_and_output(absolute_LED_index, LED_color, current_pixel, outer_magnitude_displayed, 0);
 
 
 			absolute_LED_index = 120 + ((30 + outer_index - current_pixel + outer_offset_requested) % 30);
-			blur_mask_and_output(absolute_LED_index, LED_color, current_pixel, outer_magnitude_displayed);
+			blur_mask_and_output(absolute_LED_index, LED_color, current_pixel, outer_magnitude_displayed, 1);
 
 		}
 		//Serial.println(micros() - start);
 
 		LEDS.show();
+		// wait for ready
+
 
 
 		//906 * 64 is low when plugged into batteries, about 3.55 v per cell
@@ -668,28 +680,56 @@ CHSV map_hsv(uint8_t input, uint8_t in_min, uint8_t in_max, CHSV* out_min, CHSV*
 		(input - in_min) * (out_max->v - out_min->v) / (in_max - in_min) + out_min->v);
 }
 
-void blur_mask_and_output(uint8_t i, CHSV* color, uint8_t current_pixel, uint8_t magnitude){
+void blur_mask_and_output(uint8_t i, CHSV* color, uint8_t current_pixel, uint8_t magnitude, boolean side){
 
 	//convert HSV to RGB
 	CRGB temp_rgb = *color;
 
 	//crecent masking   0 is all off, 0 to 16 is opening, 16 is all on, 16 to 32 is closing, 32 is all off
-	if (magnitude < 16){  // dont modify full on
+	if (magnitude >= 0 && magnitude < 16){  //basic open
 		if (current_pixel >= magnitude) temp_rgb = CRGB(0, 0, 0);  //blank the off area
-		if (magnitude > 1){ //dont modify single pixels
-			if (current_pixel == magnitude-1) temp_rgb.fadeLightBy(32); // feather the edges
+	}
+	else if (magnitude > 16 && magnitude < 33){ //basic close
+		if (current_pixel <= magnitude - 17) temp_rgb = CRGB(0, 0, 0); //blank the off area
+	}
+	else if (magnitude > 32 && magnitude < 47){ // cw corkscrew open
+		if (side){
+			if ((current_pixel) > magnitude - 33 && current_pixel < 15) temp_rgb = CRGB(0, 0, 0); //blank the off area
 		}
-
-	}if (magnitude > 16){ // dont modify full on
-		if (current_pixel < magnitude-16) temp_rgb = CRGB(0, 0, 0); //blank the off area
-		if (current_pixel < 31){ //don't modify single pixels
-			if (current_pixel == magnitude - 16) temp_rgb.fadeLightBy(32);  //feather the edges
+		else{
+			if ((15 - current_pixel) > magnitude - 33 && current_pixel > 0) temp_rgb = CRGB(0, 0, 0); //blank the off area
 		}
 	}
-	
-	//turn leds off immediately
+	else if (magnitude > 47 && magnitude <= 62){ // cw corkscrew close
+		if (side){
+			if ((current_pixel) < magnitude - 47 || current_pixel ==15) temp_rgb = CRGB(0, 0, 0); //blank the off area
+		}
+		else{
+			if ((15 - current_pixel) < magnitude - 47 || current_pixel ==0) temp_rgb = CRGB(0, 0, 0); //blank the off area
+		}
+	}
+	else if (magnitude > 62 && magnitude < 77){ //ccw corkscrew
+		if (side){
+			if (current_pixel >0 && current_pixel <= (15 - (magnitude - 62)) && current_pixel < 15) temp_rgb = CRGB(0, 0, 0); //blank the off area
+		}
+		else{
+			if (current_pixel >0 && current_pixel >= (magnitude - 62) && current_pixel < 15) temp_rgb = CRGB(0, 0, 0); //blank the off area
+		}
+	}
+	else if (magnitude > 77){ //ccw corkscrew
+		if (side){
+			if (current_pixel == 15 || current_pixel == 0 || current_pixel > (15 - (magnitude - 78))) temp_rgb = CRGB(0, 0, 0); //blank the off area
+		}
+		else{
+			if (current_pixel == 15 || current_pixel == 0 || current_pixel < (magnitude - 78)) temp_rgb = CRGB(0, 0, 0); //blank the off area
+		}
+	}
+
+
+
 	//dont blur or fade pixels that are turning on
 	//dont blur or fade beam pixels
+	//turn leds off immediately
 	if (packet_beam != current_pixel && color->v != 0){
 
 		temp_rgb.fadeToBlackBy(fade_level); // fade_level
