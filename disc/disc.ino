@@ -69,7 +69,7 @@ CHSV *inner_stream = color1_streaming;
 uint8_t inner_offset_requested = 0;
 uint8_t outer_offset_requested = 0;
 uint8_t inner_magnitude_displayed = 0;
-uint8_t outer_magnitude_displayed = 76;
+uint8_t outer_magnitude_displayed = 0;
 uint8_t inner_index = 16;
 int8_t outer_index = 16;
 uint8_t inner_magnitude_requested = 16;
@@ -484,53 +484,39 @@ void loop() {
 		blinkState++;
 		digitalWrite(LED_PIN, bitRead(blinkState, 2));
 
-		long int start = micros();
-		//polar rendering
-		//renders for 16 pixels - each pixel is mirrored on either side of disc
-		//pixel 1 and 16 overlaps - pixel 0 is off
-		for (uint8_t current_pixel = 0; current_pixel < 16; current_pixel++) {
-			uint8_t absolute_LED_index;
+		//disc rendering
+		for (uint8_t current_pixel = 0; current_pixel < 30; current_pixel++) {
 
+			uint8_t absolute_LED_index;
 			CHSV* LED_color;
 
+			//first half of inner circle	
+			if (current_pixel < 16)	LED_color = &inner_stream[(current_pixel + stream_head + 15) % 16];
+			//back half of inner circle - wrap the inner stream buffer
+			else LED_color = &inner_stream[((15 - (current_pixel - 16)) + (stream_head - 1) + 15) % 16];
+
 			//set inner LEDs
-			//streaming input render
-			LED_color = &inner_stream[(current_pixel + stream_head + 15) % 16];
-
 			absolute_LED_index = ((30 + inner_index + current_pixel + inner_offset_requested) % 30);
-			blur_mask_and_output(absolute_LED_index, LED_color, current_pixel, inner_magnitude_displayed, 0);
+			mask_blur_and_output(absolute_LED_index, LED_color, current_pixel, inner_magnitude_displayed);
 
-
-			absolute_LED_index = ((30 + inner_index - current_pixel + inner_offset_requested) % 30);
-			blur_mask_and_output(absolute_LED_index, LED_color, current_pixel, inner_magnitude_displayed, 1);
-
+			//first half of outer circle	
+			if (current_pixel < 16)	LED_color = &outer_stream[(current_pixel + stream_head + 15) % 16];
+			//back half of outer circle - wrap the outer stream buffer
+			else LED_color = &outer_stream[((15 - (current_pixel - 16)) + (stream_head - 1) + 15) % 16];
 
 			//set outer LEDs
-			//streaming input render
-			LED_color = &outer_stream[(current_pixel + stream_head + 15) % 16];
-
-
 			absolute_LED_index = 120 + ((30 + outer_index + current_pixel + outer_offset_requested) % 30);
-			blur_mask_and_output(absolute_LED_index, LED_color, current_pixel, outer_magnitude_displayed, 0);
-
-
-			absolute_LED_index = 120 + ((30 + outer_index - current_pixel + outer_offset_requested) % 30);
-			blur_mask_and_output(absolute_LED_index, LED_color, current_pixel, outer_magnitude_displayed, 1);
-
+			mask_blur_and_output(absolute_LED_index, LED_color, current_pixel, outer_magnitude_displayed);
 		}
-		//Serial.println(micros() - start);
-
+	
+		//called at 100hz max
 		LEDS.show();
-		// wait for ready
-
-
 
 		//906 * 64 is low when plugged into batteries, about 3.55 v per cell
 		voltage = voltage * .95 + .05 * (((uint16_t)adc->analogReadContinuous(ADC_0)) / 4083.375); //voltage
 
 		//temp sensor from https://github.com/manitou48/teensy3/blob/master/chiptemp.pde
 		temperature = temperature * .95 + .05 * (25 - (((uint16_t)adc->analogReadContinuous(ADC_1)) - 38700) / -35.7); //temp in C
-
 	}
 }
 
@@ -565,8 +551,6 @@ void SerialUpdate(void){
 
 void sendPacket(){
 	//send reply
-
-
 	byte raw_buffer[11];
 	raw_buffer[0] = inner_index;
 	raw_buffer[1] = inner_magnitude_displayed;
@@ -668,7 +652,6 @@ void increment_stream(){
 			color1_streaming[stream_tail] = color1;
 			color2_streaming[stream_tail] = color2;
 
-
 		}
 	}
 }
@@ -680,53 +663,43 @@ CHSV map_hsv(uint8_t input, uint8_t in_min, uint8_t in_max, CHSV* out_min, CHSV*
 		(input - in_min) * (out_max->v - out_min->v) / (in_max - in_min) + out_min->v);
 }
 
-void blur_mask_and_output(uint8_t i, CHSV* color, uint8_t current_pixel, uint8_t magnitude, boolean side){
+void mask_blur_and_output(uint8_t i, CHSV* color, uint8_t current_pixel, uint8_t magnitude){
 
 	//convert HSV to RGB
 	CRGB temp_rgb = *color;
 
-	//crecent masking   0 is all off, 0 to 16 is opening, 16 is all on, 16 to 32 is closing, 32 is all off
+	//masking code
 	if (magnitude >= 0 && magnitude < 16){  //basic open
-		if (current_pixel >= magnitude) temp_rgb = CRGB(0, 0, 0);  //blank the off area
+		if (current_pixel >= magnitude  && current_pixel <= (30 - magnitude)) temp_rgb = CRGB(0, 0, 0);
 	}
 	else if (magnitude > 16 && magnitude < 33){ //basic close
-		if (current_pixel <= magnitude - 17) temp_rgb = CRGB(0, 0, 0); //blank the off area
+		if (current_pixel < (magnitude - 16) || current_pixel >(29 - (magnitude - 17))) temp_rgb = CRGB(0, 0, 0);
 	}
-	else if (magnitude > 32 && magnitude < 47){ // cw corkscrew open
-		if (side){
-			if ((current_pixel) > magnitude - 33 && current_pixel < 15) temp_rgb = CRGB(0, 0, 0); //blank the off area
+	else if (magnitude > 32 && magnitude < 47){ // ccw corkscrew open
+		if (current_pixel < 15){
+			if (current_pixel > (magnitude - 33)) temp_rgb = CRGB(0, 0, 0);
 		}
-		else{
-			if ((15 - current_pixel) > magnitude - 33 && current_pixel > 0) temp_rgb = CRGB(0, 0, 0); //blank the off area
-		}
+		else if (current_pixel - 15 >(magnitude - 33)) temp_rgb = CRGB(0, 0, 0);
 	}
-	else if (magnitude > 47 && magnitude <= 62){ // cw corkscrew close
-		if (side){
-			if ((current_pixel) < magnitude - 47 || current_pixel ==15) temp_rgb = CRGB(0, 0, 0); //blank the off area
+	else if (magnitude > 47 && magnitude <= 62){ // ccw corkscrew close
+		if (current_pixel < 15){
+			if (current_pixel < (magnitude - 47)) temp_rgb = CRGB(0, 0, 0);
 		}
-		else{
-			if ((15 - current_pixel) < magnitude - 47 || current_pixel ==0) temp_rgb = CRGB(0, 0, 0); //blank the off area
-		}
+		else if (current_pixel - 15 < (magnitude - 47)) temp_rgb = CRGB(0, 0, 0);
 	}
-	else if (magnitude > 62 && magnitude < 77){ //ccw corkscrew
-		if (side){
-			if (current_pixel >0 && current_pixel <= (15 - (magnitude - 62)) && current_pixel < 15) temp_rgb = CRGB(0, 0, 0); //blank the off area
+	else if (magnitude > 62 && magnitude < 77){ //cw corkscrew open
+		if (current_pixel < 15 && current_pixel > 0) {
+			if (current_pixel < 15 - (magnitude - 63)) temp_rgb = CRGB(0, 0, 0);
 		}
-		else{
-			if (current_pixel >0 && current_pixel >= (magnitude - 62) && current_pixel < 15) temp_rgb = CRGB(0, 0, 0); //blank the off area
-		}
+		else if (current_pixel > 15) if (current_pixel < 30 - (magnitude - 63)) temp_rgb = CRGB(0, 0, 0);
 	}
-	else if (magnitude > 77){ //ccw corkscrew
-		if (side){
-			if (current_pixel == 15 || current_pixel == 0 || current_pixel > (15 - (magnitude - 78))) temp_rgb = CRGB(0, 0, 0); //blank the off area
+	else if (magnitude > 77){ //cw corkscrew close
+		if (current_pixel < 15) {
+			if (current_pixel > 14-(magnitude - 78) || current_pixel == 0) temp_rgb = CRGB(0, 0, 0);
 		}
-		else{
-			if (current_pixel == 15 || current_pixel == 0 || current_pixel < (magnitude - 78)) temp_rgb = CRGB(0, 0, 0); //blank the off area
-		}
+		else if (current_pixel - 15 >  14 - (magnitude - 78) || current_pixel == 15) temp_rgb = CRGB(0, 0, 0);
 	}
-
-
-
+	
 	//dont blur or fade pixels that are turning on
 	//dont blur or fade beam pixels
 	//turn leds off immediately
@@ -743,7 +716,6 @@ void blur_mask_and_output(uint8_t i, CHSV* color, uint8_t current_pixel, uint8_t
 		if (actual_output[i].b < temp_rgb.b) temp_rgb.b = min(actual_output[i].b + blur_rate, temp_rgb.b);
 		else if (actual_output[i].b > temp_rgb.b) temp_rgb.b = max(actual_output[i].b - blur_rate, temp_rgb.b);
 	}
-
 
 	actual_output[i] = temp_rgb;
 }
