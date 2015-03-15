@@ -20,19 +20,19 @@
 boolean flow_direction_positive = true;
 
 typedef struct {
-	boolean fresh;
-	boolean finger1_in_progress;
-	boolean finger2_in_progress;
-	boolean finger3_in_progress;
-	boolean finger4_in_progress;
+	boolean fresh = false;
+	boolean finger1_in_progress = false;
+	boolean finger2_in_progress = false;
+	boolean finger3_in_progress = false;
+	boolean finger4_in_progress = false;
 
 	int16_t yaw_raw;  //yaw pitch and roll in degrees * 100
 	int16_t pitch_raw;
 	int16_t roll_raw;
 
-	int32_t yaw_offset;  //yaw pitch and roll in degrees * 100
-	int32_t pitch_offset;
-	int32_t roll_offset;
+	int32_t yaw_offset = 0;  //yaw pitch and roll in degrees * 100
+	int32_t pitch_offset = 0;
+	int32_t roll_offset = 0;
 
 	int32_t yaw_compensated;  //yaw pitch and roll in degrees * 100
 	int32_t pitch_compensated;
@@ -66,13 +66,15 @@ typedef struct {
 	uint8_t cpu_temp;
 
 	//outputs
-	CRGB output_rgb_led;
-	uint8_t output_white_led;
+	CRGB output_rgb_led = CRGB(0, 0, 0);
+	uint8_t output_white_led = 0;
 
 	//calculated results
 	int8_t gloveX;
 	int8_t gloveY;
 
+	uint8_t disc_offset; // 0 to 29
+	int16_t magnitude; //about 3000 is edges
 } GLOVE;
 
 
@@ -97,11 +99,15 @@ typedef struct {
 	CHSV color1;
 	CHSV color2;
 
-	uint8_t inner_offset;
-	uint8_t outer_offset;
+	uint8_t inner_offset_requested = 0;
+	uint8_t outer_offset_requested = 0;
+	uint8_t inner_offset_reported = 0;
+	uint8_t outer_offset_reported = 0;
 
-	uint8_t inner_magnitude;
-	uint8_t outer_magnitude;
+	uint8_t inner_magnitude_requested = 8;
+	uint8_t outer_magnitude_requested = 8;
+	uint8_t inner_magnitude_reported = 0;
+	uint8_t outer_magnitude_reported = 0;
 
 	uint8_t fade_level;
 	uint8_t requested_mode;
@@ -159,6 +165,11 @@ uint8_t incoming1_raw_buffer[INCOMING1_BUFFER_SIZE];
 uint8_t incoming1_index = 0;
 uint8_t incoming1_decoded_buffer[INCOMING1_BUFFER_SIZE];
 
+#define INCOMING2_BUFFER_SIZE 128
+uint8_t incoming2_raw_buffer[INCOMING2_BUFFER_SIZE];
+uint8_t incoming2_index = 0;
+uint8_t incoming2_decoded_buffer[INCOMING2_BUFFER_SIZE];
+
 
 ADC *adc = new ADC(); // adc object
 
@@ -179,6 +190,7 @@ uint16_t fpscount = 0;
 GLOVE glove0;
 GLOVE glove1;
 SERIALSTATS serial1stats;
+SERIALSTATS serial2stats;
 DISC disc0;
 
 byte gloveindicator[16][8];
@@ -207,20 +219,6 @@ void setup() {
 
 	display.display();
 
-	glove1.finger1_in_progress = false;
-	glove0.finger1_in_progress = false;
-	glove0.fresh = false;
-	glove1.fresh = false;
-	glove1.yaw_offset = 0;
-	glove1.pitch_offset = 0;
-	glove1.roll_offset = 0;
-	glove0.yaw_offset = 0;
-	glove0.pitch_offset = 0;
-	glove0.roll_offset = 0;
-	glove0.output_rgb_led = CRGB(0, 0, 0);
-	glove0.output_white_led = 0;
-	glove1.output_rgb_led = CRGB(0, 0, 0);
-	glove1.output_white_led = 0;
 
 	//must go first so Serial.begin can override pins!!!
 	LEDS.addLeds<OCTOWS2811>(actual_output, NUM_LEDS_PER_STRIP);
@@ -232,7 +230,7 @@ void setup() {
 	//bump hardwareserial.cpp to 255
 	Serial.begin(115200);   //Debug
 	Serial1.begin(115200);  //Gloves	
-	Serial2.begin(115200);  //Xbee	
+	Serial2.begin(38400);  //Xbee	
 	Serial3.begin(115200);  //BT
 
 	//pinMode(A9, INPUT); //audio input
@@ -268,12 +266,11 @@ void setup() {
 #define static_menu_location_x 18
 #define static_menu_location_y 10
 
-
 #define inner_disc_location_x 1
-#define inner_disc_location_y 1
+#define inner_disc_location_y 30
 
-#define outer_disc_location_x 1
-#define outer_disc_location_y 1
+#define outer_disc_location_x 15
+#define outer_disc_location_y 30
 
 
 void loop() {
@@ -329,10 +326,27 @@ void loop() {
 		}
 	}
 
+
+
+	disc0.inner_offset_requested = glove1.disc_offset;
+	disc0.outer_offset_requested = glove1.disc_offset;
+
 	if (FPSdisplay.check()){
-		Serial.print(fpscount);
+
+
+		
+
+
+		//disc0.inner_magnitude_requested++;
+	//	if (disc0.inner_magnitude_requested > 33){
+			disc0.inner_offset_requested = 5;
+		//}
+
+
+
+		Serial.print(serial2stats.packets_in_per_second);
 		Serial.print(" ");
-		Serial.print(serial1stats.packets_out_per_second);
+		Serial.print(serial2stats.packets_out_per_second);
 		Serial.print(" ");
 		Serial.println(temperature);
 		serial1stats.packets_out_per_second = 0;
@@ -372,9 +386,7 @@ void loop() {
 		glove0.output_rgb_led = CRGB(0, 0, 0);
 	}
 
-	if (Serial2.available()){
-		Serial2.read();
-	}
+
 
 	if (Serial3.available()){
 		Serial3.read();
@@ -457,7 +469,9 @@ void loop() {
 	//this gets updated during writing out the main LED display, its the last thing to do
 	display.drawRect(realtime_location_x - 1, realtime_location_y - 1, 18, 10, WHITE);
 
+	draw_disc(disc0.inner_offset_requested, disc0.inner_magnitude_requested, inner_disc_location_x, inner_disc_location_y);
 
+	draw_disc(disc0.outer_offset_requested, disc0.outer_magnitude_requested, outer_disc_location_x, outer_disc_location_y);
 
 	for (uint8_t y = 0; y < 8; y++) {
 		for (uint8_t x = 0; x < 16; x++) {
@@ -598,10 +612,10 @@ void loop() {
 		raw_buffer[3] = disc0.color2.h;
 		raw_buffer[4] = disc0.color2.s;
 		raw_buffer[5] = disc0.color2.v;
-		raw_buffer[6] = 0;
-		raw_buffer[7] = 0;
-		raw_buffer[8] = 16;
-		raw_buffer[9] = 16;
+		raw_buffer[6] = disc0.inner_offset_requested;
+		raw_buffer[7] = disc0.outer_offset_requested;
+		raw_buffer[8] = disc0.inner_magnitude_requested;
+		raw_buffer[9] = disc0.outer_magnitude_requested;
 		raw_buffer[10] = 128; //disc0.fade_level;  //fade
 		raw_buffer[11] = 0x00;  //mode
 		raw_buffer[12] = disc0.packet_sequence_number;  //sequence
@@ -741,7 +755,9 @@ void loop() {
 			//Serial.println("");
 		}
 	}
+
 	SerialUpdate();
+
 }
 
 boolean visible_menu(uint8_t x, uint8_t y){
@@ -1057,6 +1073,60 @@ void SerialUpdate(void){
 				incoming1_index++;
 		}
 	}
+
+
+	while (Serial2.available()){
+
+		//read in a byte
+		incoming2_raw_buffer[incoming2_index] = Serial2.read();
+
+		//check for end of packet
+		if (incoming2_raw_buffer[incoming2_index] == 0x00){
+			//try to decode
+			uint8_t decoded_length = COBSdecode(incoming2_raw_buffer, incoming2_index, incoming2_decoded_buffer);
+
+			//check length of decoded data (cleans up a series of 0x00 bytes)
+			if (decoded_length > 0){
+				onPacket2(incoming1_decoded_buffer, decoded_length);
+			}
+
+			//reset index
+			incoming2_index = 0;
+		}
+		else{
+			//read data in until we hit overflow, then hold at last position
+			if (incoming2_index < INCOMING1_BUFFER_SIZE)
+				incoming2_index++;
+		}
+	}
+
+
+}
+
+
+void onPacket2(const uint8_t* buffer, size_t size)
+{
+
+	if (size != 11){
+		serial2stats.framing_errors++;
+	
+	}
+	else{
+		uint8_t crc = OneWire::crc8(buffer, size - 2);
+		if (crc != buffer[size - 1]){
+			serial2stats.crc_errors++;
+		}
+		else{
+
+			if (serial2stats.packets_in_per_second < 255){
+				serial2stats.packets_in_per_second++;
+			}
+
+			Serial.println("Get xbee");
+
+
+		}
+	}
 }
 
 void onPacket1(const uint8_t* buffer, size_t size)
@@ -1128,18 +1198,18 @@ void onPacket1(const uint8_t* buffer, size_t size)
 			current_glove->cpu_temp = buffer[32];
 
 			//update the gesture grid (8x8 grid + overlap 
-
+			int temp_gloveX_saved = 0;
 			int temp_gloveX = 0;
 
 			if (current_glove == &glove1){
-				temp_gloveX = map((current_glove->yaw_compensated - 18000) - ((current_glove->pitch_compensated - 18000)*abs(sin((current_glove->roll_raw - 18000)* PI / 18000))) + 18000, 18000 - GLOVE_DEADZONE, 18000 + GLOVE_DEADZONE, 0, 8);
+				temp_gloveX_saved = (current_glove->yaw_compensated - 18000) - ((current_glove->pitch_compensated - 18000)*abs(sin((current_glove->roll_raw - 18000)* PI / 18000))) + 18000;
 			}
 			else{
-				temp_gloveX = map((current_glove->yaw_compensated - 18000) + ((current_glove->pitch_compensated - 18000)*abs(sin((current_glove->roll_raw - 18000)* PI / 18000))) + 18000, 18000 - GLOVE_DEADZONE, 18000 + GLOVE_DEADZONE, 0, 8);
+				temp_gloveX_saved = (current_glove->yaw_compensated - 18000) + ((current_glove->pitch_compensated - 18000)*abs(sin((current_glove->roll_raw - 18000)* PI / 18000))) + 18000;
 			}
+			temp_gloveX = map(temp_gloveX_saved, 18000 - GLOVE_DEADZONE, 18000 + GLOVE_DEADZONE, 0, 8);
 
 			int temp_gloveY = map((current_glove->pitch_compensated), 18000 - GLOVE_DEADZONE, 18000 + GLOVE_DEADZONE, 0, 8);
-
 			temp_gloveY = constrain(temp_gloveY, 0, 7);
 
 			if (current_glove == &glove0){
@@ -1163,6 +1233,19 @@ void onPacket1(const uint8_t* buffer, size_t size)
 				current_glove->gloveX = temp_gloveX;
 			}
 
+			//calc disc circle location
+			temp_gloveX = map(temp_gloveX_saved, 18000 - GLOVE_DEADZONE, 18000 + GLOVE_DEADZONE, -1024, 1024);
+
+			temp_gloveY = map((current_glove->pitch_compensated), 18000 - GLOVE_DEADZONE, 18000 + GLOVE_DEADZONE, -1024, 1024);
+
+			int angle = atan2(temp_gloveY, temp_gloveX) * 180 / PI;
+			angle = (angle + 360 + 90) % 360;
+
+			current_glove->disc_offset = constrain(map(angle, 0, 361, 0, 30), 0, 29);
+
+			current_glove->magnitude = sqrt(temp_gloveX*temp_gloveX + temp_gloveY*temp_gloveY);
+		
+
 			//check for gestures
 			readglove(&glove0);
 			readglove(&glove1);
@@ -1180,108 +1263,109 @@ CHSV map_hsv(uint8_t input, uint8_t in_min, uint8_t in_max, CHSV* out_min, CHSV*
 
 
 
-void draw_disc(uint8_t index_offset, uint8_t magnitude , uint8_t x_offset, uint8_t y_offset){
-
+void draw_disc(uint8_t index_offset, uint8_t magnitude, uint8_t x_offset, uint8_t y_offset){
+	index_offset = (index_offset + 15) % 30;
 	//draw pointer line
-	display.drawLine(x_offset + 6, y_offset + 5, circle_xcoord(index_offset), circle_ycoord(index_offset), WHITE);
-	display.drawLine(x_offset + 6, y_offset + 4, circle_xcoord(index_offset), circle_ycoord(index_offset), WHITE);
+	display.drawLine(x_offset + 6, y_offset + 5, x_offset + circle_xcoord(index_offset), y_offset + circle_ycoord(index_offset), WHITE);
+	display.drawLine(x_offset + 6, y_offset + 4, x_offset + circle_xcoord(index_offset), y_offset + circle_ycoord(index_offset), WHITE);
 
 	//draw the circle
 	if (magnitude <= 16){
-		for (uint8_t i = 0; i < 15; i++) {
+		for (uint8_t i = 0; i < 16; i++) {
 			if (i < magnitude){
-				display.drawPixel(circle_xcoord(i), circle_ycoord(i), WHITE);
-				display.drawPixel(circle_xcoord(30 - i), circle_ycoord(30 - i), WHITE);
+				display.drawPixel(x_offset + circle_xcoord((index_offset + i) % 30), y_offset + circle_ycoord((index_offset + i) % 30), WHITE);
+				display.drawPixel(x_offset + circle_xcoord((index_offset + 30 - i) % 30), y_offset + circle_ycoord((index_offset + 30 - i) % 30), WHITE);
 			}
 		}
-	}else if (magnitude > 16 &&magnitude <= 32){
-		for (uint8_t i = 0; i < 15; i++) {
-			if (i > (magnitude - 17)){
-				display.drawPixel(circle_xcoord(i), circle_ycoord(i), WHITE);
-				display.drawPixel(circle_xcoord(30 - i), circle_ycoord(30 - i), WHITE);
+	}
+	else if (magnitude > 16 && magnitude <= 32){
+		for (uint8_t i = 0; i < 16; i++) {
+			if (i >(magnitude - 17)){
+				display.drawPixel(x_offset + circle_xcoord(i), y_offset + circle_ycoord(i), WHITE);
+				display.drawPixel(x_offset + circle_xcoord(30 - i), y_offset + circle_ycoord(30 - i), WHITE);
 			}
 		}
-	}else if (magnitude > 32 && magnitude <= 47){
-		for (uint8_t i = 0; i < 15; i++) {
-			if (i <= magnitude - 32) display.drawPixel(circle_xcoord(i), circle_ycoord(i), WHITE);
-			if (i <= magnitude - 32) display.drawPixel(circle_xcoord(i+15), circle_ycoord(i+15), WHITE);
+	}
+	else if (magnitude > 32 && magnitude <= 47){
+		for (uint8_t i = 0; i < 16; i++) {
+			if (i <= magnitude - 32) display.drawPixel(x_offset + circle_xcoord(i), y_offset + circle_ycoord(i), WHITE);
+			if (i <= magnitude - 32) display.drawPixel(x_offset + circle_xcoord(i + 15), y_offset + circle_ycoord(i + 15), WHITE);
 		}
-	}else if (magnitude > 47 && magnitude <= 62){
-		for (uint8_t i = 0; i < 15; i++) {
-			if (i > magnitude - 47) display.drawPixel(circle_xcoord(i), circle_ycoord(i), WHITE);
-			if (i > magnitude - 47) display.drawPixel(circle_xcoord(i + 15), circle_ycoord(i + 15), WHITE);
+	}
+	else if (magnitude > 47 && magnitude <= 62){
+		for (uint8_t i = 0; i < 16; i++) {
+			if (i > magnitude - 47) display.drawPixel(x_offset + circle_xcoord(i), y_offset + circle_ycoord(i), WHITE);
+			if (i > magnitude - 47) display.drawPixel(x_offset + circle_xcoord(i + 15), y_offset + circle_ycoord(i + 15), WHITE);
 		}
-	}else if (magnitude > 62 && magnitude <= 77){
-		for (uint8_t i = 0; i < 15; i++) {
+	}
+	else if (magnitude > 62 && magnitude <= 77){
+		for (uint8_t i = 0; i < 16; i++) {
 
-		
+
 		}
 	}
 
 	//blank the beam pixel
-	if (disc0.packet_beam < 17 && disc0.packet_beam > 0 && disc0.fade_level < 255){
-		display.drawPixel(circle_xcoord(disc0.packet_beam), circle_ycoord(disc0.packet_beam), BLACK);
-		display.drawPixel(circle_xcoord(30 - disc0.packet_beam), circle_ycoord(30 - disc0.packet_beam), BLACK);
-	}
+	//if (disc0.packet_beam < 17 && disc0.packet_beam > 0 && disc0.fade_level < 255){
+	//	display.drawPixel(circle_xcoord(disc0.packet_beam), circle_ycoord(disc0.packet_beam), BLACK);
+	//	display.drawPixel(circle_xcoord(30 - disc0.packet_beam), circle_ycoord(30 - disc0.packet_beam), BLACK);
+	//}
 
 }
-		
-	
-
 
 
 uint8_t circle_xcoord(uint8_t circle_index){
 	switch (circle_index){
 	case 6:	case 7:	case 8:	case 9:
-		return 0;
+		return 12 - 0;
 	case 5:	case 10:
-		return 1;
+		return 12 - 1;
 	case 11: case 4:
-		return 2;
+		return 12 - 2;
 	case 12: case 3:
-		return 3;
+		return 12 - 3;
 	case 2:	case 13:
-		return 4;
+		return 12 - 4;
 	case 1:	case 14:
-		return 5;
+		return 12 - 5;
 	case 0:	case 15:
-		return 6;
+		return 12 - 6;
 	case 16: case 29:
-		return 7;
+		return 12 - 7;
 	case 17: case 28:
-		return 8;
-	case 18: case 26:
-		return 9;
-	case 19: case 27:
-		return 10;
+		return 12 - 8;
+	case 18: case 27:
+		return 12 - 9;
+	case 19: case 26:
+		return 12 - 10;
 	case 20: case 25:
-		return 11;
+		return 12 - 11;
 	case 21: case 22: case 23: case 24:
-		return 12;
+		return 12 - 12;
 	}
 }
 
 uint8_t circle_ycoord(uint8_t circle_index){
 	switch (circle_index){
 	case 13: case 14: case 15: case 16: case 17:
-		return 0;
+		return 9 - 0;
 	case 11: case 12: case 18: case 19:
-		return 1;
+		return 9 - 1;
 	case 10: case 20:
-		return 2;
+		return 9 - 2;
 	case 9: case 21:
-		return 3;
+		return 9 - 3;
 	case 8: case 22:
-		return 4;
+		return 9 - 4;
 	case 7: case 23:
-		return 5;
+		return 9 - 5;
 	case 6: case 24:
-		return 6;
+		return 9 - 6;
 	case 5: case 25:
-		return 7;
+		return 9 - 7;
 	case 3: case 4: case 26: case 27:
-		return 8;
+		return 9 - 8;
 	case 0:	case 1: case 2: case 28: case 29:
-		return 9;
+		return 9 - 9;
 	}
 }

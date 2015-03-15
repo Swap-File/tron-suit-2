@@ -51,25 +51,23 @@ uint8_t saved_inner_index_acceleration = 0;
 CHSV color1 = CHSV(128, 255, 255);
 CHSV color2 = CHSV(0, 255, 255);
 
-const uint8_t blur_rate = 2;
+uint8_t blur_rate = 2;
+uint8_t blur_modifier = 0;
 
 //buffers to hold data as it streams in
 int8_t stream_head = 0;
 CHSV color1_streaming[16];
 CHSV color2_streaming[16];
 
-
-
 //pointers to colors, set by effect modes
 CHSV *outer_stream = color2_streaming;
 CHSV *inner_stream = color1_streaming;
-
 
 //effect mode 2 variables
 uint8_t inner_offset_requested = 0;
 uint8_t outer_offset_requested = 0;
 uint8_t inner_magnitude_displayed = 0;
-uint8_t outer_magnitude_displayed = 0;
+uint8_t outer_magnitude_displayed = 90;
 uint8_t inner_index = 16;
 int8_t outer_index = 16;
 uint8_t inner_magnitude_requested = 16;
@@ -156,7 +154,7 @@ void setup() {
 #endif
 
 	Serial.begin(115200); //Debug
-	Serial1.begin(115200); //Xbee
+	Serial1.begin(38400); //Xbee
 
 	// initialize device
 	Serial.println(F("Initializing I2C devices..."));
@@ -239,8 +237,6 @@ void loop() {
 	// wait for MPU interrupt or extra packet(s) available
 	while (!mpuInterrupt && fifoCount < packetSize) {
 
-
-
 		if (FPSdisplay.check()){
 			cpu_usage = 100 - (idle_microseconds / 10000);
 			idle_microseconds = 0;
@@ -252,30 +248,12 @@ void loop() {
 			Serial.print(" ");
 			Serial.print(packets_out_per_second);
 			Serial.print(" ");
-			Serial.print(cpu_usage);
+			Serial.print(disc_mode);
 			Serial.print(" ");
-			Serial.println(disc_mode);
-			Serial.print("Voltage: ");
-			Serial.println(voltage);
-			Serial.print("Temp in C: ");
-			Serial.println(temperature);
 			Serial.print(outer_magnitude_displayed);
-			Serial.print("  ");
-			Serial.println(packet_beam);
-
-
-
-
-
+			Serial.print(" ");
+			Serial.println(inner_magnitude_displayed);
 		}
-
-		if (Serial.available()) {
-			outer_magnitude_displayed++;
-			while (Serial.available()){
-				Serial.read();
-			}
-		}
-		if (outer_magnitude_displayed > 92) outer_magnitude_displayed = 0;
 
 		SerialUpdate();
 
@@ -284,14 +262,14 @@ void loop() {
 		inner_stream = bitRead(effect_mode, 1) ? color2_streaming : color1_streaming;
 
 		if (idle_start_timer == 0){
-
+			
 			idle_start_timer = micros();
 		}
 	}
 
 	idle_microseconds = idle_microseconds + (micros() - idle_start_timer);
 
-
+	
 	// reset interrupt flag and get INT_STATUS byte
 	mpuInterrupt = false;
 	mpuIntStatus = mpu.getIntStatus();
@@ -428,7 +406,6 @@ void loop() {
 
 
 		if (disc_mode >= 2){
-
 			if (abs(aaReal.z) > 8000 && cooldowncomplete){
 				disc_mode = 2;
 			}
@@ -440,21 +417,18 @@ void loop() {
 		}
 
 		if (disc_mode == 2){
-			//inner_magnitude_displayed = inner_magnitude_requested;
-			//outer_magnitude_displayed = outer_magnitude_requested;
+			blur_rate = 2;
+			inner_magnitude_displayed = inner_magnitude_requested;
+			outer_magnitude_displayed = outer_magnitude_requested;
 		}
 
 		if (disc_mode == DISC_MODE_SWIPE){
-
+			blur_rate = 255;
 			//maybe adjust the effect for range 
 			//stuff the streaming buffers with color data
 			for (uint8_t current_pixel = 0; current_pixel < 16; current_pixel++) {
-
-				//check the 0-15 thing?
-				CHSV temp = CHSV(0, 0, 0);
-				color1_streaming[stream_head] = map_hsv(current_pixel, 0, 15, &color1, &temp);
-				color2_streaming[stream_head] = map_hsv(current_pixel, 0, 15, &color2, &temp);
-
+				color1_streaming[current_pixel] = color1;
+				color2_streaming[current_pixel] = color2;
 			}
 
 			if (xy_accel_magnitude > 3000){
@@ -468,7 +442,7 @@ void loop() {
 				saved_xy_accel_magnitude_smoothed = xy_accel_magnitude_smoothed;
 			}
 			else{
-				uint8_t magnitude_temp = constrain(map(saved_xy_accel_magnitude_smoothed, 3000, 10000, 1, 10), 1, 10);
+				uint8_t magnitude_temp = constrain(map(saved_xy_accel_magnitude_smoothed, 3000, 10000, 1, 20), 1, 20);
 
 				inner_magnitude_displayed = magnitude_temp;
 				outer_magnitude_displayed = magnitude_temp;
@@ -496,7 +470,7 @@ void loop() {
 			else LED_color = &inner_stream[((15 - (current_pixel - 16)) + (stream_head - 1) + 15) % 16];
 
 			//set inner LEDs
-			absolute_LED_index = ((30 + inner_index + current_pixel + inner_offset_requested) % 30);
+			absolute_LED_index = ((60 + inner_index + current_pixel - inner_offset_requested) % 30);
 			mask_blur_and_output(absolute_LED_index, LED_color, current_pixel, inner_magnitude_displayed);
 
 			//first half of outer circle	
@@ -508,15 +482,18 @@ void loop() {
 			absolute_LED_index = 120 + ((30 + outer_index + current_pixel + outer_offset_requested) % 30);
 			mask_blur_and_output(absolute_LED_index, LED_color, current_pixel, outer_magnitude_displayed);
 		}
-	
+		
 		//called at 100hz max
 		LEDS.show();
-
+		
 		//906 * 64 is low when plugged into batteries, about 3.55 v per cell
 		voltage = voltage * .95 + .05 * (((uint16_t)adc->analogReadContinuous(ADC_0)) / 4083.375); //voltage
 
 		//temp sensor from https://github.com/manitou48/teensy3/blob/master/chiptemp.pde
 		temperature = temperature * .95 + .05 * (25 - (((uint16_t)adc->analogReadContinuous(ADC_1)) - 38700) / -35.7); //temp in C
+
+		blur_modifier = blur_modifier * .9;
+		Serial.println(blur_modifier);
 	}
 }
 
@@ -569,7 +546,7 @@ void sendPacket(){
 	uint8_t encoded_size = COBSencode(raw_buffer, 11, encoded_buffer);
 	Serial1.write(encoded_buffer, encoded_size);
 	Serial1.write(0x00);
-
+	//Serial1.println("Testing EAM!");
 	if (packets_out_counter < 255){
 		packets_out_counter++;
 	}
@@ -581,14 +558,13 @@ void receivePacket(const uint8_t* buffer, size_t size)
 	//format of packet is
 	//H-0 S-0 V-0 H-1 S-1 V-1 INNER-INDEX-OFFSET INNER-MAGNITUDE OUTER-INDEX-OFFSET OUTER-MAGNITUDE
 	//PACKET_INDEX FADE MODE CRC
-
+	
 	//Packet index can double as pulse beam
 
 	//mode bits
 	//0 & 1 are color mapping
 	//4 is flow direction inner
 	//5 could be pulsing on and off?
-
 
 	//check for framing errors
 	if (size != 15){
@@ -607,13 +583,24 @@ void receivePacket(const uint8_t* buffer, size_t size)
 				packets_in_counter++;
 			}
 
-			sendPacket();
-
 			color1 = CHSV(buffer[0], buffer[1], buffer[2]);
 			color2 = CHSV(buffer[3], buffer[4], buffer[5]);
 
-			inner_offset_requested = ((uint8_t)buffer[6]) % 30;
-			outer_offset_requested = ((uint8_t)buffer[7]) % 30;
+			uint8_t offset_temp;
+				
+			offset_temp = ((uint8_t)buffer[6]) % 30;
+
+			if (offset_temp != inner_offset_requested){
+				inner_offset_requested = offset_temp;
+				blur_modifier = qadd8(blur_modifier, 3);
+			}
+
+			offset_temp = ((uint8_t)buffer[7]) % 30;
+			
+			if (offset_temp != outer_offset_requested){
+					outer_offset_requested = offset_temp;
+					blur_modifier = qadd8(blur_modifier, 3);
+				}
 
 			inner_magnitude_requested = ((uint8_t)buffer[8]) % 17;
 			outer_magnitude_requested = ((uint8_t)buffer[9]) % 17;
@@ -626,6 +613,8 @@ void receivePacket(const uint8_t* buffer, size_t size)
 				increment_stream();
 			}
 			packet_beam = buffer[13];
+		
+			sendPacket();
 		}
 	}
 }
@@ -669,6 +658,12 @@ void mask_blur_and_output(uint8_t i, CHSV* color, uint8_t current_pixel, uint8_t
 	CRGB temp_rgb = *color;
 
 	//masking code
+
+	//reverse basic modes
+	if (magnitude > 92){
+		magnitude = 31 - (magnitude - 93);
+	}
+	
 	if (magnitude >= 0 && magnitude < 16){  //basic open
 		if (current_pixel >= magnitude  && current_pixel <= (30 - magnitude)) temp_rgb = CRGB(0, 0, 0);
 	}
@@ -699,22 +694,34 @@ void mask_blur_and_output(uint8_t i, CHSV* color, uint8_t current_pixel, uint8_t
 		}
 		else if (current_pixel - 15 >  14 - (magnitude - 78) || current_pixel == 15) temp_rgb = CRGB(0, 0, 0);
 	}
+
+	
+	//determine beam pattern
+	bool blur = true;
+	if (packet_beam < 16){
+		if (current_pixel < 16){
+			if (current_pixel == packet_beam) blur = false;
+		}
+		else{
+			if (30-current_pixel == packet_beam) blur = false;
+		}
+	}
 	
 	//dont blur or fade pixels that are turning on
 	//dont blur or fade beam pixels
 	//turn leds off immediately
-	if (packet_beam != current_pixel && color->v != 0){
+	if (blur && color->v != 0 && actual_output[i] != CRGB(0,0,0) && disc_mode < 3){
 
 		temp_rgb.fadeToBlackBy(fade_level); // fade_level
 
-		if (actual_output[i].r < temp_rgb.r) temp_rgb.r = min(actual_output[i].r + blur_rate, temp_rgb.r);
-		else if (actual_output[i].r > temp_rgb.r) temp_rgb.r = max(actual_output[i].r - blur_rate, temp_rgb.r);
+		if (actual_output[i].r < temp_rgb.r) temp_rgb.r = min(actual_output[i].r + (blur_rate + blur_modifier), temp_rgb.r);
+		else if (actual_output[i].r > temp_rgb.r) temp_rgb.r = max(actual_output[i].r - (blur_rate + blur_modifier), temp_rgb.r);
 
-		if (actual_output[i].g < temp_rgb.g) temp_rgb.g = min(actual_output[i].g + blur_rate, temp_rgb.g);
-		else if (actual_output[i].g > temp_rgb.g) temp_rgb.g = max(actual_output[i].g - blur_rate, temp_rgb.g);
+		if (actual_output[i].g < temp_rgb.g) temp_rgb.g = min(actual_output[i].g + (blur_rate + blur_modifier), temp_rgb.g);
+		else if (actual_output[i].g > temp_rgb.g) temp_rgb.g = max(actual_output[i].g - (blur_rate + blur_modifier), temp_rgb.g);
 
-		if (actual_output[i].b < temp_rgb.b) temp_rgb.b = min(actual_output[i].b + blur_rate, temp_rgb.b);
-		else if (actual_output[i].b > temp_rgb.b) temp_rgb.b = max(actual_output[i].b - blur_rate, temp_rgb.b);
+		if (actual_output[i].b < temp_rgb.b) temp_rgb.b = min(actual_output[i].b + (blur_rate + blur_modifier), temp_rgb.b);
+		else if (actual_output[i].b > temp_rgb.b) temp_rgb.b = max(actual_output[i].b - (blur_rate + blur_modifier), temp_rgb.b);
 	}
 
 	actual_output[i] = temp_rgb;
