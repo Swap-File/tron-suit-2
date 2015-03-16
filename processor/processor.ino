@@ -18,13 +18,6 @@
 #include <ADC.h>
 
 //menu scroll-aways to match effect
-
-#define MENU_SCROLL_OFF_UP 1
-#define MENU_SCROLL_OFF_DOWN 2
-#define MENU_SCROLL_OFF_LEFT 3
-#define MENU_SCROLL_OFF_RIGHT 4
-uint8_t menu_scroll_off = MENU_SCROLL_OFF_RIGHT;
-
 #define HAND_DIRECTION_LEFT 1
 #define HAND_DIRECTION_RIGHT 2
 #define HAND_DIRECTION_UP 3
@@ -1171,19 +1164,15 @@ void menu_map(uint8_t direction){
 	case MENU_DEFAULT:
 		switch (direction){
 		case HAND_DIRECTION_LEFT:
-			menu_scroll_off = MENU_SCROLL_OFF_LEFT; // menu scrolling exit type
 			menu_mode = MENU_FFT_ROOT; //new menu screen 
 			break;
 		case HAND_DIRECTION_RIGHT:
-			menu_scroll_off = MENU_SCROLL_OFF_RIGHT;
 			menu_mode = MENU_FFT_ROOT;
 			break;
 		case HAND_DIRECTION_UP:
-			menu_scroll_off = MENU_SCROLL_OFF_UP;
 			menu_mode = MENU_FFT_ROOT;
 			break;
 		case HAND_DIRECTION_DOWN:
-			menu_scroll_off = MENU_SCROLL_OFF_DOWN;
 			menu_mode = MENU_FFT_ROOT;
 			break;
 		}
