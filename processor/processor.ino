@@ -143,6 +143,10 @@ typedef struct {
 } SERIALSTATS;
 
 
+uint8_t circle_x[30] = { 6, 7, 8, 9, 10, 11, 12, 12, 12, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 0, 0, 1, 2, 3, 4, 5 };
+uint8_t circle_y[30] = { 0, 0, 0, 1, 1, 2, 3, 4, 5, 6, 7, 8, 8, 9, 9, 9, 9, 9, 8, 8, 7, 6, 5, 4, 3, 2, 1, 1, 0, 0 };
+
+
 CHSV color1 = CHSV(0, 255, 255);
 CHSV color2 = CHSV(64, 255, 255);
 
@@ -167,12 +171,17 @@ int16_t sms_text_ending_pos = 0; //160 * 5 max length
 int16_t sms_scroll_pos = 0;
 int16_t menu_text_ending_pos = 0;
 
-uint8_t scroll_count = 0;
-int8_t scroll_pos_x = 0;
 
-int8_t scroll_pos_y = 0;
-uint8_t scroll_mode = 0;
-long int scroll_timer = 0;
+//scroll state has 3 modes
+//scrolling from start position to 0,0
+//pausing at 0,0 according to scroll_timer
+//scrolling from 0,0 to scroll_off pos
+int8_t scroll_pos_x = 0; //starting position to scroll from x
+int8_t scroll_pos_y = 0;  //starting position to scroll from y
+int8_t scroll_end_pos_x = 0;  //destination to scroll to x
+int8_t scroll_end_pos_y = 0; //destination to scroll to y
+uint8_t scroll_mode = 0;  //keeps track of scroll state
+long int scroll_timer = 0;  //time to pause at 0,0
 
 //crank up hardwareserial.cpp to 128 to match!
 #define INCOMING1_BUFFER_SIZE 128
@@ -556,21 +565,20 @@ void loop() {
 			sms_scroll_pos = 0;
 		}
 
-		//center the text from whatever direction its coming from
 		switch (scroll_mode){
 		case 3:
-			//take up slack when scrolling in from the far side
+			//take up slack when scrolling in backwards
 			if (menu_text_ending_pos < 0 && scroll_pos_x < 0) scroll_pos_x -= menu_text_ending_pos;
 
 			if (scroll_pos_x > 0) scroll_pos_x--;
-			if (scroll_pos_y > 0) scroll_pos_y--;
-			if (scroll_pos_x < 0) scroll_pos_x++;
-			if (scroll_pos_y < 0) scroll_pos_y++;
+			else if (scroll_pos_y > 0) scroll_pos_y--;
+			else if (scroll_pos_x < 0) scroll_pos_x++;
+			else if (scroll_pos_y < 0) scroll_pos_y++;
+
 			if (scroll_pos_y == 0 && scroll_pos_x == 0){
 				scroll_mode = 2;
 				scroll_timer = millis();
 			}
-
 			break;
 		case 2:
 			if (millis() - scroll_timer > 1000){
@@ -578,35 +586,13 @@ void loop() {
 			}
 			break;
 		case 1:
-			//scroll off the left side  
+			if (scroll_pos_x > scroll_end_pos_x) scroll_pos_x--;
+			else if (scroll_pos_y > scroll_end_pos_y) scroll_pos_y--;
+			else if (scroll_pos_x < scroll_end_pos_x) scroll_pos_x++;
+			else if (scroll_pos_y < scroll_end_pos_y) scroll_pos_y++;
 
-			if (menu_scroll_off == MENU_SCROLL_OFF_RIGHT){
-				scroll_pos_x--;
-				if (menu_text_ending_pos < 0 && scroll_pos_x < -16){
-					scroll_mode = 0;
-				}
-			}
-			else if(menu_scroll_off == MENU_SCROLL_OFF_LEFT){
-				scroll_pos_x++;
-				if (scroll_pos_x >16){
-					scroll_mode = 0;
-				}
-			}
-			else  if (menu_scroll_off == MENU_SCROLL_OFF_UP){
-				scroll_pos_y--;
-				if (scroll_pos_y <-8){
-					scroll_mode = 0;
-				}
-			}
-			else  if (menu_scroll_off == MENU_SCROLL_OFF_DOWN){
-				scroll_pos_y++;
-				if (scroll_pos_y > 8){
-					scroll_mode = 0;
-				}
-			}
-			else {
+			if (scroll_pos_y == scroll_end_pos_y && scroll_pos_x == scroll_end_pos_x){
 				scroll_mode = 0;
-
 			}
 		}
 	}
@@ -815,8 +801,7 @@ boolean read_sms_pixel(uint8_t x, uint8_t y){
 }
 
 #define MODECHANGEBRIGHTNESS 250  
-#define MODECHANGESTARTPOSX 18
-#define MODECHANGESTARTPOSY 8
+
 
 void readglove(void * temp){
 
@@ -824,36 +809,20 @@ void readglove(void * temp){
 	if (current_glove->finger1 == 1 && current_glove->finger1_in_progress == true){
 
 		if (current_glove->gloveY <= 0){
-			Serial.println(" down!");
-			scroll_mode = 3;
-			scroll_pos_x = 0;
-			scroll_pos_y = -MODECHANGESTARTPOSY;
 			menu_map(HAND_DIRECTION_DOWN);
 		}
 		else
 		{
 			if (current_glove->gloveY >= 7){
-				Serial.println(" up!");
-				scroll_mode = 3;
-				scroll_pos_x = 0;
-				scroll_pos_y = MODECHANGESTARTPOSY;
 				menu_map(HAND_DIRECTION_UP);
 			}
 
 			else{
 				if (current_glove->gloveX <= 0){
-					Serial.println(" right!");
-					scroll_mode = 3;
-					scroll_pos_x = MODECHANGESTARTPOSX;
-					scroll_pos_y = 0;
 					menu_map(HAND_DIRECTION_RIGHT);
 				}
 
 				if (current_glove->gloveX >= 7){
-					Serial.println(" left!");
-					scroll_mode = 3;
-					scroll_pos_x = -128; //negative a lot, this gets fixed by the shift code
-					scroll_pos_y = 0;
 					menu_map(HAND_DIRECTION_LEFT);
 				}
 			}
@@ -902,7 +871,7 @@ void readglove(void * temp){
 }
 
 
-void SerialUpdate(void){
+inline void SerialUpdate(void){
 
 	while (Serial1.available()){
 
@@ -959,7 +928,7 @@ void SerialUpdate(void){
 }
 
 
-void onPacket2(const uint8_t* buffer, size_t size)
+inline void onPacket2(const uint8_t* buffer, size_t size)
 {
 
 	if (size != 11){
@@ -984,7 +953,7 @@ void onPacket2(const uint8_t* buffer, size_t size)
 	}
 }
 
-void onPacket1(const uint8_t* buffer, size_t size)
+inline void onPacket1(const uint8_t* buffer, size_t size)
 {
 
 	if (size != 35){
@@ -1123,36 +1092,36 @@ void draw_disc(uint8_t index_offset, uint8_t magnitude, uint8_t x_offset, uint8_
 	//adjust reference
 	index_offset = (index_offset + 15) % 30;
 	//draw pointer line
-	display.drawLine(x_offset + 6, y_offset + 5, x_offset + circle_xcoord(index_offset), y_offset + circle_ycoord(index_offset), WHITE);
-	display.drawLine(x_offset + 6, y_offset + 4, x_offset + circle_xcoord(index_offset), y_offset + circle_ycoord(index_offset), WHITE);
+	display.drawLine(x_offset + 6, y_offset + 5, x_offset + circle_x[index_offset], y_offset + circle_y[index_offset], WHITE);
+	display.drawLine(x_offset + 6, y_offset + 4, x_offset + circle_x[index_offset], y_offset + circle_y[index_offset], WHITE);
 
 	//draw the circle
 	if (magnitude <= 16){
 		for (uint8_t i = 0; i < 16; i++) {
 			if (i < magnitude){
-				display.drawPixel(x_offset + circle_xcoord((index_offset + i) % 30), y_offset + circle_ycoord((index_offset + i) % 30), WHITE);
-				display.drawPixel(x_offset + circle_xcoord((index_offset + 30 - i) % 30), y_offset + circle_ycoord((index_offset + 30 - i) % 30), WHITE);
+				display.drawPixel(x_offset + circle_x[(index_offset + i) % 30], y_offset + circle_y[(index_offset + i) % 30], WHITE);
+				display.drawPixel(x_offset + circle_x[(index_offset + 30 - i) % 30], y_offset + circle_y[(index_offset + 30 - i) % 30], WHITE);
 			}
 		}
 	}
 	else if (magnitude > 16 && magnitude <= 32){
 		for (uint8_t i = 0; i < 16; i++) {
 			if (i >(magnitude - 17)){
-				display.drawPixel(x_offset + circle_xcoord(i), y_offset + circle_ycoord(i), WHITE);
-				display.drawPixel(x_offset + circle_xcoord(30 - i), y_offset + circle_ycoord(30 - i), WHITE);
+				display.drawPixel(x_offset + circle_x[i], y_offset + circle_y[i], WHITE);
+				display.drawPixel(x_offset + circle_x[30 - i], y_offset + circle_y[30 - i], WHITE);
 			}
 		}
 	}
 	else if (magnitude > 32 && magnitude <= 47){
 		for (uint8_t i = 0; i < 16; i++) {
-			if (i <= magnitude - 32) display.drawPixel(x_offset + circle_xcoord(i), y_offset + circle_ycoord(i), WHITE);
-			if (i <= magnitude - 32) display.drawPixel(x_offset + circle_xcoord(i + 15), y_offset + circle_ycoord(i + 15), WHITE);
+			if (i <= magnitude - 32) display.drawPixel(x_offset + circle_x[i], y_offset + circle_y[i], WHITE);
+			if (i <= magnitude - 32) display.drawPixel(x_offset + circle_x[i + 15], y_offset + circle_y[i + 15], WHITE);
 		}
 	}
 	else if (magnitude > 47 && magnitude <= 62){
 		for (uint8_t i = 0; i < 16; i++) {
-			if (i > magnitude - 47) display.drawPixel(x_offset + circle_xcoord(i), y_offset + circle_ycoord(i), WHITE);
-			if (i > magnitude - 47) display.drawPixel(x_offset + circle_xcoord(i + 15), y_offset + circle_ycoord(i + 15), WHITE);
+			if (i > magnitude - 47) display.drawPixel(x_offset + circle_x[i], y_offset + circle_y[i], WHITE);
+			if (i > magnitude - 47) display.drawPixel(x_offset + circle_x[i + 15], y_offset + circle_y[i + 15], WHITE);
 		}
 	}
 	else if (magnitude > 62 && magnitude <= 77){
@@ -1171,64 +1140,31 @@ void draw_disc(uint8_t index_offset, uint8_t magnitude, uint8_t x_offset, uint8_
 }
 
 
-uint8_t circle_xcoord(uint8_t circle_index){
-	switch (circle_index){
-	case 6:	case 7:	case 8:	case 9:
-		return 12 - 0;
-	case 5:	case 10:
-		return 12 - 1;
-	case 11: case 4:
-		return 12 - 2;
-	case 12: case 3:
-		return 12 - 3;
-	case 2:	case 13:
-		return 12 - 4;
-	case 1:	case 14:
-		return 12 - 5;
-	case 0:	case 15:
-		return 12 - 6;
-	case 16: case 29:
-		return 12 - 7;
-	case 17: case 28:
-		return 12 - 8;
-	case 18: case 27:
-		return 12 - 9;
-	case 19: case 26:
-		return 12 - 10;
-	case 20: case 25:
-		return 12 - 11;
-	case 21: case 22: case 23: case 24:
-		return 12 - 12;
-	}
-}
-
-uint8_t circle_ycoord(uint8_t circle_index){
-	switch (circle_index){
-	case 13: case 14: case 15: case 16: case 17:
-		return 9 - 0;
-	case 11: case 12: case 18: case 19:
-		return 9 - 1;
-	case 10: case 20:
-		return 9 - 2;
-	case 9: case 21:
-		return 9 - 3;
-	case 8: case 22:
-		return 9 - 4;
-	case 7: case 23:
-		return 9 - 5;
-	case 6: case 24:
-		return 9 - 6;
-	case 5: case 25:
-		return 9 - 7;
-	case 3: case 4: case 26: case 27:
-		return 9 - 8;
-	case 0:	case 1: case 2: case 28: case 29:
-		return 9 - 9;
-	}
-}
 
 
 void menu_map(uint8_t direction){
+
+	//set initial scroll on and scroll off variables
+	//can/will be overridden by menu below if desired
+	switch (direction){
+	case HAND_DIRECTION_LEFT:
+		menu_scroll_start_left();
+		menu_scroll_end_left();
+		break;
+	case HAND_DIRECTION_RIGHT:
+		menu_scroll_start_right();
+		menu_scroll_end_right();
+		break;
+	case HAND_DIRECTION_UP:
+		menu_scroll_start_up();
+		menu_scroll_end_up();
+		break;
+	case HAND_DIRECTION_DOWN:
+		menu_scroll_start_down();
+		menu_scroll_end_down();
+		break;
+	}
+
 
 	switch (menu_mode){
 	case MENU_FFT_ROOT:
@@ -1253,4 +1189,50 @@ void menu_map(uint8_t direction){
 		}
 		break;
 	}
+}
+
+//locations to start a scroll movement from
+inline void menu_scroll_start_left(void){
+	scroll_mode = 3;
+	scroll_pos_x = -128; //negative longer than longest text message, the slack will get taken up by the shift code
+	scroll_pos_y = 0;
+}
+
+inline void menu_scroll_start_right(void){
+	scroll_mode = 3;
+	scroll_pos_x = 18;
+	scroll_pos_y = 0;
+}
+
+inline void menu_scroll_start_up(void){
+	scroll_mode = 3;
+	scroll_pos_x = 0;
+	scroll_pos_y = 8;
+}
+
+inline void menu_scroll_start_down(void){
+	scroll_mode = 3;
+	scroll_pos_x = 0;
+	scroll_pos_y = -8;
+}
+
+//locations to stop a scroll movement at
+inline void menu_scroll_end_left(void){
+	scroll_end_pos_x = 16;
+	scroll_end_pos_y = 0;
+}
+
+inline void menu_scroll_end_right(void){
+	scroll_end_pos_x = -128;  //negative longer than longest text message, the slack will get taken up by the shift code
+	scroll_end_pos_y = 0;
+}
+
+inline void menu_scroll_end_up(void){
+	scroll_end_pos_x = 0;
+	scroll_end_pos_y = -8;
+}
+
+inline void menu_scroll_end_down(void){
+	scroll_end_pos_x = 0;
+	scroll_end_pos_y = 8;
 }
