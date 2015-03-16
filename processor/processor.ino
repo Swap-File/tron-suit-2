@@ -17,6 +17,22 @@
 
 #include <ADC.h>
 
+//menu scroll-aways to match effect
+
+#define MENU_SCROLL_OFF_UP 1
+#define MENU_SCROLL_OFF_DOWN 2
+#define MENU_SCROLL_OFF_LEFT 3
+#define MENU_SCROLL_OFF_RIGHT 4
+uint8_t menu_scroll_off = MENU_SCROLL_OFF_RIGHT;
+
+#define HAND_DIRECTION_LEFT 1
+#define HAND_DIRECTION_RIGHT 2
+#define HAND_DIRECTION_UP 3
+#define HAND_DIRECTION_DOWN 4
+
+#define MENU_DEFAULT 1
+#define MENU_FFT_ROOT 2
+
 boolean flow_direction_positive = true;
 
 typedef struct {
@@ -153,7 +169,6 @@ int16_t menu_text_ending_pos = 0;
 
 uint8_t scroll_count = 0;
 int8_t scroll_pos_x = 0;
-int8_t scroll_pos_x_offset = 0; //used for scrolling from the wrong end 
 
 int8_t scroll_pos_y = 0;
 uint8_t scroll_mode = 0;
@@ -334,16 +349,6 @@ void loop() {
 	if (FPSdisplay.check()){
 
 
-		
-
-
-		//disc0.inner_magnitude_requested++;
-	//	if (disc0.inner_magnitude_requested > 33){
-			disc0.inner_offset_requested = 5;
-		//}
-
-
-
 		Serial.print(serial2stats.packets_in_per_second);
 		Serial.print(" ");
 		Serial.print(serial2stats.packets_out_per_second);
@@ -425,8 +430,16 @@ void loop() {
 	//draw the menu first for masking purposes
 	display.drawRect(menu_location_x - 1, menu_location_y - 1, 18, 10, WHITE);
 
-	display.setCursor(menu_location_x + scroll_pos_x + scroll_pos_x_offset, menu_location_y + scroll_pos_y);
-	display.print(menu_mode);
+	display.setCursor(menu_location_x + scroll_pos_x, menu_location_y + scroll_pos_y);
+
+	switch (menu_mode){
+	case MENU_FFT_ROOT:
+		display.print("FFT");
+		break;
+	default:
+		display.print(menu_mode);
+	}
+
 	menu_text_ending_pos = display.getCursorX(); //save menu text length for elsewhere
 	//black out the rest!  probably dont need full width... 
 	display.fillRect(menu_location_x - 1, menu_location_y - 1 - 10, display.width() - (menu_location_x - 1), 10, BLACK);
@@ -566,12 +579,35 @@ void loop() {
 			break;
 		case 1:
 			//scroll off the left side  
-			scroll_pos_x--;
 
-			if (menu_text_ending_pos < 0 && scroll_pos_x < -16){
-				scroll_mode = 0;
+			if (menu_scroll_off == MENU_SCROLL_OFF_RIGHT){
+				scroll_pos_x--;
+				if (menu_text_ending_pos < 0 && scroll_pos_x < -16){
+					scroll_mode = 0;
+				}
 			}
-			break;
+			else if(menu_scroll_off == MENU_SCROLL_OFF_LEFT){
+				scroll_pos_x++;
+				if (scroll_pos_x >16){
+					scroll_mode = 0;
+				}
+			}
+			else  if (menu_scroll_off == MENU_SCROLL_OFF_UP){
+				scroll_pos_y--;
+				if (scroll_pos_y <-8){
+					scroll_mode = 0;
+				}
+			}
+			else  if (menu_scroll_off == MENU_SCROLL_OFF_DOWN){
+				scroll_pos_y++;
+				if (scroll_pos_y > 8){
+					scroll_mode = 0;
+				}
+			}
+			else {
+				scroll_mode = 0;
+
+			}
 		}
 	}
 
@@ -760,39 +796,6 @@ void loop() {
 
 }
 
-boolean visible_menu(uint8_t x, uint8_t y){
-
-	if (scroll_mode == 3){
-		if (scroll_pos_y != 0){
-
-			if (scroll_pos_y < 0){
-				if (y >= -scroll_pos_y) return false;
-			}
-			if (scroll_pos_y > 0){
-				if (y <= 8 - scroll_pos_y)  return false;
-			}
-		}
-		if (scroll_pos_x != 0){
-
-			if (scroll_pos_x < 0){
-				if (x <= menu_text_ending_pos)  return false;
-			}
-			if (scroll_pos_x > 0){
-				if (x >= scroll_pos_x)  return false;
-
-			}
-		}
-	}
-	if (scroll_mode == 2){
-		return false;
-	}
-	if (scroll_mode == 1){
-		if (x <= max(menu_text_ending_pos, scroll_pos_x + 16))  return false;
-	}
-	return true;
-
-}
-
 boolean read_menu_pixel(uint8_t x, uint8_t y){
 
 	//add 7 sub y to flip on y axis
@@ -822,184 +825,36 @@ void readglove(void * temp){
 
 		if (current_glove->gloveY <= 0){
 			Serial.println(" down!");
-
 			scroll_mode = 3;
 			scroll_pos_x = 0;
 			scroll_pos_y = -MODECHANGESTARTPOSY;
-
-			//root menus
-			if (menu_mode == 3){
-				menu_mode = 2;
-			}
-			else if (menu_mode == 2){
-				menu_mode = 1;
-			}
-			else if (menu_mode == 1){
-				menu_mode = 3;
-			}
-			//10s menus
-			if (menu_mode >= 10 && menu_mode <= 19){
-				menu_mode--;
-
-				//rollaround
-				if (menu_mode == 9){
-					menu_mode = 12;
-				}
-			}
-
-			//20s menus
-			if (menu_mode >= 20 && menu_mode <= 29){
-				menu_mode--;
-
-				//rollaround
-				if (menu_mode == 19){
-					menu_mode = 24;
-				}
-			}
-			//30s menus
-			if (menu_mode >= 30 && menu_mode <= 39){
-				menu_mode--;
-
-				//rollaround
-				if (menu_mode == 29){
-					menu_mode = 31;
-				}
-			}
-
+			menu_map(HAND_DIRECTION_DOWN);
 		}
 		else
 		{
 			if (current_glove->gloveY >= 7){
 				Serial.println(" up!");
-
 				scroll_mode = 3;
 				scroll_pos_x = 0;
 				scroll_pos_y = MODECHANGESTARTPOSY;
-
-
-
-				//root menus
-				if (menu_mode == 1){
-					menu_mode = 2;
-				}
-				else if (menu_mode == 2){
-					menu_mode = 3;
-				}
-				else if (menu_mode == 3){
-					menu_mode = 1;
-				}
-
-				//10s menus
-				if (menu_mode >= 10 && menu_mode <= 19){
-					menu_mode++;
-
-					//rollaround
-					if (menu_mode == 13){
-						menu_mode = 10;
-					}
-				}
-
-				//20s menus
-				if (menu_mode >= 20 && menu_mode <= 29){
-					menu_mode++;
-
-					//rollaround
-					if (menu_mode == 24){
-						menu_mode = 20;
-					}
-				}
-				//30s menus
-				if (menu_mode >= 30 && menu_mode <= 39){
-					menu_mode++;
-
-					//rollaround
-					if (menu_mode == 32){
-						menu_mode = 30;
-					}
-				}
-
-
+				menu_map(HAND_DIRECTION_UP);
 			}
 
 			else{
 				if (current_glove->gloveX <= 0){
 					Serial.println(" right!");
-
 					scroll_mode = 3;
 					scroll_pos_x = MODECHANGESTARTPOSX;
 					scroll_pos_y = 0;
-
-
-
-					if (menu_mode == 30){
-						mask_mode = 0;
-					}
-					if (menu_mode == 31){
-						mask_mode = 1;
-					}
-
-					if (menu_mode == 20){
-						fftmode = 0;
-					}
-					if (menu_mode == 21){
-						fftmode = 1;
-					}
-					if (menu_mode == 22){
-						fftmode = 2;
-					}
-					if (menu_mode == 23){
-						fftmode = 3;
-					}
-
-					if (menu_mode == 10){
-						color_on = 0;
-					}
-					if (menu_mode == 11){
-						color_on = 1;
-					}
-
-
-					//jump into first layer menu
-					if (menu_mode < 10){
-						menu_mode = menu_mode * 10;
-					}
-
-
-
-
-
-
+					menu_map(HAND_DIRECTION_RIGHT);
 				}
 
 				if (current_glove->gloveX >= 7){
 					Serial.println(" left!");
-
 					scroll_mode = 3;
 					scroll_pos_x = -128; //negative a lot, this gets fixed by the shift code
 					scroll_pos_y = 0;
-
-
-
-					//back out of 10s menu
-					if (menu_mode <= 19 && menu_mode >= 10){
-						menu_mode = 1;
-					}
-
-					//back out of 20s menu
-					if (menu_mode <= 29 && menu_mode >= 20){
-						menu_mode = 2;
-					}
-
-					//back out of 30s menu
-					if (menu_mode <= 39 && menu_mode >= 30){
-						menu_mode = 3;
-					}
-
-					//back out of 40s menu
-					if (menu_mode <= 49 && menu_mode >= 40){
-						menu_mode = 4;
-					}
-
+					menu_map(HAND_DIRECTION_LEFT);
 				}
 			}
 		}
@@ -1109,7 +964,7 @@ void onPacket2(const uint8_t* buffer, size_t size)
 
 	if (size != 11){
 		serial2stats.framing_errors++;
-	
+
 	}
 	else{
 		uint8_t crc = OneWire::crc8(buffer, size - 2);
@@ -1122,7 +977,7 @@ void onPacket2(const uint8_t* buffer, size_t size)
 				serial2stats.packets_in_per_second++;
 			}
 
-			Serial.println("Get xbee");
+			//Serial.println("Get xbee");
 
 
 		}
@@ -1244,7 +1099,7 @@ void onPacket1(const uint8_t* buffer, size_t size)
 			current_glove->disc_offset = constrain(map(angle, 0, 361, 0, 30), 0, 29);
 
 			current_glove->magnitude = sqrt(temp_gloveX*temp_gloveX + temp_gloveY*temp_gloveY);
-		
+
 
 			//check for gestures
 			readglove(&glove0);
@@ -1264,6 +1119,8 @@ CHSV map_hsv(uint8_t input, uint8_t in_min, uint8_t in_max, CHSV* out_min, CHSV*
 
 
 void draw_disc(uint8_t index_offset, uint8_t magnitude, uint8_t x_offset, uint8_t y_offset){
+
+	//adjust reference
 	index_offset = (index_offset + 15) % 30;
 	//draw pointer line
 	display.drawLine(x_offset + 6, y_offset + 5, x_offset + circle_xcoord(index_offset), y_offset + circle_ycoord(index_offset), WHITE);
@@ -1367,5 +1224,33 @@ uint8_t circle_ycoord(uint8_t circle_index){
 		return 9 - 8;
 	case 0:	case 1: case 2: case 28: case 29:
 		return 9 - 9;
+	}
+}
+
+
+void menu_map(uint8_t direction){
+
+	switch (menu_mode){
+	case MENU_FFT_ROOT:
+	case MENU_DEFAULT:
+		switch (direction){
+		case HAND_DIRECTION_LEFT:
+			menu_scroll_off = MENU_SCROLL_OFF_LEFT; // menu scrolling exit type
+			menu_mode = MENU_FFT_ROOT; //new menu screen 
+			break;
+		case HAND_DIRECTION_RIGHT:
+			menu_scroll_off = MENU_SCROLL_OFF_RIGHT;
+			menu_mode = MENU_FFT_ROOT;
+			break;
+		case HAND_DIRECTION_UP:
+			menu_scroll_off = MENU_SCROLL_OFF_UP;
+			menu_mode = MENU_FFT_ROOT;
+			break;
+		case HAND_DIRECTION_DOWN:
+			menu_scroll_off = MENU_SCROLL_OFF_DOWN;
+			menu_mode = MENU_FFT_ROOT;
+			break;
+		}
+		break;
 	}
 }
