@@ -154,7 +154,7 @@ void setup() {
 #endif
 
 	Serial.begin(115200); //Debug
-	Serial1.begin(38400); //Xbee
+	Serial1.begin(115200); //Wixel
 
 	// initialize device
 	Serial.println(F("Initializing I2C devices..."));
@@ -299,7 +299,6 @@ void loop() {
 		mpu.dmpGetQuaternion(&q, fifoBuffer);
 		mpu.dmpGetGravity(&gravity, &q);
 		mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
-
 		mpu.dmpGetAccel(&aa, fifoBuffer);
 		mpu.dmpGetLinearAccel(&aaReal, &aa, &gravity);
 
@@ -482,7 +481,8 @@ void loop() {
 			absolute_LED_index = 120 + ((30 + outer_index + current_pixel + outer_offset_requested) % 30);
 			mask_blur_and_output(absolute_LED_index, LED_color, current_pixel, outer_magnitude_displayed);
 		}
-		
+
+
 		//called at 100hz max
 		LEDS.show();
 		
@@ -493,7 +493,9 @@ void loop() {
 		temperature = temperature * .95 + .05 * (25 - (((uint16_t)adc->analogReadContinuous(ADC_1)) - 38700) / -35.7); //temp in C
 
 		blur_modifier = blur_modifier * .9;
-		Serial.println(blur_modifier);
+		//Serial.println(blur_modifier);
+
+		sendPacket();
 	}
 }
 
@@ -546,7 +548,7 @@ void sendPacket(){
 	uint8_t encoded_size = COBSencode(raw_buffer, 11, encoded_buffer);
 	Serial1.write(encoded_buffer, encoded_size);
 	Serial1.write(0x00);
-	//Serial1.println("Testing EAM!");
+
 	if (packets_out_counter < 255){
 		packets_out_counter++;
 	}
@@ -565,6 +567,7 @@ void receivePacket(const uint8_t* buffer, size_t size)
 	//0 & 1 are color mapping
 	//4 is flow direction inner
 	//5 could be pulsing on and off?
+	
 
 	//check for framing errors
 	if (size != 15){
@@ -599,6 +602,7 @@ void receivePacket(const uint8_t* buffer, size_t size)
 			
 			if (offset_temp != outer_offset_requested){
 					outer_offset_requested = offset_temp;
+
 					blur_modifier = qadd8(blur_modifier, 3);
 				}
 
@@ -613,8 +617,8 @@ void receivePacket(const uint8_t* buffer, size_t size)
 				increment_stream();
 			}
 			packet_beam = buffer[13];
-		
-			sendPacket();
+	
+			
 		}
 	}
 }
