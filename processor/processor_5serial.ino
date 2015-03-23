@@ -78,9 +78,9 @@ inline void SerialUpdate(void){
 				incoming1_index = 0;
 			}
 			else{
-				//read data in until we hit overflow, then hold at last position
-				if (incoming1_index < INCOMING1_BUFFER_SIZE)
-					incoming1_index++;
+				//read data in until we hit overflow then start over
+				if (incoming1_index < INCOMING1_BUFFER_SIZE) incoming1_index++;
+				else incoming1_index = 0;
 			}
 		}
 
@@ -103,9 +103,9 @@ inline void SerialUpdate(void){
 				incoming2_index = 0;
 			}
 			else{
-				//read data in until we hit overflow, then hold at last position
-				if (incoming2_index < INCOMING2_BUFFER_SIZE)
-					incoming2_index++;
+				//read data in until we hit overflow then start over
+				if (incoming2_index < INCOMING2_BUFFER_SIZE) incoming2_index++;
+				else incoming2_index = 0;
 			}
 		}
 

@@ -521,9 +521,9 @@ void SerialUpdate(void){
 			incoming_index = 0;
 		}
 		else{
-			//read data in until we hit overflow, then hold at last position
-			if (incoming_index < INCOMING_BUFFER_SIZE)
-				incoming_index++;
+			//read data in until we hit overflow then start over
+			if (incoming_index < INCOMING_BUFFER_SIZE) incoming_index++;
+			else incoming_index = 0;
 		}
 	}
 }

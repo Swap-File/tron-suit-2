@@ -28,12 +28,20 @@ void setup() {
 	pinMode(A3, INPUT);
 	adc->setAveraging(32, ADC_1);
 	adc->setResolution(16, ADC_1);
+
+	//global settings
+	display.setTextSize(1);
+	display.setTextColor(WHITE);
+	display.setTextWrap(false);
 }
 
 long int average_time;
 
 void loop() {
-	SerialUpdate();
+
+	long start_time = micros();
+
+
 	if (YPRdisplay.check()){
 		
 		switch (adc1_mode){
@@ -124,9 +132,6 @@ void loop() {
 		// local_packets_in_counter_1 = 0;
 	}
 
-
-	SerialUpdate();
-
 	if (glove1.finger2 == 0 || glove1.finger3 == 0){
 		if (glove1.finger2 == 0){
 			glove0.output_white_led = 0x01;
@@ -169,9 +174,10 @@ void loop() {
 
 
 	//draw most of hud, last bit will be drawn in external helmet bit
-	draw_HUD();
 
+	draw_HUD();
 	
+
 	for (uint8_t y = 0; y < 8; y++) {
 		for (uint8_t x = 0; x < 16; x++) {
 
@@ -181,10 +187,8 @@ void loop() {
 			CRGB final_color = CRGB(0, 0, 0);
 
 
-			if (scroll_mode > 0){
-				if (read_menu_pixel(x, y)){
-					menu_name = CRGB(180, 180, 180);
-				}
+			if (scroll_mode != SCROLL_MODE_COMPLETE){
+				if (read_menu_pixel(x, y))	menu_name = CRGB(180, 180, 180);
 			}
 
 			if (gloveindicator[x][7 - y] > 0){ // flip Y for helmet external display by subtracting from 7
@@ -233,8 +237,6 @@ void loop() {
 			actual_output[tempindex] = target_output[tempindex];
 		}
 	}
-	SerialUpdate();
-
 
 	//advance scrolling if timer reached or stop
 
@@ -245,7 +247,8 @@ void loop() {
 		}
 
 		switch (scroll_mode){
-		case 3:
+			
+		case SCROLL_MODE_INCOMING:
 			//take up slack when scrolling in backwards
 			if (menu_text_ending_pos < 0 && scroll_pos_x < 0) scroll_pos_x -= menu_text_ending_pos;
 
@@ -255,35 +258,31 @@ void loop() {
 			else if (scroll_pos_y < 0) scroll_pos_y++;
 
 			if (scroll_pos_y == 0 && scroll_pos_x == 0){
-				scroll_mode = 2;
+				scroll_mode = SCROLL_MODE_PAUSE;
 				scroll_timer = millis();
 			}
 			break;
-		case 2:
+		case SCROLL_MODE_PAUSE:
 			if (millis() - scroll_timer > 1000){
-				scroll_mode = 1;
+				scroll_mode = SCROLL_MODE_OUTGOING;
 			}
 			break;
-		case 1:
+		case SCROLL_MODE_OUTGOING:
 			if (scroll_pos_x > scroll_end_pos_x) scroll_pos_x--;
 			else if (scroll_pos_y > scroll_end_pos_y) scroll_pos_y--;
 			else if (scroll_pos_x < scroll_end_pos_x) scroll_pos_x++;
 			else if (scroll_pos_y < scroll_end_pos_y) scroll_pos_y++;
 
 			if (scroll_pos_y == scroll_end_pos_y && scroll_pos_x == scroll_end_pos_x){
-				scroll_mode = 0;
+				scroll_mode = SCROLL_MODE_COMPLETE;
 			}
 		}
 	}
 
 	if (LEDdisplay.check()){
-		//show it all
-		long start_time = micros();
-
 		display.display();
-		LEDS.show();
-
-		average_time = average_time * .5 + .5 * (micros() - start_time);
+		LEDS.show();	
+		fpscount++;
 	}
 
 	if (DiscSend.check()){
@@ -307,59 +306,52 @@ void loop() {
 
 
 	if (fft256_1.available()) {
-	
 		fftmath();
-		
 	}
 
 	SerialUpdate();
+
+	average_time = average_time * .5 + .5 * (micros() - start_time);
 }
 
+//finger 1 is menu control
+//finger 2 is menu control - silent
+//finger 3 is shortcut menu - silent
+//finger 4 is on / off - silent
 void readglove(void * temp){
 
 	GLOVE * current_glove = (GLOVE *)temp;
-	if (current_glove->finger1 == 1 && current_glove->finger1_in_progress == true){
-
-		if (current_glove->gloveY <= 0){
-			menu_map(HAND_DIRECTION_DOWN);
-		}
-		else
-		{
-			if (current_glove->gloveY >= 7){
-				menu_map(HAND_DIRECTION_UP);
-			}
-
-			else{
-				if (current_glove->gloveX <= 0)	menu_map(HAND_DIRECTION_RIGHT);
-				else if (current_glove->gloveX >= 7) menu_map(HAND_DIRECTION_LEFT);
-			}
-		}
-	}
 
 	if (current_glove->finger4 == 0){
-		if (current_glove->finger4_in_progress == false){
-			current_glove->finger4_in_progress = true;
 
-			//if (menu_mode == 0){
-			//	menu_mode = 1;
-
-			//	}
-			//	else{
-			//	menu_mode = 0;
-			//
-			//	}
-
-		}
-	}
-	else{
-		current_glove->finger4_in_progress = false;
-
-
+		menu_mode = MENU_DEFAULT;
+		fftmode = FFT_MODE_OFF;
+		scroll_mode = SCROLL_MODE_COMPLETE;
 	}
 
-	if (current_glove->finger1 == 0){
-		if (current_glove->finger1_in_progress == false){
-			current_glove->finger1_in_progress = true;
+	if (current_glove->finger1 == 1 &&  current_glove->finger2 == 1 && current_glove->finger3 == 1 && current_glove->gesture_in_progress == true){
+
+
+		if (current_glove->gloveY <= 0)      menu_map(HAND_DIRECTION_DOWN);
+		else if (current_glove->gloveY >= 7) menu_map(HAND_DIRECTION_UP);
+		else if (current_glove->gloveX <= 0) menu_map(HAND_DIRECTION_LEFT);
+		else if (current_glove->gloveX >= 7) menu_map(HAND_DIRECTION_RIGHT);
+		
+		//disable scroll mode on all other fingers
+		if (current_glove->gesture_finger != 1) scroll_mode = SCROLL_MODE_COMPLETE;
+	}
+
+	//if a single finger is pressed down....
+	if (current_glove->finger1 == 0 && current_glove->finger2 == 1 && current_glove->finger3 == 1 || \
+		current_glove->finger1 == 1 && current_glove->finger2 == 0 && current_glove->finger3 == 1 || \
+		current_glove->finger1 == 1 && current_glove->finger2 == 1 && current_glove->finger3 == 0 ){
+		if (current_glove->gesture_in_progress == false){
+
+			if (current_glove->finger1 == 0) current_glove->gesture_finger = 1;
+			else if (current_glove->finger2 == 0) current_glove->gesture_finger = 2;
+			else if (current_glove->finger3 == 0) current_glove->gesture_finger = 3;
+
+			current_glove->gesture_in_progress = true;
 			current_glove->yaw_offset = current_glove->yaw_raw;
 			current_glove->pitch_offset = current_glove->pitch_raw;
 			current_glove->roll_offset = current_glove->roll_raw;
@@ -372,9 +364,9 @@ void readglove(void * temp){
 		}
 	}
 	else{
-		current_glove->finger1_in_progress = false;
+		current_glove->gesture_in_progress = false;
 	}
-	fpscount++;
+
 }
 
 

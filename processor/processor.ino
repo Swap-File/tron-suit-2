@@ -30,21 +30,22 @@
 #define FFT_MODE_VERT_BARS_UP 3
 #define FFT_MODE_VERT_BARS_DOWN 4
 #define FFT_MODE_VERT_BARS_STATIC 5
-uint8_t fftmode = FFT_MODE_VERT_BARS_DOWN;
+#define FFT_MODE_OFF 6
+uint8_t fftmode = FFT_MODE_OFF;
 
 #define MENU_DEFAULT 1
 #define MENU_FFT_H_or_V 2
 #define MENU_FFT_H 3
 #define MENU_FFT_V 4
+#define MENU_FFT 5
 
 boolean flow_direction_positive = true;
 
+
 typedef struct {
 	boolean fresh = false;
-	boolean finger1_in_progress = false;
-	boolean finger2_in_progress = false;
-	boolean finger3_in_progress = false;
-	boolean finger4_in_progress = false;
+	boolean gesture_in_progress = false;
+	uint8_t gesture_finger;
 
 	int16_t yaw_raw;  //yaw pitch and roll in degrees * 100
 	int16_t pitch_raw;
@@ -191,9 +192,8 @@ int8_t flow_offset = 0;
 #define OLED_RESET  19
 Adafruit_SSD1306 display(OLED_DC, OLED_RESET, OLED_CS);
 
-
-int mask_mode = 0;
-uint8_t menu_mode = 1;
+uint8_t mask_mode = 0;
+uint8_t menu_mode = MENU_DEFAULT;
 double  temperature = 0.0;
 double  voltage = 0.0;
 char sms_message[160];
@@ -210,7 +210,12 @@ int8_t scroll_pos_x = 0; //starting position to scroll from x
 int8_t scroll_pos_y = 0;  //starting position to scroll from y
 int8_t scroll_end_pos_x = 0;  //destination to scroll to x
 int8_t scroll_end_pos_y = 0; //destination to scroll to y
-uint8_t scroll_mode = 0;  //keeps track of scroll state
+
+#define SCROLL_MODE_INCOMING 3
+#define SCROLL_MODE_PAUSE 2
+#define SCROLL_MODE_OUTGOING 1
+#define SCROLL_MODE_COMPLETE 0
+uint8_t scroll_mode = SCROLL_MODE_COMPLETE;  //keeps track of scroll state
 long int scroll_timer = 0;  //time to pause at 0,0
 
 //crank up hardwareserial.cpp to 128 to match!

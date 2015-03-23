@@ -1,27 +1,17 @@
 inline void draw_HUD(void){
+
 	//HUD!
 	display.clearDisplay();
-
-	//global settings (might not need to keep setting, figure it out later
-	display.setTextSize(1);
-	display.setTextColor(WHITE);
-	display.setTextWrap(false);
-
-	//most boxes are widt
+	
 	//draw the boxes are 18x10, thats 16x8 + the boarder pixels
 
 	//draw the menu first for masking purposes
 	display.drawRect(menu_location_x - 1, menu_location_y - 1, 18, 10, WHITE);
 
 	display.setCursor(menu_location_x + scroll_pos_x, menu_location_y + scroll_pos_y);
+	
+	print_menu_mode();
 
-	switch (menu_mode){
-	//case MENU_FFT_ROOT:
-		//display.print("FFT");
-		//break;
-	default:
-		display.print(menu_mode);
-	}
 
 	menu_text_ending_pos = display.getCursorX(); //save menu text length for elsewhere
 	//black out the rest!  probably dont need full width... 
@@ -32,7 +22,7 @@ inline void draw_HUD(void){
 	//staticmode
 	display.drawRect(static_menu_location_x - 1, static_menu_location_y - 1, 35, 10, WHITE);
 	display.setCursor(static_menu_location_x, static_menu_location_y);
-	display.print(menu_mode);
+	print_menu_mode();
 
 	//hand display dots - its important to always know where your hands are.
 	display.drawRect(hand_location_x - 1, hand_location_y - 1, 18, 10, WHITE);
@@ -56,7 +46,7 @@ inline void draw_HUD(void){
 	display.print(sms_message);
 	sms_text_ending_pos = display.getCursorX(); //save menu text length for elsewhere
 	//pad out message for contiual scrolling in the HUD, gives me more text at once
-	display.setCursor(sms_text_ending_pos + 19, sms_location_y + 1);
+	display.setCursor(sms_text_ending_pos + 19, sms_location_y );
 	for (uint8_t i = 0; i < 7; i++){
 		display.print(sms_message[i]);
 	}
@@ -131,7 +121,6 @@ void draw_disc(uint8_t index_offset, uint8_t magnitude, uint8_t x_offset, uint8_
 	else if (magnitude > 62 && magnitude <= 77){
 		for (uint8_t i = 0; i < 16; i++) {
 
-
 		}
 	}
 
@@ -144,13 +133,13 @@ void draw_disc(uint8_t index_offset, uint8_t magnitude, uint8_t x_offset, uint8_
 }
 
 
-
 void menu_map(uint8_t direction){
 
+	scroll_mode = SCROLL_MODE_INCOMING;  //start new scroll action
 	//set initial scroll on and scroll off variables
 	//can/will be overridden by menu below if desired
 	switch (direction){
-		scroll_mode = 3;  //start new scroll action
+		
 	case HAND_DIRECTION_LEFT:
 		menu_scroll_start_left();
 		menu_scroll_end_left();
@@ -173,29 +162,35 @@ void menu_map(uint8_t direction){
 	switch (menu_mode){
 
 	case MENU_FFT_H:
+		scroll_mode = SCROLL_MODE_COMPLETE; 
 		switch (direction){
 		case HAND_DIRECTION_LEFT:
-			fftmode = FFT_MODE_HORZ_BARS_LEFT; //new menu screen 
+			fftmode = FFT_MODE_HORZ_BARS_LEFT;
 			break;
 		case HAND_DIRECTION_RIGHT:
 			fftmode = FFT_MODE_HORZ_BARS_RIGHT;
 			break;
 		case HAND_DIRECTION_UP:
-			menu_mode = MENU_FFT_H_or_V;
+			menu_mode = MENU_FFT_V;
+			fftmode = FFT_MODE_VERT_BARS_STATIC;
 			break;
 		case HAND_DIRECTION_DOWN:
-			fftmode = FFT_MODE_HORZ_BARS_STATIC;
+			menu_mode = MENU_FFT_V;
+			fftmode = FFT_MODE_VERT_BARS_STATIC;
 			break;
 		}
 		break;
 
 	case MENU_FFT_V:
+		scroll_mode = SCROLL_MODE_COMPLETE;
 		switch (direction){
 		case HAND_DIRECTION_LEFT:
-			menu_mode = MENU_FFT_H_or_V; //new menu screen 
+			menu_mode = MENU_FFT_H; 
+			fftmode = FFT_MODE_HORZ_BARS_STATIC;
 			break;
 		case HAND_DIRECTION_RIGHT:
-			fftmode = FFT_MODE_VERT_BARS_STATIC;
+			menu_mode = MENU_FFT_H;
+			fftmode = FFT_MODE_HORZ_BARS_STATIC;
 			break;
 		case HAND_DIRECTION_UP:
 			fftmode = FFT_MODE_VERT_BARS_UP;
@@ -210,35 +205,39 @@ void menu_map(uint8_t direction){
 	case MENU_FFT_H_or_V:
 		switch (direction){
 		case HAND_DIRECTION_LEFT:
+			fftmode = FFT_MODE_HORZ_BARS_STATIC;
 			menu_mode = MENU_FFT_H; //new menu screen 
 			break;
 		case HAND_DIRECTION_RIGHT:
+			fftmode = FFT_MODE_HORZ_BARS_STATIC;
 			menu_mode = MENU_FFT_H;
 			break;
 		case HAND_DIRECTION_UP:
+			fftmode = FFT_MODE_VERT_BARS_STATIC;
 			menu_mode = MENU_FFT_V;
 			break;
 		case HAND_DIRECTION_DOWN:
+			fftmode = FFT_MODE_VERT_BARS_STATIC;
 			menu_mode = MENU_FFT_V;
 			break;
 		}
 		break;
 
 
-
-	case MENU_DEFAULT:
+case MENU_DEFAULT:
+case MENU_FFT:
 		switch (direction){
 		case HAND_DIRECTION_LEFT:
-			menu_mode = MENU_FFT_H_or_V; //new menu screen 
+			menu_mode = MENU_DEFAULT; //new menu screen 
 			break;
 		case HAND_DIRECTION_RIGHT:
 			menu_mode = MENU_FFT_H_or_V;
 			break;
 		case HAND_DIRECTION_UP:
-			menu_mode = MENU_FFT_H_or_V;
+			menu_mode = MENU_FFT;
 			break;
 		case HAND_DIRECTION_DOWN:
-			menu_mode = MENU_FFT_H_or_V;
+			menu_mode = MENU_FFT;
 			break;
 		}
 		break;
@@ -249,14 +248,33 @@ void menu_map(uint8_t direction){
 
 }
 
+void print_menu_mode(void ){
+	switch (menu_mode){
+	case MENU_DEFAULT:
+		display.print("DEFAULT");
+		break;
+
+	case MENU_FFT_H_or_V:
+		display.print("FFT");
+		break;
+	case MENU_FFT_H:
+		display.print("FFTH");
+		break;
+	case MENU_FFT_V:
+		display.print("FFTV");
+		break;
+	default:
+		display.print(menu_mode);
+	}
+}
 //locations to start a scroll movement from
 inline void menu_scroll_start_left(void){
-	scroll_pos_x = -128; //negative longer than longest text message, the slack will get taken up by the shift code
+	scroll_pos_x = 18;
 	scroll_pos_y = 0;
 }
 
 inline void menu_scroll_start_right(void){
-	scroll_pos_x = 18;
+	scroll_pos_x = -128; //negative longer than longest text message, the slack will get taken up by the shift code
 	scroll_pos_y = 0;
 }
 
@@ -272,12 +290,12 @@ inline void menu_scroll_start_down(void){
 
 //locations to stop a scroll movement at
 inline void menu_scroll_end_left(void){
-	scroll_end_pos_x = 16;
+	scroll_end_pos_x = -128;  //negative longer than longest text message, the slack will get taken up by the shift code
 	scroll_end_pos_y = 0;
 }
 
 inline void menu_scroll_end_right(void){
-	scroll_end_pos_x = -128;  //negative longer than longest text message, the slack will get taken up by the shift code
+	scroll_end_pos_x = 16;
 	scroll_end_pos_y = 0;
 }
 

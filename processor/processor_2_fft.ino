@@ -56,6 +56,13 @@ inline void fftmath(void){
 			}
 		}
 	}
+	else if (fftmode == FFT_MODE_OFF){
+		for (uint8_t y = 0; y < 8; y++) {
+			for (uint8_t x = 0; x < 16; x++) {
+				EQdisplay[x][y] = CHSV(0, 0, 0);
+			}
+		}
+	}
 
 
 	if (fftmode == FFT_MODE_HORZ_BARS_RIGHT || fftmode == FFT_MODE_HORZ_BARS_LEFT){
