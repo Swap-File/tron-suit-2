@@ -22,7 +22,7 @@
 #define HAND_DIRECTION_RIGHT 2
 #define HAND_DIRECTION_UP 3
 #define HAND_DIRECTION_DOWN 4
-
+#define HAND_DIRECTION_SHORT_PRESS 5
 
 #define FFT_MODE_HORZ_BARS_LEFT 0
 #define FFT_MODE_HORZ_BARS_RIGHT 1
@@ -31,6 +31,7 @@
 #define FFT_MODE_VERT_BARS_DOWN 4
 #define FFT_MODE_VERT_BARS_STATIC 5
 #define FFT_MODE_OFF 6
+
 uint8_t fftmode = FFT_MODE_OFF;
 
 #define MENU_DEFAULT 1
@@ -38,7 +39,10 @@ uint8_t fftmode = FFT_MODE_OFF;
 #define MENU_FFT_H 3
 #define MENU_FFT_V 4
 #define MENU_FFT 5
-
+#define MENU_SUIT 6
+#define MENU_DISC 7
+#define MENU_MAG 8
+#define MENU_SPIN 9
 boolean flow_direction_positive = true;
 
 
@@ -93,9 +97,12 @@ typedef struct {
 	//calculated results
 	int8_t gloveX;
 	int8_t gloveY;
-
+	int8_t calculated_mag;
 	uint8_t disc_offset; // 0 to 29
 	int16_t magnitude; //about 3000 is edges
+
+	uint32_t finger_timer; //differentiate between short and long presses
+
 } GLOVE;
 
 
@@ -125,8 +132,8 @@ typedef struct {
 	uint8_t inner_offset_reported = 0;
 	uint8_t outer_offset_reported = 0;
 
-	uint8_t inner_magnitude_requested = 8;
-	uint8_t outer_magnitude_requested = 8;
+	uint8_t inner_magnitude_requested = 16;
+	uint8_t outer_magnitude_requested = 16;
 	uint8_t inner_magnitude_reported = 0;
 	uint8_t outer_magnitude_reported = 0;
 

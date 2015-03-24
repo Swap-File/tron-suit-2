@@ -18,7 +18,7 @@ void setup() {
 	Serial1.begin(115200);  //Gloves	
 	Serial2.begin(115200);  //Xbee	
 	Serial3.begin(115200);  //BT
-	
+
 	//audio library setup
 	AudioMemory(4);
 	fft256_1.windowFunction(AudioWindowHanning256);
@@ -43,16 +43,16 @@ void loop() {
 
 
 	if (YPRdisplay.check()){
-		
+
 		switch (adc1_mode){
 		case BATTERY_METER:
 			voltage = voltage * .95 + .05 * (((uint16_t)adc->analogReadContinuous(ADC_1)) / 4083.375); //voltage
 			adc->stopContinuous(ADC_1);
 			adc->setReference(ADC_REF_INTERNAL, ADC_1);  //modified this to remove calibration, drops time from 2ms to ~2ns
 			adc->startContinuous(38, ADC_1);
-			adc1_mode = TEMP_SENSOR ;
+			adc1_mode = TEMP_SENSOR;
 			break;
-		case TEMP_SENSOR :
+		case TEMP_SENSOR:
 			// temp sensor from https ://github.com/manitou48/teensy3/blob/master/chiptemp.pde
 			temperature = temperature * .95 + .05 * (25 - (((uint16_t)adc->analogReadContinuous(ADC_1)) - 38700) / -35.7); //temp in C
 			adc->stopContinuous(ADC_1);
@@ -92,8 +92,7 @@ void loop() {
 	}
 
 
-	disc0.inner_offset_requested = glove1.disc_offset;
-	disc0.outer_offset_requested = glove1.disc_offset;
+
 
 	if (FPSdisplay.check()){
 		Serial.print(serial1stats.packets_in_per_second);
@@ -133,7 +132,7 @@ void loop() {
 	}
 
 	if (glove1.finger3 == 1){
-			glove0.output_white_led = 0x01;
+		glove0.output_white_led = 0x01;
 		uint32_t sum = glove0.color_sensor_Clear;
 		float r, g, b;
 		r = glove0.color_sensor_R; r /= sum;
@@ -171,10 +170,27 @@ void loop() {
 	}
 
 
+	if ((glove1.finger1 || glove1.finger2) && menu_mode == MENU_MAG){
+		disc0.outer_magnitude_requested = glove1.calculated_mag;
+	}
+	
+
+	if ((glove1.finger1 || glove1.finger2) && menu_mode == MENU_SPIN){
+		disc0.inner_offset_requested = glove1.disc_offset;
+		disc0.outer_offset_requested = glove1.disc_offset;
+	}
+	
+
+	if (menu_mode != MENU_MAG && menu_mode != MENU_SPIN){
+		disc0.outer_magnitude_requested = 16;
+		disc0.inner_offset_requested = 0;
+		disc0.outer_offset_requested = 0;
+	}
+
 	//draw most of hud, last bit will be drawn in external helmet bit
 
 	draw_HUD();
-	
+
 
 	for (uint8_t y = 0; y < 8; y++) {
 		for (uint8_t x = 0; x < 16; x++) {
@@ -245,7 +261,7 @@ void loop() {
 		}
 
 		switch (scroll_mode){
-			
+
 		case SCROLL_MODE_INCOMING:
 			//take up slack when scrolling in backwards
 			if (menu_text_ending_pos < 0 && scroll_pos_x < 0) scroll_pos_x -= menu_text_ending_pos;
@@ -279,7 +295,7 @@ void loop() {
 
 	if (LEDdisplay.check()){
 		display.display();
-		LEDS.show();	
+		LEDS.show();
 		fpscount++;
 	}
 

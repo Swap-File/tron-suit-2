@@ -134,25 +134,29 @@ void draw_disc(uint8_t index_offset, uint8_t magnitude, uint8_t x_offset, uint8_
 
 
 void menu_map(uint8_t direction){
-
-	scroll_mode = SCROLL_MODE_INCOMING;  //start new scroll action
+	
+	
 	//set initial scroll on and scroll off variables
 	//can/will be overridden by menu below if desired
 	switch (direction){
 		
 	case HAND_DIRECTION_LEFT:
+		scroll_mode = SCROLL_MODE_INCOMING;  //start new scroll action
 		menu_scroll_start_left();
 		menu_scroll_end_left();
 		break;
 	case HAND_DIRECTION_RIGHT:
+		scroll_mode = SCROLL_MODE_INCOMING;  //start new scroll action
 		menu_scroll_start_right();
 		menu_scroll_end_right();
 		break;
 	case HAND_DIRECTION_UP:
+		scroll_mode = SCROLL_MODE_INCOMING;  //start new scroll action
 		menu_scroll_start_up();
 		menu_scroll_end_up();
 		break;
 	case HAND_DIRECTION_DOWN:
+		scroll_mode = SCROLL_MODE_INCOMING;  //start new scroll action
 		menu_scroll_start_down();
 		menu_scroll_end_down();
 		break;
@@ -225,10 +229,62 @@ void menu_map(uint8_t direction){
 
 
 case MENU_DEFAULT:
+case MENU_SUIT:
+	switch (direction){
+	case HAND_DIRECTION_LEFT:
+	
+		break;
+	case HAND_DIRECTION_RIGHT:
+		menu_mode = MENU_FFT;
+		break;
+	case HAND_DIRECTION_UP:
+		menu_mode = MENU_DISC; //new menu screen 
+		break;
+	case HAND_DIRECTION_DOWN:
+		menu_mode = MENU_DISC; //new menu screen 
+		
+		break;
+	}
+	break;
+	
+
+	case MENU_DISC:
+		switch (direction){
+		case HAND_DIRECTION_LEFT:
+			break;
+		case HAND_DIRECTION_RIGHT:
+			menu_mode = MENU_MAG;
+			break;
+		case HAND_DIRECTION_UP:
+			menu_mode = MENU_SUIT;
+			break;
+		case HAND_DIRECTION_DOWN:
+			menu_mode = MENU_SUIT;
+			break;
+		}
+		break;
+
+
+	case MENU_MAG:
+		switch (direction){
+		case HAND_DIRECTION_SHORT_PRESS:
+			menu_mode = MENU_SPIN;
+			break;
+		}
+		break;
+	
+	case MENU_SPIN:
+		switch (direction){
+		case HAND_DIRECTION_SHORT_PRESS:
+			menu_mode = MENU_MAG; 
+			break;
+		}
+		break;
+
 case MENU_FFT:
 		switch (direction){
 		case HAND_DIRECTION_LEFT:
-			menu_mode = MENU_DEFAULT; //new menu screen 
+			menu_mode = MENU_DEFAULT;
 			break;
 		case HAND_DIRECTION_RIGHT:
 			menu_mode = MENU_FFT_H_or_V;
@@ -253,7 +309,18 @@ void print_menu_mode(void ){
 	case MENU_DEFAULT:
 		display.print("DEFAULT");
 		break;
-
+	case MENU_DISC:
+		display.print("DISC");
+		break;
+	case MENU_SUIT:
+		display.print("SUIT");
+		break;
+	case MENU_MAG:
+		display.print("MAG");
+		break;
+	case MENU_SPIN:
+		display.print("SPIN");
+		break;
 	case MENU_FFT_H_or_V:
 		display.print("FFT");
 		break;

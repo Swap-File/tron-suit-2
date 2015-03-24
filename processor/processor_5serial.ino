@@ -234,7 +234,7 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 				current_glove->finger3 = false;
 				current_glove->finger4 = false;
 			}
-		
+
 
 			current_glove->packets_in_per_second = buffer[27];
 			current_glove->packets_out_per_second = buffer[28];
@@ -293,6 +293,12 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 
 			current_glove->magnitude = sqrt(temp_gloveX*temp_gloveX + temp_gloveY*temp_gloveY);
 
+			// calc mag stuff
+			temp_gloveY = map((current_glove->pitch_compensated), 18000 - GLOVE_DEADZONE, 18000 + GLOVE_DEADZONE, 0, 32);
+			current_glove->calculated_mag = constrain(temp_gloveY, 0, 32);
+
+			
+
 			//check for gestures
 
 			if (current_glove->finger4 == 1){
@@ -309,6 +315,7 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 				else if (current_glove->gloveY >= 7) menu_map(HAND_DIRECTION_UP);
 				else if (current_glove->gloveX <= 0) menu_map(HAND_DIRECTION_LEFT);
 				else if (current_glove->gloveX >= 7) menu_map(HAND_DIRECTION_RIGHT);
+				else if (millis() - current_glove->finger_timer < 200) menu_map(HAND_DIRECTION_SHORT_PRESS);
 
 				//disable scroll mode on all other fingers
 				//if (current_glove->gesture_finger != 1) scroll_mode = SCROLL_MODE_COMPLETE;
@@ -317,6 +324,7 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 			//if a single finger is pressed down....
 			if (current_glove->finger1 || current_glove->finger2 || current_glove->finger3){
 				if (current_glove->gesture_in_progress == false){
+					current_glove->finger_timer = millis();
 					current_glove->gesture_in_progress = true;
 					current_glove->yaw_offset = current_glove->yaw_raw;
 					current_glove->pitch_offset = current_glove->pitch_raw;
