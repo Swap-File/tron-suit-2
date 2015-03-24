@@ -199,10 +199,42 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 			current_glove->color_sensor_B = buffer[22] << 8 | buffer[23];
 			current_glove->color_sensor_Clear = buffer[24] << 8 | buffer[25];
 
-			current_glove->finger1 = bitRead(buffer[26], 0);
-			current_glove->finger2 = bitRead(buffer[26], 1);
-			current_glove->finger3 = bitRead(buffer[26], 2);
-			current_glove->finger4 = bitRead(buffer[26], 3);
+			//only allow one finger at a time
+			if (buffer[26] == 0x0E){
+				current_glove->finger1 = true;
+				current_glove->finger2 = false;
+				current_glove->finger3 = false;
+				current_glove->finger4 = false;
+				current_glove->gesture_finger = 1;
+			}
+			else if (buffer[26] == 0x0D){
+				current_glove->finger1 = false;
+				current_glove->finger2 = true;
+				current_glove->finger3 = false;
+				current_glove->finger4 = false;
+				current_glove->gesture_finger = 2;
+			}
+			else if (buffer[26] == 0x0B){
+				current_glove->finger1 = false;
+				current_glove->finger2 = false;
+				current_glove->finger3 = true;
+				current_glove->finger4 = false;
+				current_glove->gesture_finger = 3;
+			}
+			else if (buffer[26] == 0x07){
+				current_glove->finger1 = false;
+				current_glove->finger2 = false;
+				current_glove->finger3 = false;
+				current_glove->finger4 = true;
+				current_glove->gesture_finger = 4;
+			}
+			else{
+				current_glove->finger1 = false;
+				current_glove->finger2 = false;
+				current_glove->finger3 = false;
+				current_glove->finger4 = false;
+			}
+		
 
 			current_glove->packets_in_per_second = buffer[27];
 			current_glove->packets_out_per_second = buffer[28];
@@ -261,10 +293,37 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 
 			current_glove->magnitude = sqrt(temp_gloveX*temp_gloveX + temp_gloveY*temp_gloveY);
 
-
 			//check for gestures
-			readglove(&glove0);
-			readglove(&glove1);
+
+			if (current_glove->finger4 == 1){
+
+				menu_mode = MENU_DEFAULT;
+				fftmode = FFT_MODE_OFF;
+				scroll_mode = SCROLL_MODE_COMPLETE;
+			}
+
+			if (!current_glove->finger1 &&  !current_glove->finger2 && !current_glove->finger3 && current_glove->gesture_in_progress == true){
+
+
+				if (current_glove->gloveY <= 0)      menu_map(HAND_DIRECTION_DOWN);
+				else if (current_glove->gloveY >= 7) menu_map(HAND_DIRECTION_UP);
+				else if (current_glove->gloveX <= 0) menu_map(HAND_DIRECTION_LEFT);
+				else if (current_glove->gloveX >= 7) menu_map(HAND_DIRECTION_RIGHT);
+
+				//disable scroll mode on all other fingers
+				//if (current_glove->gesture_finger != 1) scroll_mode = SCROLL_MODE_COMPLETE;
+			}
+
+			//if a single finger is pressed down....
+			if (current_glove->finger1 || current_glove->finger2 || current_glove->finger3){
+				if (current_glove->gesture_in_progress == false){
+					current_glove->gesture_in_progress = true;
+					current_glove->yaw_offset = current_glove->yaw_raw;
+					current_glove->pitch_offset = current_glove->pitch_raw;
+					current_glove->roll_offset = current_glove->roll_raw;
+				}
+			}
+			else current_glove->gesture_in_progress = false;
 
 		}
 	}

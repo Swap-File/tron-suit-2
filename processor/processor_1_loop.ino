@@ -132,10 +132,8 @@ void loop() {
 		// local_packets_in_counter_1 = 0;
 	}
 
-	if (glove1.finger2 == 0 || glove1.finger3 == 0){
-		if (glove1.finger2 == 0){
+	if (glove1.finger3 == 1){
 			glove0.output_white_led = 0x01;
-		}
 		uint32_t sum = glove0.color_sensor_Clear;
 		float r, g, b;
 		r = glove0.color_sensor_R; r /= sum;
@@ -167,7 +165,7 @@ void loop() {
 		}
 	}
 
-	if (glove1.finger1 == 0){
+	if (glove1.finger1 == 1){
 		gloveindicator[8 + glove0.gloveX][7 - glove0.gloveY] = 100;// flip Y for helmet external display by subtracting from 7
 		gloveindicator[glove1.gloveX][7 - glove1.gloveY] = 100;// flip Y for helmet external display by subtracting from 7
 	}
@@ -314,60 +312,7 @@ void loop() {
 	average_time = average_time * .5 + .5 * (micros() - start_time);
 }
 
-//finger 1 is menu control
-//finger 2 is menu control - silent
-//finger 3 is shortcut menu - silent
-//finger 4 is on / off - silent
-void readglove(void * temp){
 
-	GLOVE * current_glove = (GLOVE *)temp;
-
-	if (current_glove->finger4 == 0){
-
-		menu_mode = MENU_DEFAULT;
-		fftmode = FFT_MODE_OFF;
-		scroll_mode = SCROLL_MODE_COMPLETE;
-	}
-
-	if (current_glove->finger1 == 1 &&  current_glove->finger2 == 1 && current_glove->finger3 == 1 && current_glove->gesture_in_progress == true){
-
-
-		if (current_glove->gloveY <= 0)      menu_map(HAND_DIRECTION_DOWN);
-		else if (current_glove->gloveY >= 7) menu_map(HAND_DIRECTION_UP);
-		else if (current_glove->gloveX <= 0) menu_map(HAND_DIRECTION_LEFT);
-		else if (current_glove->gloveX >= 7) menu_map(HAND_DIRECTION_RIGHT);
-		
-		//disable scroll mode on all other fingers
-		if (current_glove->gesture_finger != 1) scroll_mode = SCROLL_MODE_COMPLETE;
-	}
-
-	//if a single finger is pressed down....
-	if (current_glove->finger1 == 0 && current_glove->finger2 == 1 && current_glove->finger3 == 1 || \
-		current_glove->finger1 == 1 && current_glove->finger2 == 0 && current_glove->finger3 == 1 || \
-		current_glove->finger1 == 1 && current_glove->finger2 == 1 && current_glove->finger3 == 0 ){
-		if (current_glove->gesture_in_progress == false){
-
-			if (current_glove->finger1 == 0) current_glove->gesture_finger = 1;
-			else if (current_glove->finger2 == 0) current_glove->gesture_finger = 2;
-			else if (current_glove->finger3 == 0) current_glove->gesture_finger = 3;
-
-			current_glove->gesture_in_progress = true;
-			current_glove->yaw_offset = current_glove->yaw_raw;
-			current_glove->pitch_offset = current_glove->pitch_raw;
-			current_glove->roll_offset = current_glove->roll_raw;
-
-			//TEMP
-			glove0.yaw_offset = glove0.yaw_raw;
-			glove0.pitch_offset = glove0.pitch_raw;
-			glove0.roll_offset = glove0.roll_raw;
-
-		}
-	}
-	else{
-		current_glove->gesture_in_progress = false;
-	}
-
-}
 
 
 CHSV map_hsv(uint8_t input, uint8_t in_min, uint8_t in_max, CHSV* out_min, CHSV* out_max){
