@@ -45,6 +45,8 @@ uint8_t fftmode = FFT_MODE_OFF;
 #define MENU_SPIN 9
 boolean flow_direction_positive = true;
 
+uint32_t total_packets_in = 0;
+uint32_t total_packets_out = 0;
 
 typedef struct {
 	boolean fresh = false;
@@ -62,14 +64,6 @@ typedef struct {
 	int32_t yaw_compensated;  //yaw pitch and roll in degrees * 100
 	int32_t pitch_compensated;
 	int32_t roll_compensated;
-
-	int16_t aaRealX; // gravity-free accel sensor measurements
-	int16_t aaRealY;
-	int16_t aaRealZ;
-
-	int16_t gravityX; // world-frame accel sensor measurements
-	int16_t gravityY;
-	int16_t gravityZ;
 
 	int16_t color_sensor_R;
 	int16_t color_sensor_G;
@@ -274,8 +268,8 @@ Metro glovedisplayfade = Metro(10);
 Metro YPRdisplay = Metro(100);
 Metro ScrollSpeed = Metro(40);
 Metro GloveSend = Metro(10);
-Metro DiscSend = Metro(100);
-Metro DiscSend2 = Metro(20);
+Metro DiscSend = Metro(50);
+Metro DiscSend3 = Metro(20);
 Metro LEDdisplay = Metro(10);
 
 //to round robin poll sensors

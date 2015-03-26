@@ -16,7 +16,7 @@ void setup() {
 	//bump hardwareserial.cpp to 255
 	Serial.begin(115200);   //Debug
 	Serial1.begin(115200);  //Gloves	
-	Serial2.begin(115200);  //Xbee	
+	Serial2.begin(57600);  //Xbee	
 	Serial3.begin(115200);  //BT
 
 	//audio library setup
@@ -114,8 +114,10 @@ void loop() {
 		Serial.print(disc0.crc_errors);
 		Serial.print(" ");
 		Serial.print(disc0.framing_errors);
+		Serial.print(" "); 
+		Serial.print(average_time);
 		Serial.print(" ");
-		Serial.println(average_time);
+		Serial.println(total_packets_out - total_packets_in);
 		serial1stats.packets_in_per_second = 0;
 		serial1stats.packets_out_per_second = 0;
 		serial2stats.packets_in_per_second = 0;
@@ -188,9 +190,9 @@ void loop() {
 	}
 
 	//draw most of hud, last bit will be drawn in external helmet bit
-
+	//SerialUpdate();
 	draw_HUD();
-
+	//SerialUpdate();
 
 	for (uint8_t y = 0; y < 8; y++) {
 		for (uint8_t x = 0; x < 16; x++) {
@@ -313,9 +315,6 @@ void loop() {
 		disc0.fade_level++;
 		disc0.packet_sequence_number++;
 
-	}
-	if (DiscSend2.check()){
-		disc0.packet_beam--;
 	}
 
 

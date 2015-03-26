@@ -52,7 +52,7 @@ Adafruit_TCS34725 tcs = Adafruit_TCS34725(TCS34725_INTEGRATIONTIME_50MS, TCS3472
 
 #define COLOR_SENSOR_WHITE_LED            11
 #define LED_PIN 13 // (Arduino is 13, Teensy is 11, Teensy++ is 6)
-bool blinkState = false;
+uint8_t blinkState = 0;
 
 // MPU control/status vars
 bool dmpReady = false;  // set true if DMP init was successful
@@ -144,22 +144,6 @@ void setup() {
 	//Serial.println(F("Initializing MPU6050 devices..."));
 	mpu.initialize();
 
-	// thanks PhilB for this gamma table!
-	// it helps convert RGB colors to what humans see
-	for (int i = 0; i < 256; i++) {
-		float x = i;
-		x /= 255;
-		x = pow(x, 2.5);
-		x *= 255;
-
-		if (commonAnode) {
-			gammatable[i] = 255 - x;
-		}
-		else {
-			gammatable[i] = x;
-		}
-		//Serial.println(gammatable[i]);
-	}
 
 	tcs.setInterrupt(true);
 
@@ -335,9 +319,9 @@ void loop() {
 		mpu.dmpGetQuaternion(&q, fifoBuffer);
 		mpu.dmpGetGravity(&gravity, &q);
 		mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
-		mpu.dmpGetAccel(&aa, fifoBuffer);
-		mpu.dmpGetLinearAccel(&aaReal, &aa, &gravity);
-		mpu.dmpGetLinearAccelInWorld(&aaWorld, &aaReal, &q);
+		//mpu.dmpGetAccel(&aa, fifoBuffer);
+		//mpu.dmpGetLinearAccel(&aaReal, &aa, &gravity);
+		//mpu.dmpGetLinearAccelInWorld(&aaWorld, &aaReal, &q);
 
 
 
@@ -373,7 +357,7 @@ void loop() {
 #endif
 
 
-		byte raw_buffer[35];
+		byte raw_buffer[22];
 
 		raw_buffer[0] = ((((int16_t)(ypr[0] * 18000 / M_PI)) >> 8) & 0xff);
 		raw_buffer[1] = ((((int16_t)(ypr[0] * 18000 / M_PI)) >> 0) & 0xff);
@@ -382,51 +366,50 @@ void loop() {
 		raw_buffer[4] = ((((int16_t)(ypr[2] * 18000 / M_PI)) >> 8) & 0xff);
 		raw_buffer[5] = ((((int16_t)(ypr[2] * 18000 / M_PI)) >> 0) & 0xff);
 
-		raw_buffer[6] = ((aaReal.x >> 8) & 0xff);
-		raw_buffer[7] = ((aaReal.x >> 0) & 0xff);
-		raw_buffer[8] = ((aaReal.y >> 8) & 0xff);
-		raw_buffer[9] = ((aaReal.y >> 0) & 0xff);
-		raw_buffer[10] = ((aaReal.z >> 8) & 0xff);
-		raw_buffer[11] = ((aaReal.z >> 0) & 0xff);
+		//raw_buffer[6] = ((aaReal.x >> 8) & 0xff);
+		//raw_buffer[7] = ((aaReal.x >> 0) & 0xff);
+		//raw_buffer[8] = ((aaReal.y >> 8) & 0xff);
+		//raw_buffer[9] = ((aaReal.y >> 0) & 0xff);
+		//raw_buffer[10] = ((aaReal.z >> 8) & 0xff);
+		//raw_buffer[11] = ((aaReal.z >> 0) & 0xff);
 
-		raw_buffer[12] = ((aaWorld.x >> 8) & 0xff);
-		raw_buffer[13] = ((aaWorld.x >> 0) & 0xff);
-		raw_buffer[14] = ((aaWorld.y >> 8) & 0xff);
-		raw_buffer[15] = ((aaWorld.y >> 0) & 0xff);
-		raw_buffer[16] = ((aaWorld.z >> 8) & 0xff);
-		raw_buffer[17] = ((aaWorld.z >> 0) & 0xff);
+		//raw_buffer[12] = ((aaWorld.x >> 8) & 0xff);
+		//raw_buffer[13] = ((aaWorld.x >> 0) & 0xff);
+		//raw_buffer[14] = ((aaWorld.y >> 8) & 0xff);
+		//raw_buffer[15] = ((aaWorld.y >> 0) & 0xff);
+		//raw_buffer[16] = ((aaWorld.z >> 8) & 0xff);
+		//raw_buffer[17] = ((aaWorld.z >> 0) & 0xff);
 
 
 		tcs.getRawData(&rgb_sample[0], &rgb_sample[1], &rgb_sample[2], &rgb_sample[3]);  //rgbclear
 
-		raw_buffer[18] = ((rgb_sample[0] >> 8) & 0xff);
-		raw_buffer[19] = ((rgb_sample[0] >> 0) & 0xff);
-		raw_buffer[20] = ((rgb_sample[1] >> 8) & 0xff);
-		raw_buffer[21] = ((rgb_sample[1] >> 0) & 0xff);
-		raw_buffer[22] = ((rgb_sample[2] >> 8) & 0xff);
-		raw_buffer[23] = ((rgb_sample[2] >> 0) & 0xff);
-		raw_buffer[24] = ((rgb_sample[3] >> 8) & 0xff);
-		raw_buffer[25] = ((rgb_sample[3] >> 0) & 0xff);
+		raw_buffer[6] = ((rgb_sample[0] >> 8) & 0xff);
+		raw_buffer[7] = ((rgb_sample[0] >> 0) & 0xff);
+		raw_buffer[8] = ((rgb_sample[1] >> 8) & 0xff);
+		raw_buffer[9] = ((rgb_sample[1] >> 0) & 0xff);
+		raw_buffer[10] = ((rgb_sample[2] >> 8) & 0xff);
+		raw_buffer[11] = ((rgb_sample[2] >> 0) & 0xff);
+		raw_buffer[12] = ((rgb_sample[3] >> 8) & 0xff);
+		raw_buffer[13] = ((rgb_sample[3] >> 0) & 0xff);
 
-		raw_buffer[26] = fingers;
+		raw_buffer[14] = (int8_t)(fingers | (gloveid << 7));
 
-		raw_buffer[27] = packets_in_per_second;
-		raw_buffer[28] = packets_out_per_second;
+		raw_buffer[15] = packets_in_per_second;
+		raw_buffer[16] = packets_out_per_second;
 
-		raw_buffer[29] = framing_error;
-		raw_buffer[30] = crc_error;
+		raw_buffer[17] = framing_error;
+		raw_buffer[18] = crc_error;
 
-		raw_buffer[31] = cpu_usage;
+		raw_buffer[19] = cpu_usage;
 
-		raw_buffer[32] = ((((int16_t)(temperature)) >> 0) & 0xff);
+		raw_buffer[20] = ((((int16_t)(temperature)) >> 0) & 0xff);
 
-		raw_buffer[33] = gloveid;
-
-		raw_buffer[34] = OneWire::crc8(raw_buffer, 33);
+		
+		raw_buffer[21] = OneWire::crc8(raw_buffer, 20);
 
 		//prep buffer completely
-		uint8_t encoded_buffer[36];  //one extra to hold cobs data
-		uint8_t encoded_size = COBSencode(raw_buffer, 35, encoded_buffer);
+		uint8_t encoded_buffer[23];  //one extra to hold cobs data
+		uint8_t encoded_size = COBSencode(raw_buffer, 22, encoded_buffer);
 		//send out data from last cycle
 		Serial.write(encoded_buffer, encoded_size);
 		Serial.write(0x00);
@@ -434,9 +417,7 @@ void loop() {
 		if (packets_out_counter < 255){
 			packets_out_counter++;
 		}
-		// blink LED to indicate activity
-		blinkState = !blinkState;
-		digitalWrite(LED_PIN, blinkState);
+		
 
 		SerialUpdate();
 		//do temp calculation last, give it as much time as possible to settle
@@ -452,7 +433,7 @@ void onPacket(const uint8_t* buffer, size_t size)
 	//R-0 G-0 B-0 COLOR-0 R-1 G-1 B-1 COLOR-1 CRC
 
 	//check for framing errors
-	if (size != 9 && size != 35){
+	if (size != 9 && size != 22){
 		framing_error++;
 	}
 	else{
@@ -469,6 +450,10 @@ void onPacket(const uint8_t* buffer, size_t size)
 					packets_in_counter++;
 				}
 
+				// blink LED to indicate activity
+				blinkState++;
+				digitalWrite(LED_PIN, bitRead(blinkState, 2));
+
 				//detect which glove we are
 				uint8_t offset = 0;
 				if (gloveid == 0){
@@ -480,7 +465,7 @@ void onPacket(const uint8_t* buffer, size_t size)
 					offset = 4;
 				}
 
-				pixels.setPixelColor(0, pixels.Color(gammatable[(int)buffer[0 + offset]], gammatable[(int)buffer[1 + offset]], gammatable[(int)buffer[2 + offset]]));
+				pixels.setPixelColor(0, pixels.Color((int)buffer[0 + offset], (int)buffer[1 + offset], (int)buffer[2 + offset]));
 				pixels.show();
 
 				//set white sensor light
@@ -493,7 +478,7 @@ void onPacket(const uint8_t* buffer, size_t size)
 
 			}
 			//pass buffer on if we get sent one
-			else if (size == 35){
+			else if (size == 22){
 				Serial.write(incoming_raw_buffer, incoming_index);
 				Serial.write(0x00);
 			}
@@ -565,8 +550,9 @@ void SerialUpdate(void){
 		}
 		else{
 			//read data in until we hit overflow, then hold at last position
-			if (incoming_index < INCOMING_BUFFER_SIZE)
-				incoming_index++;
+			incoming_index++;
+			if (incoming_index == INCOMING_BUFFER_SIZE) incoming_index = 0;
+				
 		}
 	}
 }

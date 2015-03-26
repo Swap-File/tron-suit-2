@@ -1,5 +1,8 @@
 inline void SerialUpdate(void){
-	if (GloveSend.check()){
+	if (DiscSend3.check()){
+		total_packets_out++;
+		disc0.packet_beam--;
+		if (disc0.packet_beam > 16)  disc0.packet_beam = 16;
 
 		uint8_t raw_buffer[14];
 
@@ -24,14 +27,19 @@ inline void SerialUpdate(void){
 		}
 		uint8_t encoded_buffer[16];
 		uint8_t encoded_size = COBSencode(raw_buffer, 15, encoded_buffer);
-
 		Serial2.write(encoded_buffer, encoded_size);
 		Serial2.write(0x00);
+
 		if (serial2stats.packets_out_per_second < 255){
 			serial2stats.packets_out_per_second++;
 		}
 
-		raw_buffer[9];
+
+	}
+	if (GloveSend.check()){
+
+		
+		uint8_t raw_buffer[10];
 
 		raw_buffer[0] = glove0.output_rgb_led.r;
 		raw_buffer[1] = glove0.output_rgb_led.g;
@@ -43,9 +51,8 @@ inline void SerialUpdate(void){
 		raw_buffer[7] = glove1.output_white_led;
 
 		raw_buffer[8] = OneWire::crc8(raw_buffer, 7);
-
-		// encoded_buffer[9];
-		encoded_size = COBSencode(raw_buffer, 9, encoded_buffer);
+		uint8_t encoded_buffer[16];
+		uint8_t encoded_size = COBSencode(raw_buffer, 9, encoded_buffer);
 
 
 		Serial1.write(encoded_buffer, encoded_size);
@@ -79,8 +86,8 @@ inline void SerialUpdate(void){
 			}
 			else{
 				//read data in until we hit overflow then start over
-				if (incoming1_index < INCOMING1_BUFFER_SIZE) incoming1_index++;
-				else incoming1_index = 0;
+				incoming1_index++;
+				if (incoming1_index == INCOMING1_BUFFER_SIZE) incoming1_index = 0;
 			}
 		}
 
@@ -104,8 +111,9 @@ inline void SerialUpdate(void){
 			}
 			else{
 				//read data in until we hit overflow then start over
-				if (incoming2_index < INCOMING2_BUFFER_SIZE) incoming2_index++;
-				else incoming2_index = 0;
+				incoming2_index++;
+				if (incoming2_index == INCOMING2_BUFFER_SIZE) incoming2_index = 0;
+
 			}
 		}
 
@@ -134,7 +142,7 @@ inline void onPacket2(const uint8_t* buffer, size_t size)
 			if (serial2stats.packets_in_per_second < 255){
 				serial2stats.packets_in_per_second++;
 			}
-
+			total_packets_in++;
 
 			disc0.battery_voltage = buffer[6];
 			disc0.cpu_temp = buffer[7];
@@ -148,8 +156,9 @@ inline void onPacket2(const uint8_t* buffer, size_t size)
 inline void onPacket1(const uint8_t* buffer, size_t size)
 {
 
-	if (size != 35){
+	if (size != 22){
 		serial1stats.framing_errors++;
+		Serial.println(size);
 	}
 	else{
 		uint8_t crc = OneWire::crc8(buffer, size - 2);
@@ -163,14 +172,10 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 			}
 
 			GLOVE * current_glove;
-			if (buffer[33] == 0){
-				current_glove = &glove0;
-			}
-			else if (buffer[33] == 1)
-			{
-				current_glove = &glove1;
-			}
-
+			if bitRead(buffer[14],7) current_glove = &glove1;
+			else current_glove = &glove0;
+		
+			
 			current_glove->fresh = true;
 
 			current_glove->yaw_raw = buffer[0] << 8 | buffer[1];
@@ -185,43 +190,35 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 			current_glove->yaw_compensated = (current_glove->yaw_compensated + 2 * 36000 + 18000) % 36000;
 			current_glove->pitch_compensated = (current_glove->pitch_compensated + 2 * 36000 + 18000) % 36000;
 			current_glove->roll_compensated = (current_glove->roll_compensated + 2 * 36000 + 18000) % 36000;
-
-			current_glove->aaRealX = buffer[6] << 8 | buffer[7];
-			current_glove->aaRealY = buffer[8] << 8 | buffer[9];
-			current_glove->aaRealZ = buffer[10] << 8 | buffer[11];
-
-			current_glove->gravityX = buffer[12] << 8 | buffer[13];
-			current_glove->gravityY = buffer[14] << 8 | buffer[15];
-			current_glove->gravityZ = buffer[16] << 8 | buffer[17];
-
-			current_glove->color_sensor_R = buffer[18] << 8 | buffer[19];
-			current_glove->color_sensor_G = buffer[20] << 8 | buffer[21];
-			current_glove->color_sensor_B = buffer[22] << 8 | buffer[23];
-			current_glove->color_sensor_Clear = buffer[24] << 8 | buffer[25];
+				
+			current_glove->color_sensor_R = buffer[6] << 8 | buffer[7];
+			current_glove->color_sensor_G = buffer[8] << 8 | buffer[9];
+			current_glove->color_sensor_B = buffer[10] << 8 | buffer[11];
+			current_glove->color_sensor_Clear = buffer[12] << 8 | buffer[13];
 
 			//only allow one finger at a time
-			if (buffer[26] == 0x0E){
+			if ((buffer[14] & 0x0F) == 0x0E){
 				current_glove->finger1 = true;
 				current_glove->finger2 = false;
 				current_glove->finger3 = false;
 				current_glove->finger4 = false;
 				current_glove->gesture_finger = 1;
 			}
-			else if (buffer[26] == 0x0D){
+			else if ((buffer[14] & 0x0F) == 0x0D){
 				current_glove->finger1 = false;
 				current_glove->finger2 = true;
 				current_glove->finger3 = false;
 				current_glove->finger4 = false;
 				current_glove->gesture_finger = 2;
 			}
-			else if (buffer[26] == 0x0B){
+			else if ((buffer[14] & 0x0F) == 0x0B){
 				current_glove->finger1 = false;
 				current_glove->finger2 = false;
 				current_glove->finger3 = true;
 				current_glove->finger4 = false;
 				current_glove->gesture_finger = 3;
 			}
-			else if (buffer[26] == 0x07){
+			else if ((buffer[14] & 0x0F) == 0x07){
 				current_glove->finger1 = false;
 				current_glove->finger2 = false;
 				current_glove->finger3 = false;
@@ -236,14 +233,14 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 			}
 
 
-			current_glove->packets_in_per_second = buffer[27];
-			current_glove->packets_out_per_second = buffer[28];
+			current_glove->packets_in_per_second = buffer[15];
+			current_glove->packets_out_per_second = buffer[16];
 
-			current_glove->framing_errors = buffer[29];
-			current_glove->crc_errors = buffer[30];
+			current_glove->framing_errors = buffer[17];
+			current_glove->crc_errors = buffer[18];
 
-			current_glove->cpu_usage = buffer[31];
-			current_glove->cpu_temp = buffer[32];
+			current_glove->cpu_usage = buffer[19];
+			current_glove->cpu_temp = buffer[20];
 
 			//update the gesture grid (8x8 grid + overlap 
 			int temp_gloveX_saved = 0;

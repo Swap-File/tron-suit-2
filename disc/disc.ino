@@ -128,6 +128,9 @@ void dmpDataReady() {
 }
 
 void setup() {
+	// configure LED for output
+	pinMode(LED_PIN, OUTPUT);
+	digitalWrite(LED_PIN, 1);
 
 	//battery meter pin
 	pinMode(A9, INPUT);
@@ -154,7 +157,7 @@ void setup() {
 #endif
 
 	Serial.begin(115200); //Debug
-	Serial1.begin(115200); //Wixel
+	Serial1.begin(57600); //Wixel
 
 	// initialize device
 	Serial.println(F("Initializing I2C devices..."));
@@ -205,8 +208,7 @@ void setup() {
 		Serial.println(F(")"));
 	}
 
-	// configure LED for output
-	pinMode(LED_PIN, OUTPUT);
+
 
 
 
@@ -226,6 +228,7 @@ void setup() {
 
 	//final reset to start it all
 	mpu.resetFIFO();
+	digitalWrite(LED_PIN, 0);
 }
 
 void loop() {
@@ -298,26 +301,9 @@ void loop() {
 
 		mpu.dmpGetQuaternion(&q, fifoBuffer);
 		mpu.dmpGetGravity(&gravity, &q);
-		mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
+		//mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
 		mpu.dmpGetAccel(&aa, fifoBuffer);
 		mpu.dmpGetLinearAccel(&aaReal, &aa, &gravity);
-
-#ifdef TESTING
-		Serial.print("ypr\t");
-		Serial.print(ypr[0] * 180 / M_PI);
-		Serial.print("\t");
-		Serial.print(ypr[1] * 180 / M_PI);
-		Serial.print("\t");
-		Serial.print(ypr[2] * 180 / M_PI);
-		Serial.print("\t");
-
-		Serial.print("areal\t");
-		Serial.print(gravity.x);
-		Serial.print("\t");
-		Serial.print(gravity.y);
-		Serial.print("\t");
-		Serial.print(gravity.z);
-#endif
 
 		//4.77 = (30/2) / PI + 0.5 physical offset
 		float temp = (atan2(gravity.x, gravity.y) * 4.77) + 15;
@@ -453,9 +439,7 @@ void loop() {
 
 		}
 
-		// blink LED to indicate activity
-		blinkState++;
-		digitalWrite(LED_PIN, bitRead(blinkState, 2));
+
 
 		//disc rendering
 		for (uint8_t current_pixel = 0; current_pixel < 30; current_pixel++) {
@@ -495,7 +479,7 @@ void loop() {
 		blur_modifier = blur_modifier * .9;
 		//Serial.println(blur_modifier);
 
-		sendPacket();
+		
 	}
 }
 
@@ -522,13 +506,14 @@ void SerialUpdate(void){
 		}
 		else{
 			//read data in until we hit overflow then start over
-			if (incoming_index < INCOMING_BUFFER_SIZE) incoming_index++;
-			else incoming_index = 0;
+			incoming_index++;
+			if (incoming_index == INCOMING_BUFFER_SIZE) incoming_index = 0;
 		}
 	}
 }
 
 void sendPacket(){
+
 	//send reply
 	byte raw_buffer[11];
 	raw_buffer[0] = inner_index;
@@ -567,7 +552,11 @@ void receivePacket(const uint8_t* buffer, size_t size)
 	//0 & 1 are color mapping
 	//4 is flow direction inner
 	//5 could be pulsing on and off?
-	
+
+	//increment packet stats counter
+	if (packets_in_counter < 255){
+		packets_in_counter++;
+	}
 
 	//check for framing errors
 	if (size != 15){
@@ -581,10 +570,12 @@ void receivePacket(const uint8_t* buffer, size_t size)
 		}
 		else{
 
-			//increment packet stats counter
-			if (packets_in_counter < 255){
-				packets_in_counter++;
-			}
+			// blink LED to indicate activity
+			blinkState++;
+			digitalWrite(LED_PIN, bitRead(blinkState, 2));
+
+			//only speak when spoken to, avoids collisions
+			sendPacket();
 
 			color1 = CHSV(buffer[0], buffer[1], buffer[2]);
 			color2 = CHSV(buffer[3], buffer[4], buffer[5]);
