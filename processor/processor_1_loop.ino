@@ -10,7 +10,6 @@ void setup() {
 	LEDS.addLeds<OCTOWS2811>(actual_output, NUM_LEDS_PER_STRIP);
 	for (int i = 0; i < NUM_STRIPS * NUM_LEDS_PER_STRIP; i++) {
 		actual_output[i] = CRGB(0, 0, 0);
-		target_output[i] = CHSV(0, 0, 0);
 	}
 
 	//bump hardwareserial.cpp to 255
@@ -95,35 +94,28 @@ void loop() {
 
 
 	if (FPSdisplay.check()){
-		Serial.print(serial1stats.packets_in_per_second);
-		Serial.print(" ");
-		Serial.print(serial1stats.packets_out_per_second);
-		Serial.print(" ");
-		Serial.print(serial1stats.crc_errors);
-		Serial.print(" ");
-		Serial.print(serial1stats.framing_errors);
-		Serial.print(" ");
-		Serial.print(serial2stats.packets_in_per_second);
-		Serial.print(" ");
-		Serial.print(serial2stats.packets_out_per_second);
-		Serial.print(" ");
-		Serial.print(serial2stats.crc_errors);
-		Serial.print(" ");
-		Serial.print(serial2stats.framing_errors);
-		Serial.print(" ");
-		Serial.print(disc0.crc_errors);
-		Serial.print(" ");
-		Serial.print(disc0.framing_errors);
-		Serial.print(" "); 
 		Serial.print(average_time);
 		Serial.print(" ");
 		Serial.println(total_packets_out - total_packets_in);
-		serial1stats.packets_in_per_second = 0;
-		serial1stats.packets_out_per_second = 0;
-		serial2stats.packets_in_per_second = 0;
-		serial2stats.packets_out_per_second = 0;
-		serial3stats.packets_in_per_second = 0;
-		serial3stats.packets_out_per_second = 0;
+
+
+		glovestats.total_lost_packets += (glovestats.local_packets_out_per_second << 1); //add in both gloves
+		glovestats.total_lost_packets -= glovestats.local_packets_in_per_second_glove0;
+		glovestats.total_lost_packets -= glovestats.local_packets_in_per_second_glove1;
+		glovestats.local_packets_in_per_second_glove0 = 0;
+		glovestats.local_packets_in_per_second_glove1 = 0;
+		glovestats.local_packets_out_per_second = 0;
+
+		discstats.total_lost_packets += discstats.local_packets_out_per_second;
+		discstats.total_lost_packets -= discstats.local_packets_in_per_second;
+		discstats.local_packets_in_per_second = 0;
+		discstats.local_packets_out_per_second = 0;
+
+		bluetoothstats.total_lost_packets += bluetoothstats.local_packets_out_per_second;
+		bluetoothstats.total_lost_packets -= bluetoothstats.local_packets_in_per_second;
+		bluetoothstats.local_packets_in_per_second = 0;
+		bluetoothstats.local_packets_out_per_second = 0;
+
 		fpscount = 0;
 		//cpu_usage = 100 - (idle_microseconds / 10000);
 		//local_packets_out_per_second_1 = local_packets_out_counter_1;
@@ -134,21 +126,34 @@ void loop() {
 	}
 
 	if (glove1.finger3 == 1){
+		
 		glove0.output_white_led = 0x01;
+		
+
 		uint32_t sum = glove0.color_sensor_Clear;
-		float r, g, b;
-		r = glove0.color_sensor_R; r /= sum;
-		g = glove0.color_sensor_G; g /= sum;
-		b = glove0.color_sensor_B; b /= sum;
-		r *= 256; g *= 256; b *= 256;
+		Serial.println(sum);
+		if (sum > 3000 && sum <  20000){
 
-		CHSV temp = rgb2hsv_approximate(CRGB(r, g, b));
-		//temp.v = min(temp.v, 200);
-		temp.s = max(temp.s, 64);
-		CRGB temp2;
-		hsv2rgb_rainbow(temp, temp2);
-		glove0.output_rgb_led = temp2;
+			float r, g, b;
+			r = glove0.color_sensor_R; r /= sum;
+			g = glove0.color_sensor_G; g /= sum;
+			b = glove0.color_sensor_B; b /= sum;
+			r *= 256; g *= 256; b *= 256;
 
+			CHSV temp = rgb2hsv_approximate(CRGB(r, g, b));
+			//temp.v = min(temp.v, 200);
+			temp.s = max(temp.s, 192);
+			CRGB temp2;
+			hsv2rgb_rainbow(temp, temp2);
+			glove0.output_rgb_led = temp2;
+
+
+			color1 = temp;
+
+		}
+		else{
+			//ove0.output_rgb_led = CRGB(0, 0, 0);
+		}
 	}
 	else{
 		glove0.output_white_led = 0x00;
@@ -190,18 +195,14 @@ void loop() {
 	}
 
 	//draw most of hud, last bit will be drawn in external helmet bit
-	//SerialUpdate();
 	draw_HUD();
-	//SerialUpdate();
 
 	for (uint8_t y = 0; y < 8; y++) {
 		for (uint8_t x = 0; x < 16; x++) {
 
-
 			CRGB background_array = CRGB(0, 0, 0);
 			CRGB menu_name = CRGB(0, 0, 0);
 			CRGB final_color = CRGB(0, 0, 0);
-
 
 			if (scroll_mode != SCROLL_MODE_COMPLETE){
 				if (read_menu_pixel(x, y))	menu_name = CRGB(180, 180, 180);
@@ -234,23 +235,17 @@ void loop() {
 			//}
 
 
-
 			if ((final_color.r & 0xff == 0xff) | ((final_color.g >> 16) & 0xff == 0xff) | ((final_color.b >> 8) & 0xff == 0xff)){
 				display.drawPixel(realtime_location_x + x, realtime_location_y + 7 - y, WHITE);
 			}
 
-
 			uint8_t tempindex;  //HUD is only 128 LEDs so it will fit in a byte
 
-			if (y & 0x01 == 1){ // for odd rows scan from opposite side since external display is zig zag wired
-				tempindex = (y << 4) + 15 - x;  //  << 4 is multiply by 16 pixels per row
-			}
-			else{
-				tempindex = (y << 4) + x; //  << 4 is multiply by 16 pixels per row
-			}
+			//determin if row is even or odd
+			if ((y & 0x01) == 1)  tempindex = (y << 4) + 15 - x;  //<< 4 is multiply by 16 pixels per row
+			else                  tempindex = (y << 4) + x; //<< 4 is multiply by 16 pixels per row
 
-			target_output[tempindex] = final_color;
-			actual_output[tempindex] = target_output[tempindex];
+			actual_output[tempindex] = final_color;
 		}
 	}
 
@@ -275,11 +270,11 @@ void loop() {
 
 			if (scroll_pos_y == 0 && scroll_pos_x == 0){
 				scroll_mode = SCROLL_MODE_PAUSE;
-				scroll_timer = millis();
+				scroll_pause_start_time = millis();
 			}
 			break;
 		case SCROLL_MODE_PAUSE:
-			if (millis() - scroll_timer > 1000){
+			if (millis() - scroll_pause_start_time > SCROLL_PAUSE_TIME){
 				scroll_mode = SCROLL_MODE_OUTGOING;
 			}
 			break;

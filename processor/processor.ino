@@ -31,7 +31,6 @@
 #define FFT_MODE_VERT_BARS_DOWN 4
 #define FFT_MODE_VERT_BARS_STATIC 5
 #define FFT_MODE_OFF 6
-
 uint8_t fftmode = FFT_MODE_OFF;
 
 #define MENU_DEFAULT 1
@@ -43,13 +42,14 @@ uint8_t fftmode = FFT_MODE_OFF;
 #define MENU_DISC 7
 #define MENU_MAG 8
 #define MENU_SPIN 9
+uint8_t menu_mode = MENU_DEFAULT;
+
 boolean flow_direction_positive = true;
 
 uint32_t total_packets_in = 0;
 uint32_t total_packets_out = 0;
 
 typedef struct {
-	boolean fresh = false;
 	boolean gesture_in_progress = false;
 	uint8_t gesture_finger;
 
@@ -140,17 +140,31 @@ typedef struct {
 } DISC;
 
 typedef struct {
-	uint8_t packets_in_per_second;
-	uint8_t packets_out_per_second;
+	uint8_t local_packets_in_per_second = 0;
+	uint8_t local_packets_out_per_second = 0;
 
-	uint8_t framing_errors;
-	uint8_t crc_errors;
+	uint8_t local_framing_errors = 0;
+	uint8_t local_crc_errors = 0;
+
+	int16_t total_lost_packets = 0;
 
 } SERIALSTATS;
 
+typedef struct {
+	uint8_t local_packets_in_per_second_glove0 = 0;
+	uint8_t local_packets_in_per_second_glove1 = 0;
+	uint8_t local_packets_out_per_second = 0;
 
-uint8_t circle_x[30] = { 6, 7, 8, 9, 10, 11, 12, 12, 12, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 0, 0, 1, 2, 3, 4, 5 };
-uint8_t circle_y[30] = { 0, 0, 0, 1, 1, 2, 3, 4, 5, 6, 7, 8, 8, 9, 9, 9, 9, 9, 8, 8, 7, 6, 5, 4, 3, 2, 1, 1, 0, 0 };
+	uint8_t local_framing_errors = 0;
+	uint8_t local_crc_errors = 0;
+
+	int16_t total_lost_packets = 0;
+
+} SERIALSTATSGLOVE;
+
+//lookup table for 30 pixel circumference circle coordinates
+const uint8_t circle_x[30] = { 6, 7, 8, 9, 10, 11, 12, 12, 12, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 0, 0, 0, 1, 2, 3, 4, 5 };
+const uint8_t circle_y[30] = { 0, 0, 0, 1, 1, 2, 3, 4, 5, 6, 7, 8, 8, 9, 9, 9, 9, 9, 8, 8, 7, 6, 5, 4, 3, 2, 1, 1, 0, 0 };
 
 //HUD locations
 
@@ -178,12 +192,10 @@ uint8_t circle_y[30] = { 0, 0, 0, 1, 1, 2, 3, 4, 5, 6, 7, 8, 8, 9, 9, 9, 9, 9, 8
 #define outer_disc_location_x 15
 #define outer_disc_location_y 30
 
-
 CHSV color1 = CHSV(0, 255, 255);
 CHSV color2 = CHSV(64, 255, 255);
 
 int8_t flow_offset = 0;
-
 
 #define GLOVE_DEADZONE 3000  //30 degrees
 #define GLOVE_MAXIMUM 30000 //90 degrees
@@ -194,9 +206,9 @@ int8_t flow_offset = 0;
 Adafruit_SSD1306 display(OLED_DC, OLED_RESET, OLED_CS);
 
 uint8_t mask_mode = 0;
-uint8_t menu_mode = MENU_DEFAULT;
-double  temperature = 0.0;
-double  voltage = 0.0;
+
+float temperature = 0.0;
+float voltage = 0.0;
 char sms_message[160];
 int16_t sms_text_ending_pos = 0; //160 * 5 max length
 int16_t sms_scroll_pos = 0;
@@ -217,7 +229,8 @@ int8_t scroll_end_pos_y = 0; //destination to scroll to y
 #define SCROLL_MODE_OUTGOING 1
 #define SCROLL_MODE_COMPLETE 0
 uint8_t scroll_mode = SCROLL_MODE_COMPLETE;  //keeps track of scroll state
-long int scroll_timer = 0;  //time to pause at 0,0
+#define SCROLL_PAUSE_TIME 1000 //time to pause at 0,0
+uint32_t scroll_pause_start_time = 0; //keeps track of when pause started
 
 //crank up hardwareserial.cpp to 128 to match!
 #define INCOMING1_BUFFER_SIZE 128
@@ -240,18 +253,16 @@ AudioConnection          patchCord1(adc1, fft256_1);
 #define NUM_LEDS_PER_STRIP 130 //longest strip is helmet, 128 LEDS + 2 indicators internal
 #define NUM_STRIPS 8 //must be 8, even though only 6 are used
 CRGB actual_output[NUM_STRIPS * NUM_LEDS_PER_STRIP];
-CRGB target_output[NUM_STRIPS * NUM_LEDS_PER_STRIP];
 
-#define TESTING
 int color_on = 1;
-unsigned long fps_time = 0;
+
 uint16_t fpscount = 0;
 
 GLOVE glove0;
 GLOVE glove1;
-SERIALSTATS serial1stats;
-SERIALSTATS serial2stats;
-SERIALSTATS serial3stats;
+SERIALSTATSGLOVE glovestats;
+SERIALSTATS discstats;
+SERIALSTATS bluetoothstats;
 DISC disc0;
 
 byte gloveindicator[16][8];
@@ -259,9 +270,9 @@ byte gloveindicator[16][8];
 
 CHSV EQdisplay[16][8];
 int EQdisplayValueMax16[16]; //max vals for normalization over time
-int EQdisplayValue16[16]; //max vals for normalization over time
+uint8_t EQdisplayValue16[16]; //max vals for normalization over time
 int EQdisplayValueMax8[8]; //max vals for normalization over time
-int EQdisplayValue8[8]; //max vals for normalization over time
+uint8_t EQdisplayValue8[8]; //max vals for normalization over time
 
 Metro FPSdisplay = Metro(1000);
 Metro glovedisplayfade = Metro(10);
@@ -273,6 +284,6 @@ Metro DiscSend3 = Metro(20);
 Metro LEDdisplay = Metro(10);
 
 //to round robin poll sensors
-uint8_t adc1_mode = 0;
 #define TEMP_SENSOR 0
 #define BATTERY_METER 1
+uint8_t adc1_mode = TEMP_SENSOR;

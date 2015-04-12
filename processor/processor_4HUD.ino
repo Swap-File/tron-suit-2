@@ -335,12 +335,12 @@ void print_menu_mode(void ){
 	}
 }
 //locations to start a scroll movement from
-inline void menu_scroll_start_left(void){
+inline void menu_scroll_start_right(void){
 	scroll_pos_x = 18;
 	scroll_pos_y = 0;
 }
 
-inline void menu_scroll_start_right(void){
+inline void menu_scroll_start_left(void){
 	scroll_pos_x = -128; //negative longer than longest text message, the slack will get taken up by the shift code
 	scroll_pos_y = 0;
 }
@@ -356,12 +356,12 @@ inline void menu_scroll_start_down(void){
 }
 
 //locations to stop a scroll movement at
-inline void menu_scroll_end_left(void){
+inline void menu_scroll_end_right(void){
 	scroll_end_pos_x = -128;  //negative longer than longest text message, the slack will get taken up by the shift code
 	scroll_end_pos_y = 0;
 }
 
-inline void menu_scroll_end_right(void){
+inline void menu_scroll_end_left(void){
 	scroll_end_pos_x = 16;
 	scroll_end_pos_y = 0;
 }

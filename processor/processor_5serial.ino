@@ -2,7 +2,7 @@ inline void SerialUpdate(void){
 	if (DiscSend3.check()){
 		total_packets_out++;
 		disc0.packet_beam--;
-		if (disc0.packet_beam > 16)  disc0.packet_beam = 16;
+		//if (disc0.packet_beam > 16)  disc0.packet_beam = 16;
 
 		uint8_t raw_buffer[14];
 
@@ -30,15 +30,14 @@ inline void SerialUpdate(void){
 		Serial2.write(encoded_buffer, encoded_size);
 		Serial2.write(0x00);
 
-		if (serial2stats.packets_out_per_second < 255){
-			serial2stats.packets_out_per_second++;
+		if (discstats.local_packets_out_per_second < 255){
+			discstats.local_packets_out_per_second++;
 		}
-
 
 	}
 	if (GloveSend.check()){
 
-		
+	
 		uint8_t raw_buffer[10];
 
 		raw_buffer[0] = glove0.output_rgb_led.r;
@@ -58,8 +57,8 @@ inline void SerialUpdate(void){
 		Serial1.write(encoded_buffer, encoded_size);
 		Serial1.write(0x00);
 
-		if (serial1stats.packets_out_per_second < 255){
-			serial1stats.packets_out_per_second++;
+		if (glovestats.local_packets_out_per_second < 255){
+			glovestats.local_packets_out_per_second++;
 		}
 	}
 
@@ -130,18 +129,19 @@ inline void onPacket2(const uint8_t* buffer, size_t size)
 {
 
 	if (size != 11){
-		serial2stats.framing_errors++;
+		discstats.local_framing_errors++;
 	}
 	else{
 		uint8_t crc = OneWire::crc8(buffer, size - 2);
 		if (crc != buffer[size - 1]){
-			serial2stats.crc_errors++;
+			discstats.local_crc_errors++;
 		}
 		else{
 
-			if (serial2stats.packets_in_per_second < 255){
-				serial2stats.packets_in_per_second++;
+			if (discstats.local_packets_in_per_second < 255){
+				discstats.local_packets_in_per_second++;
 			}
+
 			total_packets_in++;
 
 			disc0.battery_voltage = buffer[6];
@@ -157,26 +157,30 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 {
 
 	if (size != 22){
-		serial1stats.framing_errors++;
-		Serial.println(size);
+		glovestats.local_framing_errors++;
 	}
 	else{
 		uint8_t crc = OneWire::crc8(buffer, size - 2);
 		if (crc != buffer[size - 1]){
-			serial1stats.crc_errors++;
+			glovestats.local_crc_errors++;
 		}
 		else{
 
-			if (serial1stats.packets_in_per_second < 255){
-				serial1stats.packets_in_per_second++;
-			}
-
 			GLOVE * current_glove;
-			if bitRead(buffer[14],7) current_glove = &glove1;
-			else current_glove = &glove0;
-		
-			
-			current_glove->fresh = true;
+			if bitRead(buffer[14], 7){  //bit 0-3 are fingers, bit 7 is glove ID.  bit 4 5 and 6 are unused.
+				current_glove = &glove1;
+				if (glovestats.local_packets_in_per_second_glove1 < 255){
+					glovestats.local_packets_in_per_second_glove1++;
+				}
+
+			}
+			else
+			{
+				current_glove = &glove0;
+				if (glovestats.local_packets_in_per_second_glove0 < 255){
+					glovestats.local_packets_in_per_second_glove0++;
+				}
+			}
 
 			current_glove->yaw_raw = buffer[0] << 8 | buffer[1];
 			current_glove->pitch_raw = buffer[2] << 8 | buffer[3];
@@ -190,7 +194,7 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 			current_glove->yaw_compensated = (current_glove->yaw_compensated + 2 * 36000 + 18000) % 36000;
 			current_glove->pitch_compensated = (current_glove->pitch_compensated + 2 * 36000 + 18000) % 36000;
 			current_glove->roll_compensated = (current_glove->roll_compensated + 2 * 36000 + 18000) % 36000;
-				
+
 			current_glove->color_sensor_R = buffer[6] << 8 | buffer[7];
 			current_glove->color_sensor_G = buffer[8] << 8 | buffer[9];
 			current_glove->color_sensor_B = buffer[10] << 8 | buffer[11];
@@ -294,10 +298,7 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 			temp_gloveY = map((current_glove->pitch_compensated), 18000 - GLOVE_DEADZONE, 18000 + GLOVE_DEADZONE, 0, 32);
 			current_glove->calculated_mag = constrain(temp_gloveY, 0, 32);
 
-			
-
 			//check for gestures
-
 			if (current_glove->finger4 == 1){
 
 				menu_mode = MENU_DEFAULT;
@@ -306,12 +307,10 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 			}
 
 			if (!current_glove->finger1 &&  !current_glove->finger2 && !current_glove->finger3 && current_glove->gesture_in_progress == true){
-
-
 				if (current_glove->gloveY <= 0)      menu_map(HAND_DIRECTION_DOWN);
 				else if (current_glove->gloveY >= 7) menu_map(HAND_DIRECTION_UP);
-				else if (current_glove->gloveX <= 0) menu_map(HAND_DIRECTION_LEFT);
-				else if (current_glove->gloveX >= 7) menu_map(HAND_DIRECTION_RIGHT);
+				else if (current_glove->gloveX <= 0) menu_map(HAND_DIRECTION_RIGHT);
+				else if (current_glove->gloveX >= 7) menu_map(HAND_DIRECTION_LEFT );
 				else if (millis() - current_glove->finger_timer < 200) menu_map(HAND_DIRECTION_SHORT_PRESS);
 
 				//disable scroll mode on all other fingers
