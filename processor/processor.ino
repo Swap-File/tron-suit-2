@@ -248,7 +248,6 @@ uint8_t incoming2_decoded_buffer[INCOMING2_BUFFER_SIZE];
 #define INCOMING3_BUFFER_SIZE 128
 uint8_t incoming3_raw_buffer[INCOMING3_BUFFER_SIZE];
 uint8_t incoming3_index = 0;
-uint8_t incoming3_decoded_buffer[INCOMING3_BUFFER_SIZE];
 
 // adc object for battery and temp meter, will use ADC1
 ADC *adc = new ADC();

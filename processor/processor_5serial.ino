@@ -121,16 +121,14 @@ inline void SerialUpdate(void){
 			//read in a byte
 			incoming3_raw_buffer[incoming3_index] = Serial3.read();
 
-			Serial.println(incoming3_raw_buffer[incoming3_index], HEX);
-	
+			Serial.println(incoming3_raw_buffer[incoming3_index],HEX);
+
 			//check for end of packet
 			if (incoming3_raw_buffer[incoming3_index] == 0x00){
-				//try to decode
-				uint8_t decoded_length = COBSdecode(incoming3_raw_buffer, incoming3_index, incoming3_decoded_buffer);
-
+				Serial.println("hit");
 				//check length of decoded data (cleans up a series of 0x00 bytes)
-				if (decoded_length > 0){
-					onPacket3(incoming3_decoded_buffer, decoded_length);
+				if (incoming3_index > 0){
+					onPacket3(incoming3_raw_buffer, incoming3_index);
 				}
 
 				//reset index
@@ -178,41 +176,39 @@ inline void onPacket2(const uint8_t* buffer, size_t size)
 
 inline void onPacket3(const uint8_t* buffer, size_t size)
 {
-	Serial.print("size ");
-	Serial.println(size);
-	if (size != 7){
+
+	if (size != 21){
 		bluetoothstats.local_framing_errors++;
 	}
 	else{
-		uint8_t crc = OneWire::crc8(buffer, size - 1);
-		Serial.print("crc ");
-		Serial.println(crc, HEX);
+	
+		uint8_t crc_temp = ctoi(buffer[18]) * 100 + ctoi(buffer[19]) * 10 + ctoi(buffer[20]);
 
-		Serial.println("Bluetooth!");
-		Serial.println(buffer[0]);
-		Serial.println(buffer[1]);
-		Serial.println(buffer[2]);
-		Serial.println(buffer[3]);
-		Serial.println(buffer[4]);
-		Serial.println(buffer[5]);
-
-
-		if (crc != buffer[size - 1]){
+		uint8_t crc = OneWire::crc8(buffer, size - 3);
+	
+		if (crc != crc_temp){
 			bluetoothstats.local_crc_errors++;
-			Serial.println("bad!");
-
 		}
-		else{
-
+	  else{
 			if (bluetoothstats.local_packets_in_per_second < 255){
 				bluetoothstats.local_packets_in_per_second++;
 			}
 
-			
-			Serial.println("good!");
-	
+			CRGB color1temp;
 
+			color1temp.r = (ctoi(buffer[0]) * 100) + (ctoi(buffer[1]) * 10) + ctoi(buffer[2]);
+			color1temp.g = (ctoi(buffer[3]) * 100) + (ctoi(buffer[4]) * 10) + ctoi(buffer[5]);
+			color1temp.b = (ctoi(buffer[6]) * 100) + (ctoi(buffer[7]) * 10) + ctoi(buffer[8]);
 
+			color1 = rgb2hsv_approximate(color1temp);
+
+			CRGB color2temp;
+
+			color2temp.r = (ctoi(buffer[9]) * 100) + (ctoi(buffer[10]) * 10) + ctoi(buffer[11]);
+			color2temp.g = (ctoi(buffer[12]) * 100) + (ctoi(buffer[13]) * 10) + ctoi(buffer[14]);
+			color2temp.b = (ctoi(buffer[15]) * 100) + (ctoi(buffer[16]) * 10) + ctoi(buffer[17]);
+
+			color2 = rgb2hsv_approximate(color2temp);
 		}
 	}
 }
@@ -395,5 +391,20 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 			else current_glove->gesture_in_progress = false;
 
 		}
+	}
+}
+
+int16_t ctoi(char input){
+switch (input) {
+	case '1':		return 1;
+	case '2':		return 2;
+	case '3':		return 3;
+	case '4':		return 4;
+	case '5':		return 5;
+	case '6':		return 6;
+	case '7':		return 7;
+	case '8':		return 8;
+	case '9':		return 9;
+	default:		return 0;
 	}
 }
