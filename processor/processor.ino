@@ -17,6 +17,8 @@
 
 #include <ADC.h>
 
+
+
 //menu scroll-aways to match effect
 #define HAND_DIRECTION_LEFT 1
 #define HAND_DIRECTION_RIGHT 2
@@ -243,6 +245,11 @@ uint8_t incoming2_raw_buffer[INCOMING2_BUFFER_SIZE];
 uint8_t incoming2_index = 0;
 uint8_t incoming2_decoded_buffer[INCOMING2_BUFFER_SIZE];
 
+#define INCOMING3_BUFFER_SIZE 128
+uint8_t incoming3_raw_buffer[INCOMING3_BUFFER_SIZE];
+uint8_t incoming3_index = 0;
+uint8_t incoming3_decoded_buffer[INCOMING3_BUFFER_SIZE];
+
 // adc object for battery and temp meter, will use ADC1
 ADC *adc = new ADC();
 
@@ -255,8 +262,6 @@ AudioConnection          patchCord1(adc1, fft256_1);
 CRGB actual_output[NUM_STRIPS * NUM_LEDS_PER_STRIP];
 
 int color_on = 1;
-
-uint16_t fpscount = 0;
 
 GLOVE glove0;
 GLOVE glove1;

@@ -405,7 +405,7 @@ void loop() {
 		raw_buffer[20] = ((((int16_t)(temperature)) >> 0) & 0xff);
 
 		
-		raw_buffer[21] = OneWire::crc8(raw_buffer, 20);
+		raw_buffer[21] = OneWire::crc8(raw_buffer, 21);
 
 		//prep buffer completely
 		uint8_t encoded_buffer[23];  //one extra to hold cobs data
@@ -438,7 +438,7 @@ void onPacket(const uint8_t* buffer, size_t size)
 	}
 	else{
 		//check for crc errors
-		byte crc = OneWire::crc8(buffer, size - 2);
+		byte crc = OneWire::crc8(buffer, size - 1);
 		if (crc != buffer[size - 1]){
 			crc_error++;
 		}

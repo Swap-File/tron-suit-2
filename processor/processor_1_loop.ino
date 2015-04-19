@@ -3,8 +3,12 @@ void setup() {
 
 	strcpy(sms_message, "TESTING TEXT MESSAGE");
 
+
 	display.begin(SSD1306_SWITCHCAPVCC);
 	display.display();
+
+
+
 
 	//must go first so Serial.begin can override pins!!!
 	LEDS.addLeds<OCTOWS2811>(actual_output, NUM_LEDS_PER_STRIP);
@@ -32,16 +36,21 @@ void setup() {
 	display.setTextSize(1);
 	display.setTextColor(WHITE);
 	display.setTextWrap(false);
+
+	
 }
 
 long int average_time;
 
 void loop() {
 
+
 	long start_time = micros();
 
 
 	if (YPRdisplay.check()){
+		
+	
 
 		switch (adc1_mode){
 		case BATTERY_METER:
@@ -63,8 +72,10 @@ void loop() {
 
 		//keep re-initing the screen for hot plug support.
 		display.reinit();
+		
 
 		if (0){
+				
 			Serial.print("ypr\t");
 			Serial.print(sin(glove1.roll_raw * PI / 18000));
 			Serial.print("ypr\t");
@@ -94,6 +105,8 @@ void loop() {
 
 
 	if (FPSdisplay.check()){
+		
+
 		Serial.print(average_time);
 		Serial.print(" ");
 		Serial.println(total_packets_out - total_packets_in);
@@ -116,7 +129,7 @@ void loop() {
 		bluetoothstats.local_packets_in_per_second = 0;
 		bluetoothstats.local_packets_out_per_second = 0;
 
-		fpscount = 0;
+		//LEDS.getFPS();
 		//cpu_usage = 100 - (idle_microseconds / 10000);
 		//local_packets_out_per_second_1 = local_packets_out_counter_1;
 		//local_packets_in_per_second_1 = local_packets_in_counter_1;
@@ -131,7 +144,7 @@ void loop() {
 		
 
 		uint32_t sum = glove0.color_sensor_Clear;
-		Serial.println(sum);
+		//Serial.println(sum);
 		if (sum > 3000 && sum <  20000){
 
 			float r, g, b;
@@ -293,7 +306,10 @@ void loop() {
 	if (LEDdisplay.check()){
 		display.display();
 		LEDS.show();
-		fpscount++;
+
+		//dont let octows2811 steal serial3
+		CORE_PIN7_CONFIG = PORT_PCR_PE | PORT_PCR_PS | PORT_PCR_PFE | PORT_PCR_MUX(3);
+		CORE_PIN8_CONFIG = PORT_PCR_DSE | PORT_PCR_SRE | PORT_PCR_MUX(3);
 	}
 
 	if (DiscSend.check()){

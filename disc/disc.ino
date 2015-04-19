@@ -527,7 +527,7 @@ void sendPacket(){
 	raw_buffer[8] = crc_error;
 	raw_buffer[9] = framing_error;
 
-	raw_buffer[10] = OneWire::crc8(raw_buffer, 9);
+	raw_buffer[10] = OneWire::crc8(raw_buffer, 10);
 
 	uint8_t encoded_buffer[12];  //one extra to hold cobs data
 	uint8_t encoded_size = COBSencode(raw_buffer, 11, encoded_buffer);
@@ -564,7 +564,7 @@ void receivePacket(const uint8_t* buffer, size_t size)
 	}
 	else{
 		//check for crc errors
-		byte crc = OneWire::crc8(buffer, size - 2);
+		byte crc = OneWire::crc8(buffer, size - 1);
 		if (crc != buffer[size - 1]){
 			crc_error++;
 		}

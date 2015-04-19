@@ -330,6 +330,9 @@ void print_menu_mode(void ){
 	case MENU_FFT_V:
 		display.print("FFTV");
 		break;
+	case MENU_FFT:
+		display.print("FFT");
+		break;
 	default:
 		display.print(menu_mode);
 	}

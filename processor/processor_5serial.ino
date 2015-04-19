@@ -20,7 +20,7 @@ inline void SerialUpdate(void){
 		raw_buffer[11] = 0x00;  //mode
 		raw_buffer[12] = disc0.packet_sequence_number;  //sequence
 		raw_buffer[13] = disc0.packet_beam;  //sequence
-		raw_buffer[14] = OneWire::crc8(raw_buffer, 13);
+		raw_buffer[14] = OneWire::crc8(raw_buffer, 14);
 
 		if (disc0.packet_sequence_number > 29){
 			disc0.packet_sequence_number = 0;
@@ -49,7 +49,7 @@ inline void SerialUpdate(void){
 		raw_buffer[6] = glove1.output_rgb_led.b;
 		raw_buffer[7] = glove1.output_white_led;
 
-		raw_buffer[8] = OneWire::crc8(raw_buffer, 7);
+		raw_buffer[8] = OneWire::crc8(raw_buffer, 8);
 		uint8_t encoded_buffer[16];
 		uint8_t encoded_size = COBSencode(raw_buffer, 9, encoded_buffer);
 
@@ -116,9 +116,32 @@ inline void SerialUpdate(void){
 			}
 		}
 
-		//blindly empty serial 3 for now
 		while (Serial3.available()){
-			Serial3.read();
+
+			//read in a byte
+			incoming3_raw_buffer[incoming3_index] = Serial3.read();
+
+			Serial.println(incoming3_raw_buffer[incoming3_index], HEX);
+	
+			//check for end of packet
+			if (incoming3_raw_buffer[incoming3_index] == 0x00){
+				//try to decode
+				uint8_t decoded_length = COBSdecode(incoming3_raw_buffer, incoming3_index, incoming3_decoded_buffer);
+
+				//check length of decoded data (cleans up a series of 0x00 bytes)
+				if (decoded_length > 0){
+					onPacket3(incoming3_decoded_buffer, decoded_length);
+				}
+
+				//reset index
+				incoming3_index = 0;
+			}
+			else{
+				//read data in until we hit overflow then start over
+				incoming3_index++;
+				if (incoming3_index == INCOMING3_BUFFER_SIZE) incoming3_index = 0;
+
+			}
 		}
 	}
 
@@ -132,7 +155,7 @@ inline void onPacket2(const uint8_t* buffer, size_t size)
 		discstats.local_framing_errors++;
 	}
 	else{
-		uint8_t crc = OneWire::crc8(buffer, size - 2);
+		uint8_t crc = OneWire::crc8(buffer, size - 1);
 		if (crc != buffer[size - 1]){
 			discstats.local_crc_errors++;
 		}
@@ -153,6 +176,48 @@ inline void onPacket2(const uint8_t* buffer, size_t size)
 	}
 }
 
+inline void onPacket3(const uint8_t* buffer, size_t size)
+{
+	Serial.print("size ");
+	Serial.println(size);
+	if (size != 7){
+		bluetoothstats.local_framing_errors++;
+	}
+	else{
+		uint8_t crc = OneWire::crc8(buffer, size - 1);
+		Serial.print("crc ");
+		Serial.println(crc, HEX);
+
+		Serial.println("Bluetooth!");
+		Serial.println(buffer[0]);
+		Serial.println(buffer[1]);
+		Serial.println(buffer[2]);
+		Serial.println(buffer[3]);
+		Serial.println(buffer[4]);
+		Serial.println(buffer[5]);
+
+
+		if (crc != buffer[size - 1]){
+			bluetoothstats.local_crc_errors++;
+			Serial.println("bad!");
+
+		}
+		else{
+
+			if (bluetoothstats.local_packets_in_per_second < 255){
+				bluetoothstats.local_packets_in_per_second++;
+			}
+
+			
+			Serial.println("good!");
+	
+
+
+		}
+	}
+}
+
+
 inline void onPacket1(const uint8_t* buffer, size_t size)
 {
 
@@ -160,7 +225,7 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 		glovestats.local_framing_errors++;
 	}
 	else{
-		uint8_t crc = OneWire::crc8(buffer, size - 2);
+		uint8_t crc = OneWire::crc8(buffer, size - 1);
 		if (crc != buffer[size - 1]){
 			glovestats.local_crc_errors++;
 		}
