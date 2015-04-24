@@ -17,8 +17,6 @@
 
 #include <ADC.h>
 
-
-
 //menu scroll-aways to match effect
 #define HAND_DIRECTION_LEFT 1
 #define HAND_DIRECTION_RIGHT 2
@@ -211,7 +209,11 @@ uint8_t mask_mode = 0;
 
 float temperature = 0.0;
 float voltage = 0.0;
-char sms_message[160];
+char sms_message1[160] = "TESTING TEXT MESSAGE";
+char sms_message2[160];
+char *front_sms = sms_message1;
+char *back_sms = sms_message2;
+
 int16_t sms_text_ending_pos = 0; //160 * 5 max length
 int16_t sms_scroll_pos = 0;
 int16_t menu_text_ending_pos = 0;
@@ -235,18 +237,12 @@ uint8_t scroll_mode = SCROLL_MODE_COMPLETE;  //keeps track of scroll state
 uint32_t scroll_pause_start_time = 0; //keeps track of when pause started
 
 //crank up hardwareserial.cpp to 128 to match!
-#define INCOMING1_BUFFER_SIZE 128
-uint8_t incoming1_raw_buffer[INCOMING1_BUFFER_SIZE];
+#define BUFFER_SIZE 128
+uint8_t incoming1_raw_buffer[BUFFER_SIZE];
 uint8_t incoming1_index = 0;
-uint8_t incoming1_decoded_buffer[INCOMING1_BUFFER_SIZE];
-
-#define INCOMING2_BUFFER_SIZE 128
-uint8_t incoming2_raw_buffer[INCOMING2_BUFFER_SIZE];
+uint8_t incoming2_raw_buffer[BUFFER_SIZE];
 uint8_t incoming2_index = 0;
-uint8_t incoming2_decoded_buffer[INCOMING2_BUFFER_SIZE];
-
-#define INCOMING3_BUFFER_SIZE 128
-uint8_t incoming3_raw_buffer[INCOMING3_BUFFER_SIZE];
+uint8_t incoming3_raw_buffer[BUFFER_SIZE];
 uint8_t incoming3_index = 0;
 
 // adc object for battery and temp meter, will use ADC1

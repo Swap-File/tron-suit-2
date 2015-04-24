@@ -1,7 +1,7 @@
 
 void setup() {
 
-	strcpy(sms_message, "TESTING TEXT MESSAGE");
+	
 
 
 	display.begin(SSD1306_SWITCHCAPVCC);
@@ -21,7 +21,7 @@ void setup() {
 	Serial1.begin(115200);  //Gloves	
 	Serial2.begin(57600);  //Xbee	
 	Serial3.begin(115200);  //BT
-
+	
 	//audio library setup
 	AudioMemory(4);
 	fft256_1.windowFunction(AudioWindowHanning256);
@@ -153,9 +153,9 @@ void loop() {
 			b = glove0.color_sensor_B; b /= sum;
 			r *= 256; g *= 256; b *= 256;
 
-			CHSV temp = rgb2hsv_approximate(CRGB(r, g, b));
+			CHSV temp = rgb2hsv_rainbow(CRGB(r, g, b));
 			//temp.v = min(temp.v, 200);
-			temp.s = max(temp.s, 192);
+			//temp.s = max(temp.s, 192);
 			CRGB temp2;
 			hsv2rgb_rainbow(temp, temp2);
 			glove0.output_rgb_led = temp2;

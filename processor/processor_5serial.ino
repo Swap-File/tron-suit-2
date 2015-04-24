@@ -37,7 +37,7 @@ inline void SerialUpdate(void){
 	}
 	if (GloveSend.check()){
 
-	
+
 		uint8_t raw_buffer[10];
 
 		raw_buffer[0] = glove0.output_rgb_led.r;
@@ -73,11 +73,12 @@ inline void SerialUpdate(void){
 			//check for end of packet
 			if (incoming1_raw_buffer[incoming1_index] == 0x00){
 				//try to decode
-				uint8_t decoded_length = COBSdecode(incoming1_raw_buffer, incoming1_index, incoming1_decoded_buffer);
+				uint8_t decoded_buffer[BUFFER_SIZE];
+				uint8_t decoded_length = COBSdecode(incoming1_raw_buffer, incoming1_index, decoded_buffer);
 
 				//check length of decoded data (cleans up a series of 0x00 bytes)
 				if (decoded_length > 0){
-					onPacket1(incoming1_decoded_buffer, decoded_length);
+					onPacket1(decoded_buffer, decoded_length);
 				}
 
 				//reset index
@@ -86,7 +87,7 @@ inline void SerialUpdate(void){
 			else{
 				//read data in until we hit overflow then start over
 				incoming1_index++;
-				if (incoming1_index == INCOMING1_BUFFER_SIZE) incoming1_index = 0;
+				if (incoming1_index == BUFFER_SIZE) incoming1_index = 0;
 			}
 		}
 
@@ -98,11 +99,13 @@ inline void SerialUpdate(void){
 			//check for end of packet
 			if (incoming2_raw_buffer[incoming2_index] == 0x00){
 				//try to decode
-				uint8_t decoded_length = COBSdecode(incoming2_raw_buffer, incoming2_index, incoming2_decoded_buffer);
+
+				uint8_t decoded_buffer[BUFFER_SIZE];
+				uint8_t decoded_length = COBSdecode(incoming2_raw_buffer, incoming2_index, decoded_buffer);
 
 				//check length of decoded data (cleans up a series of 0x00 bytes)
 				if (decoded_length > 0){
-					onPacket2(incoming2_decoded_buffer, decoded_length);
+					onPacket2(decoded_buffer, decoded_length);
 				}
 
 				//reset index
@@ -111,24 +114,28 @@ inline void SerialUpdate(void){
 			else{
 				//read data in until we hit overflow then start over
 				incoming2_index++;
-				if (incoming2_index == INCOMING2_BUFFER_SIZE) incoming2_index = 0;
+				if (incoming2_index == BUFFER_SIZE) incoming2_index = 0;
 
 			}
 		}
+
+
 
 		while (Serial3.available()){
 
 			//read in a byte
 			incoming3_raw_buffer[incoming3_index] = Serial3.read();
 
-			Serial.println(incoming3_raw_buffer[incoming3_index],HEX);
-
 			//check for end of packet
 			if (incoming3_raw_buffer[incoming3_index] == 0x00){
-				Serial.println("hit");
+				//try to decode
+
+				uint8_t decoded_buffer[BUFFER_SIZE];
+				uint8_t decoded_length = COBSdecode(incoming3_raw_buffer, incoming3_index, decoded_buffer);
+
 				//check length of decoded data (cleans up a series of 0x00 bytes)
-				if (incoming3_index > 0){
-					onPacket3(incoming3_raw_buffer, incoming3_index);
+				if (decoded_length > 0){
+					onPacket3(decoded_buffer, decoded_length);
 				}
 
 				//reset index
@@ -137,12 +144,11 @@ inline void SerialUpdate(void){
 			else{
 				//read data in until we hit overflow then start over
 				incoming3_index++;
-				if (incoming3_index == INCOMING3_BUFFER_SIZE) incoming3_index = 0;
+				if (incoming3_index == BUFFER_SIZE) incoming3_index = 0;
 
 			}
 		}
 	}
-
 }
 
 
@@ -177,38 +183,45 @@ inline void onPacket2(const uint8_t* buffer, size_t size)
 inline void onPacket3(const uint8_t* buffer, size_t size)
 {
 
-	if (size != 21){
+	if (size != 7 && size != 71 && size != 91){
+		Serial.print("Size ");
+		Serial.println(size);
+
 		bluetoothstats.local_framing_errors++;
 	}
 	else{
-	
-		uint8_t crc_temp = ctoi(buffer[18]) * 100 + ctoi(buffer[19]) * 10 + ctoi(buffer[20]);
-
-		uint8_t crc = OneWire::crc8(buffer, size - 3);
-	
-		if (crc != crc_temp){
+		uint8_t crc = OneWire::crc8(buffer, size - 1);
+		if (crc != buffer[size - 1]){
 			bluetoothstats.local_crc_errors++;
+			Serial.println("crc BAD");
 		}
-	  else{
+		else{
 			if (bluetoothstats.local_packets_in_per_second < 255){
 				bluetoothstats.local_packets_in_per_second++;
 			}
 
-			CRGB color1temp;
+			if (size == 7){
+				color1 = rgb2hsv_rainbow(CRGB(buffer[0], buffer[1], buffer[2]));
+				color2 = rgb2hsv_rainbow(CRGB(buffer[3], buffer[4], buffer[5]));
+			}
+			else if (size == 71){
+				memcpy(&back_sms[0], &buffer[0], 70);
+			}
+			else if (size == 91){
+				memcpy(&back_sms[70], &buffer[0], 90);
 
-			color1temp.r = (ctoi(buffer[0]) * 100) + (ctoi(buffer[1]) * 10) + ctoi(buffer[2]);
-			color1temp.g = (ctoi(buffer[3]) * 100) + (ctoi(buffer[4]) * 10) + ctoi(buffer[5]);
-			color1temp.b = (ctoi(buffer[6]) * 100) + (ctoi(buffer[7]) * 10) + ctoi(buffer[8]);
+				//tighten up the null terminator
+				int i = 159;
+				while (i > 0){
+					if (back_sms[i--] != 0x20) break;
+				}
+				back_sms[i] = 0;				
 
-			color1 = rgb2hsv_approximate(color1temp);
-
-			CRGB color2temp;
-
-			color2temp.r = (ctoi(buffer[9]) * 100) + (ctoi(buffer[10]) * 10) + ctoi(buffer[11]);
-			color2temp.g = (ctoi(buffer[12]) * 100) + (ctoi(buffer[13]) * 10) + ctoi(buffer[14]);
-			color2temp.b = (ctoi(buffer[15]) * 100) + (ctoi(buffer[16]) * 10) + ctoi(buffer[17]);
-
-			color2 = rgb2hsv_approximate(color2temp);
+				//swap back and front buffers
+				char * temp = front_sms;
+				front_sms = back_sms;
+				back_sms = temp;
+			}
 		}
 	}
 }
@@ -371,7 +384,7 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 				if (current_glove->gloveY <= 0)      menu_map(HAND_DIRECTION_DOWN);
 				else if (current_glove->gloveY >= 7) menu_map(HAND_DIRECTION_UP);
 				else if (current_glove->gloveX <= 0) menu_map(HAND_DIRECTION_RIGHT);
-				else if (current_glove->gloveX >= 7) menu_map(HAND_DIRECTION_LEFT );
+				else if (current_glove->gloveX >= 7) menu_map(HAND_DIRECTION_LEFT);
 				else if (millis() - current_glove->finger_timer < 200) menu_map(HAND_DIRECTION_SHORT_PRESS);
 
 				//disable scroll mode on all other fingers
@@ -394,8 +407,13 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 	}
 }
 
-int16_t ctoi(char input){
-switch (input) {
+uint8_t combine3(uint8_t input1, uint8_t input2, uint8_t input3){
+	return (ctoi(input1) * 100) + (ctoi(input2) * 10) + ctoi(input3);
+}
+
+
+uint8_t ctoi(char input){
+	switch (input) {
 	case '1':		return 1;
 	case '2':		return 2;
 	case '3':		return 3;
@@ -407,4 +425,70 @@ switch (input) {
 	case '9':		return 9;
 	default:		return 0;
 	}
+}
+
+CHSV rgb2hsv_rainbow(CRGB input_color){
+
+	CHSV output_color;
+
+	uint8_t maximum = max(input_color.r, max(input_color.g, input_color.b));
+	uint8_t minimum = min(input_color.r, min(input_color.g, input_color.b));
+
+	output_color.v = maximum;
+	uint8_t delta = maximum - minimum;
+
+	output_color.s = (maximum == 0) ? 0 : (255 * delta / maximum);
+
+	if (maximum == minimum) {
+		output_color.h = 0;
+	}
+	else {
+		if (maximum == input_color.r){
+			//Serial.println("red is max");
+			if (input_color.g >= input_color.b){
+				if ((input_color.r - input_color.g) <= (delta / 3)){
+					//Serial.println("32-64");
+					output_color.h = map((input_color.r - input_color.g), delta / 3, 0, 32, 64);
+				}
+				else{
+					//Serial.println("0-32");
+					output_color.h = map((input_color.r - input_color.g), delta, delta / 3, 0, 32);
+				}
+			}
+			else{
+				//Serial.println("208-255");
+				output_color.h = map((input_color.r - input_color.b), 0, delta, 208, 255);
+			}
+		}
+		else if (maximum == input_color.g){
+			//Serial.println("green is max");
+			if (input_color.r >= input_color.b){
+				//Serial.println("64-96");
+				output_color.h = map((input_color.g - input_color.r), 0, delta, 64, 96);
+			}
+			else{
+				if (input_color.g - input_color.b <= delta / 3){
+					//Serial.println("96-128");
+					output_color.h = map((input_color.g - input_color.b), delta, delta / 3, 96, 128);
+				}
+				else{
+					//Serial.println("128-132?");
+					output_color.h = map((input_color.g - input_color.b), delta / 3, delta, 128, 160);
+				}
+			}
+		}
+		else if (maximum == input_color.b){
+			//Serial.println("blue is max");
+			if (input_color.g > input_color.r){
+				//Serial.println("132?-160");
+				output_color.h = map((input_color.b - input_color.g), -delta / 3, delta, 128, 160);
+			}
+			else{
+				//Serial.println("160-208");
+				output_color.h = map((input_color.b - input_color.r), delta, 0, 160, 208);
+			}
+		}
+	}
+
+	return output_color;
 }

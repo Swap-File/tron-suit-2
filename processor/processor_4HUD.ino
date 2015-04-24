@@ -43,12 +43,12 @@ inline void draw_HUD(void){
 	//sms display
 	display.drawRect(sms_location_x - 1, sms_location_y - 1, 18, 10, WHITE);
 	display.setCursor(sms_location_x + 16 + sms_scroll_pos, sms_location_y);
-	display.print(sms_message);
+	display.print(front_sms);
 	sms_text_ending_pos = display.getCursorX(); //save menu text length for elsewhere
 	//pad out message for contiual scrolling in the HUD, gives me more text at once
 	display.setCursor(sms_text_ending_pos + 19, sms_location_y );
 	for (uint8_t i = 0; i < 7; i++){
-		display.print(sms_message[i]);
+		display.print(front_sms[i]);
 	}
 
 
