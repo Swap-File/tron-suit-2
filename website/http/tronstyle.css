@@ -1,0 +1,34 @@
+body {
+    font-family: Sans-Serif;
+    max-width: 450px;
+    padding-top: 3px;
+    padding-left: 3px;
+}
+/* gradient specific stuff */
+.gradient {
+    height: 10px;
+    background: linear-gradient(to right, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0));
+}
+/* box outline */
+.gradient, .boxed  {
+    border-style: solid;
+    border-width: 1px;
+    border-color: black;
+}
+/* std button */
+.button {
+    width: 150px;
+}
+/* width of stuff */
+.gradient, .text_input, .boxed{
+ width:100%;
+}
+
+/* grayed out stuff */
+body, #old_text, #old_color1, #old_color2{
+background-color: #F0F0F0;
+}
+
+.boxed {
+height: 200px;
+}
