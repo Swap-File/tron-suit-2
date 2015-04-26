@@ -1,6 +1,5 @@
 inline void SerialUpdate(void){
 	if (DiscSend3.check()){
-		total_packets_out++;
 		disc0.packet_beam--;
 		//if (disc0.packet_beam > 16)  disc0.packet_beam = 16;
 
@@ -165,11 +164,10 @@ inline void onPacket2(const uint8_t* buffer, size_t size)
 		}
 		else{
 
+
 			if (discstats.local_packets_in_per_second < 255){
 				discstats.local_packets_in_per_second++;
 			}
-
-			total_packets_in++;
 
 			disc0.battery_voltage = buffer[6];
 			disc0.cpu_temp = buffer[7];
@@ -183,45 +181,136 @@ inline void onPacket2(const uint8_t* buffer, size_t size)
 inline void onPacket3(const uint8_t* buffer, size_t size)
 {
 
-	if (size != 7 && size != 71 && size != 91){
-		Serial.print("Size ");
-		Serial.println(size);
-
+	if (size != 2 && size != 7 && size != 71 && size != 91){
 		bluetoothstats.local_framing_errors++;
 	}
 	else{
 		uint8_t crc = OneWire::crc8(buffer, size - 1);
 		if (crc != buffer[size - 1]){
 			bluetoothstats.local_crc_errors++;
-			Serial.println("crc BAD");
 		}
 		else{
 			if (bluetoothstats.local_packets_in_per_second < 255){
 				bluetoothstats.local_packets_in_per_second++;
 			}
 
+
 			if (size == 7){
+				//packet confirmation
+				Serial3.write(0x00);
+				Serial3.write(0xFF);
+				Serial3.write(0x00);
+
 				color1 = rgb2hsv_rainbow(CRGB(buffer[0], buffer[1], buffer[2]));
 				color2 = rgb2hsv_rainbow(CRGB(buffer[3], buffer[4], buffer[5]));
+
 			}
 			else if (size == 71){
+				//packet confirmation
+				Serial3.write(0x00);
+				Serial3.write(0xFF);
+				Serial3.write(0x00);
+
 				memcpy(&back_sms[0], &buffer[0], 70);
+
 			}
 			else if (size == 91){
+				//packet confirmation
+				Serial3.write(0x00);
+				Serial3.write(0xFF);
+				Serial3.write(0x00);
+
 				memcpy(&back_sms[70], &buffer[0], 90);
 
 				//tighten up the null terminator
-				int i = 159;
+				int i = 160;
 				while (i > 0){
-					if (back_sms[i--] != 0x20) break;
+					if (back_sms[--i] != 0x20) break;
 				}
-				back_sms[i] = 0;				
+				back_sms[++i] = 0;
 
 				//swap back and front buffers
 				char * temp = front_sms;
 				front_sms = back_sms;
 				back_sms = temp;
+
+
 			}
+			else if (size == 2){
+				if (buffer[0] == 0x00){
+					Serial.println("got request!");
+
+					uint8_t raw_buffer[128];
+
+					CRGB temp_color;
+					hsv2rgb_rainbow(color1, temp_color);
+					raw_buffer[0] = temp_color.r;
+					raw_buffer[1] = temp_color.g;
+					raw_buffer[2] = temp_color.b;
+					hsv2rgb_rainbow(color2, temp_color);
+					raw_buffer[3] = temp_color.r;
+					raw_buffer[4] = temp_color.g;
+					raw_buffer[5] = temp_color.b;
+
+
+					raw_buffer[6] = glovestats.local_packets_in_per_second_glove0;
+					raw_buffer[7] = glovestats.local_packets_in_per_second_glove1;
+					raw_buffer[8] = glovestats.local_packets_out_per_second;
+					raw_buffer[9] = (glovestats.total_lost_packets & 0xff);
+					raw_buffer[10] = glove0.cpu_temp;
+					raw_buffer[11] = glove0.cpu_usage;
+					raw_buffer[12] = glove1.cpu_temp;
+					raw_buffer[13] = glove1.cpu_usage;
+
+					raw_buffer[14] = discstats.local_packets_in_per_second;
+					raw_buffer[15] = discstats.local_packets_out_per_second;
+					raw_buffer[16] = (discstats.total_lost_packets & 0xff);
+					raw_buffer[17] = disc0.cpu_temp;
+					raw_buffer[18] = disc0.cpu_usage;
+
+					raw_buffer[19] = disc0.battery_voltage;
+					raw_buffer[20] = disc0.cpu_temp;
+					raw_buffer[21] = (uint8_t)(voltage * 100);
+					raw_buffer[22] = (uint8_t)(temperature * 100);
+					raw_buffer[22] = (uint8_t)(average_time / 100); //cpu usage
+
+
+					raw_buffer[23] = (((glove0.yaw_compensated) >> 8) & 0xff);
+					raw_buffer[24] = (((glove0.yaw_compensated) >> 0) & 0xff);
+					raw_buffer[25] = (((glove0.pitch_compensated) >> 8) & 0xff);
+					raw_buffer[26] = (((glove0.pitch_compensated) >> 0) & 0xff);
+					raw_buffer[27] = (((glove0.roll_compensated) >> 8) & 0xff);
+					raw_buffer[28] = (((glove0.roll_compensated) >> 0) & 0xff);
+
+					raw_buffer[29] = (((glove1.yaw_compensated) >> 8) & 0xff);
+					raw_buffer[30] = (((glove1.yaw_compensated) >> 0) & 0xff);
+					raw_buffer[31] = (((glove1.pitch_compensated) >> 8) & 0xff);
+					raw_buffer[32] = (((glove1.pitch_compensated) >> 0) & 0xff);
+					raw_buffer[33] = (((glove1.roll_compensated) >> 8) & 0xff);
+					raw_buffer[34] = (((glove1.roll_compensated) >> 0) & 0xff);
+
+					raw_buffer[35] = 0x00;
+
+					if (glove0.finger1) bitSet(raw_buffer[35], 0);
+					if (glove0.finger2) bitSet(raw_buffer[35], 1);
+					if (glove0.finger3) bitSet(raw_buffer[35], 2);
+					if (glove0.finger4) bitSet(raw_buffer[35], 3);
+					if (glove1.finger1) bitSet(raw_buffer[35], 4);
+					if (glove1.finger2) bitSet(raw_buffer[35], 5);
+					if (glove1.finger3) bitSet(raw_buffer[35], 6);
+					if (glove1.finger4) bitSet(raw_buffer[35], 7);
+
+					raw_buffer[36] = OneWire::crc8(raw_buffer, 36);
+
+					Serial3.write(raw_buffer, 37);
+
+
+				}
+
+
+			}
+
+
 		}
 	}
 }

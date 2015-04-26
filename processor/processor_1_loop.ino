@@ -1,14 +1,8 @@
 
 void setup() {
 
-	
-
-
 	display.begin(SSD1306_SWITCHCAPVCC);
 	display.display();
-
-
-
 
 	//must go first so Serial.begin can override pins!!!
 	LEDS.addLeds<OCTOWS2811>(actual_output, NUM_LEDS_PER_STRIP);
@@ -21,7 +15,7 @@ void setup() {
 	Serial1.begin(115200);  //Gloves	
 	Serial2.begin(57600);  //Xbee	
 	Serial3.begin(115200);  //BT
-	
+
 	//audio library setup
 	AudioMemory(4);
 	fft256_1.windowFunction(AudioWindowHanning256);
@@ -37,10 +31,9 @@ void setup() {
 	display.setTextColor(WHITE);
 	display.setTextWrap(false);
 
-	
 }
 
-long int average_time;
+uint32_t average_time;
 
 void loop() {
 
@@ -48,9 +41,7 @@ void loop() {
 	long start_time = micros();
 
 
-	if (YPRdisplay.check()){
-		
-	
+	if (ADC_Switch_Sample.check()){
 
 		switch (adc1_mode){
 		case BATTERY_METER:
@@ -72,10 +63,10 @@ void loop() {
 
 		//keep re-initing the screen for hot plug support.
 		display.reinit();
-		
+
 
 		if (0){
-				
+
 			Serial.print("ypr\t");
 			Serial.print(sin(glove1.roll_raw * PI / 18000));
 			Serial.print("ypr\t");
@@ -105,11 +96,13 @@ void loop() {
 
 
 	if (FPSdisplay.check()){
-		
 
-		Serial.print(average_time);
+
+		Serial.print((average_time / 100));
 		Serial.print(" ");
-		Serial.println(total_packets_out - total_packets_in);
+		Serial.print(glovestats.total_lost_packets);
+		Serial.print(" ");
+		Serial.println(discstats.total_lost_packets);
 
 
 		glovestats.total_lost_packets += (glovestats.local_packets_out_per_second << 1); //add in both gloves
@@ -118,16 +111,20 @@ void loop() {
 		glovestats.local_packets_in_per_second_glove0 = 0;
 		glovestats.local_packets_in_per_second_glove1 = 0;
 		glovestats.local_packets_out_per_second = 0;
+		if (glovestats.total_lost_packets > 255) glovestats.total_lost_packets = 0;
+
 
 		discstats.total_lost_packets += discstats.local_packets_out_per_second;
 		discstats.total_lost_packets -= discstats.local_packets_in_per_second;
-		discstats.local_packets_in_per_second = 0;
 		discstats.local_packets_out_per_second = 0;
+		discstats.local_packets_in_per_second = 0;
+		if (discstats.total_lost_packets > 255) discstats.total_lost_packets = 0;
 
 		bluetoothstats.total_lost_packets += bluetoothstats.local_packets_out_per_second;
 		bluetoothstats.total_lost_packets -= bluetoothstats.local_packets_in_per_second;
 		bluetoothstats.local_packets_in_per_second = 0;
 		bluetoothstats.local_packets_out_per_second = 0;
+		if (bluetoothstats.total_lost_packets > 255) bluetoothstats.total_lost_packets = 0;
 
 		//LEDS.getFPS();
 		//cpu_usage = 100 - (idle_microseconds / 10000);
@@ -139,13 +136,13 @@ void loop() {
 	}
 
 	if (glove1.finger3 == 1){
-		
+
 		glove0.output_white_led = 0x01;
-		
+
 
 		uint32_t sum = glove0.color_sensor_Clear;
 		//Serial.println(sum);
-		if (sum > 3000 && sum <  20000){
+		if (sum > 3000 && sum < 20000){
 
 			float r, g, b;
 			r = glove0.color_sensor_R; r /= sum;
@@ -193,13 +190,13 @@ void loop() {
 	if ((glove1.finger1 || glove1.finger2) && menu_mode == MENU_MAG){
 		disc0.outer_magnitude_requested = glove1.calculated_mag;
 	}
-	
+
 
 	if ((glove1.finger1 || glove1.finger2) && menu_mode == MENU_SPIN){
 		disc0.inner_offset_requested = glove1.disc_offset;
 		disc0.outer_offset_requested = glove1.disc_offset;
 	}
-	
+
 
 	if (menu_mode != MENU_MAG && menu_mode != MENU_SPIN){
 		disc0.outer_magnitude_requested = 16;

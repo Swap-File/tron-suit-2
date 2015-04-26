@@ -46,9 +46,6 @@ uint8_t menu_mode = MENU_DEFAULT;
 
 boolean flow_direction_positive = true;
 
-uint32_t total_packets_in = 0;
-uint32_t total_packets_out = 0;
-
 typedef struct {
 	boolean gesture_in_progress = false;
 	uint8_t gesture_finger;
@@ -276,7 +273,7 @@ uint8_t EQdisplayValue8[8]; //max vals for normalization over time
 
 Metro FPSdisplay = Metro(1000);
 Metro glovedisplayfade = Metro(10);
-Metro YPRdisplay = Metro(100);
+Metro ADC_Switch_Sample = Metro(100);
 Metro ScrollSpeed = Metro(40);
 Metro GloveSend = Metro(10);
 Metro DiscSend = Metro(50);
