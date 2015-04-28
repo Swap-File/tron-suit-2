@@ -100,7 +100,7 @@ void loop() {
 
 		Serial.print((average_time / 100));
 		Serial.print(" ");
-		Serial.print(glovestats.total_lost_packets);
+		Serial.print(glovestats.local_packets_out_per_second);
 		Serial.print(" ");
 		Serial.println(discstats.total_lost_packets);
 
@@ -108,6 +108,11 @@ void loop() {
 		glovestats.total_lost_packets += (glovestats.local_packets_out_per_second << 1); //add in both gloves
 		glovestats.total_lost_packets -= glovestats.local_packets_in_per_second_glove0;
 		glovestats.total_lost_packets -= glovestats.local_packets_in_per_second_glove1;
+
+		glovestats.saved_local_packets_in_per_second_glove0 = glovestats.local_packets_in_per_second_glove0;
+		glovestats.saved_local_packets_in_per_second_glove1 = glovestats.local_packets_in_per_second_glove1;
+		glovestats.saved_local_packets_out_per_second = glovestats.local_packets_out_per_second;
+
 		glovestats.local_packets_in_per_second_glove0 = 0;
 		glovestats.local_packets_in_per_second_glove1 = 0;
 		glovestats.local_packets_out_per_second = 0;
@@ -116,6 +121,10 @@ void loop() {
 
 		discstats.total_lost_packets += discstats.local_packets_out_per_second;
 		discstats.total_lost_packets -= discstats.local_packets_in_per_second;
+
+		discstats.saved_local_packets_out_per_second = discstats.local_packets_out_per_second;
+		discstats.saved_local_packets_in_per_second = discstats.local_packets_in_per_second;
+
 		discstats.local_packets_out_per_second = 0;
 		discstats.local_packets_in_per_second = 0;
 		if (discstats.total_lost_packets > 255) discstats.total_lost_packets = 0;
@@ -338,11 +347,12 @@ void loop() {
 
 
 
-CHSV map_hsv(uint8_t input, uint8_t in_min, uint8_t in_max, CHSV* out_min, CHSV* out_max){
+CHSV map_hsv(uint8_t input, uint8_t in_min, uint8_t in_max, CHSV* out_starting, CHSV* out_ending){
+
 	return CHSV(
-		(input - in_min) * (out_max->h - out_min->h) / (in_max - in_min) + out_min->h, \
-		(input - in_min) * (out_max->s - out_min->s) / (in_max - in_min) + out_min->s, \
-		(input - in_min) * (out_max->v - out_min->v) / (in_max - in_min) + out_min->v);
+	(input - in_min) * (out_ending->h - out_starting->h) / (in_max - in_min) + out_starting->h, \
+	(input - in_min) * (out_ending->s - out_starting->s) / (in_max - in_min) + out_starting->s, \
+	(input - in_min) * (out_ending->v - out_starting->v) / (in_max - in_min) + out_starting->v);
 }
 
 

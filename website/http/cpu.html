@@ -1,0 +1,140 @@
+<html>
+<head>
+    <title>Tron Suit 2.0</title>
+    <link rel="stylesheet" type="text/css" href="tronstyle.css">
+</head>
+<body>
+    CPU Usage:
+    <div id="cpu_div" style="height: 400px; width: 100%"></div>
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
+    <script src="http://code.highcharts.com/highcharts.js"></script>
+</body>
+</html>
+
+<script>
+	refresh_rate = 2000;
+    datapoints = 8;
+    buffering = 0;
+    last_timestamp = 0;
+
+    get_more_data();
+
+    function get_more_data() {
+
+        jQuery.get('cpu_get.php', null, function(tsv) {
+
+            var tsv = tsv.split(/\n/g);
+            var line = tsv[0].split(/\t/g);
+
+            var timestamp = 1000 * Number(line[0]);
+
+            var glove0cpu = Number(line[1]);
+            var glove1cpu = Number(line[2]);
+            var disc0cpu = Number(line[3]);
+            var suit0cpu = Number(line[4]);
+           
+			//how many points are we loading into the graphs?
+			var points_to_load = 1;
+		
+			//if this is our first time through or if we were buffering, load extra points
+            if (cpu_chart.options.series[0].visible == false || (timestamp - last_timestamp ) > (datapoints * refresh_rate)) {
+                points_to_load = datapoints;
+            }
+
+			//add datapoints without redrawing
+			if (last_timestamp < timestamp) {
+				for (var i = 0; i < points_to_load; i++) {
+					cpu_chart.series[0].addPoint([timestamp, glove0cpu], false, true);
+					cpu_chart.series[1].addPoint([timestamp, glove1cpu], false, true);
+					cpu_chart.series[2].addPoint([timestamp, disc0cpu], false, true);
+					cpu_chart.series[3].addPoint([timestamp, suit0cpu], false, true);
+				}
+			}
+
+			//set data as visible if this is our first time
+            if (cpu_chart.options.series[0].visible == false) {
+                cpu_chart.series[0].show();
+                cpu_chart.series[1].show();
+                cpu_chart.series[2].show();
+                cpu_chart.series[3].show();
+            }
+			
+            //redraw here
+            cpu_chart.redraw();
+
+            last_timestamp = timestamp;
+        });
+        setTimeout(get_more_data, refresh_rate);
+    }
+
+    jQuery(function($) {
+	   
+		
+		//cpu options
+        var cpu_options = {
+            chart: {
+                renderTo: 'cpu_div',
+                defaultSeriesType: 'spline',
+                zoomType: 'x',
+            },
+            title: {
+                text: 'CPU Usage in Percent'
+            },
+            xAxis: {
+
+                title: {
+                    text: null
+                },
+                type: 'datetime',
+                "labels": {
+                    "format": "{value:%m-%d-%y<br>%I:%M:%S%p}"
+                }
+            },
+            yAxis: {
+                title: {
+                    text: null
+                },
+                plotLines: [{
+                    value: 0,
+                    width: 1,
+                    color: '#808080'
+                }]
+            },
+            tooltip: {
+                headerFormat: '<b>{series.name}</b><br>',
+                pointFormat: '{point.x:%Y-%m-%d} <br> {point.x:%I:%M:%S %p} <br> {point.y}'
+            },
+            plotOptions: {
+                series: {
+                    marker: {
+                        enabled: true
+                    }
+                }
+            },
+            legend: {
+                layout: 'horizontal',
+            },
+            series: [{
+                name: 'Left Glove',
+                visible: false
+            }, {
+                name: 'Right Glove',
+                visible: false
+            }, {
+                name: 'Disc',
+                visible: false
+            }, {
+                name: 'Jacket',
+                visible: false
+            }]
+        };
+
+        cpu_options.series[0].data = Array.apply(null, new Array(datapoints)).map(Number.prototype.valueOf,0);
+        cpu_options.series[1].data = Array.apply(null, new Array(datapoints)).map(Number.prototype.valueOf,0);
+        cpu_options.series[2].data = Array.apply(null, new Array(datapoints)).map(Number.prototype.valueOf,0);
+        cpu_options.series[3].data = Array.apply(null, new Array(datapoints)).map(Number.prototype.valueOf,0);
+
+        cpu_chart = new Highcharts.Chart(cpu_options);
+				
+    });  
+</script>

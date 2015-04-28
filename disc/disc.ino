@@ -640,12 +640,6 @@ void increment_stream(){
 	}
 }
 
-CHSV map_hsv(uint8_t input, uint8_t in_min, uint8_t in_max, CHSV* out_min, CHSV* out_max){
-	return CHSV(
-		(input - in_min) * (out_max->h - out_min->h) / (in_max - in_min) + out_min->h, \
-		(input - in_min) * (out_max->s - out_min->s) / (in_max - in_min) + out_min->s, \
-		(input - in_min) * (out_max->v - out_min->v) / (in_max - in_min) + out_min->v);
-}
 
 void mask_blur_and_output(uint8_t i, CHSV* color, uint8_t current_pixel, uint8_t magnitude){
 

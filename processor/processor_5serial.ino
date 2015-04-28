@@ -169,6 +169,8 @@ inline void onPacket2(const uint8_t* buffer, size_t size)
 				discstats.local_packets_in_per_second++;
 			}
 
+			disc0.cpu_usage = buffer[5];
+
 			disc0.battery_voltage = buffer[6];
 			disc0.cpu_temp = buffer[7];
 			disc0.crc_errors = buffer[8];
@@ -252,29 +254,28 @@ inline void onPacket3(const uint8_t* buffer, size_t size)
 					raw_buffer[4] = temp_color.g;
 					raw_buffer[5] = temp_color.b;
 
+					raw_buffer[6] = glove0.cpu_usage;
+					raw_buffer[7] = glove1.cpu_usage;
+					raw_buffer[8] = disc0.cpu_usage;
+					raw_buffer[9] = (int8_t)(average_time / 100); //cpu usage
 
-					raw_buffer[6] = glovestats.local_packets_in_per_second_glove0;
-					raw_buffer[7] = glovestats.local_packets_in_per_second_glove1;
-					raw_buffer[8] = glovestats.local_packets_out_per_second;
-					raw_buffer[9] = (glovestats.total_lost_packets & 0xff);
 					raw_buffer[10] = glove0.cpu_temp;
-					raw_buffer[11] = glove0.cpu_usage;
-					raw_buffer[12] = glove1.cpu_temp;
-					raw_buffer[13] = glove1.cpu_usage;
+					raw_buffer[11] = glove1.cpu_temp;
+					raw_buffer[12] = disc0.cpu_temp;
+					raw_buffer[13] = (uint8_t)(temperature * 100);
 
-					raw_buffer[14] = discstats.local_packets_in_per_second;
-					raw_buffer[15] = discstats.local_packets_out_per_second;
-					raw_buffer[16] = (discstats.total_lost_packets & 0xff);
-					raw_buffer[17] = disc0.cpu_temp;
-					raw_buffer[18] = disc0.cpu_usage;
+					raw_buffer[14] = disc0.battery_voltage;
+					raw_buffer[15] = (uint8_t)(voltage * 100);
 
-					raw_buffer[19] = disc0.battery_voltage;
-					raw_buffer[20] = disc0.cpu_temp;
-					raw_buffer[21] = (uint8_t)(voltage * 100);
-					raw_buffer[22] = (uint8_t)(temperature * 100);
-					raw_buffer[22] = (uint8_t)(average_time / 100); //cpu usage
-
-
+					raw_buffer[16] = glovestats.saved_local_packets_in_per_second_glove0;
+					raw_buffer[17] = glovestats.saved_local_packets_in_per_second_glove1;
+					raw_buffer[18] = glovestats.saved_local_packets_out_per_second;
+					raw_buffer[19] = (glovestats.total_lost_packets & 0xff);
+				
+					raw_buffer[20] = discstats.saved_local_packets_in_per_second;
+					raw_buffer[21] = discstats.saved_local_packets_out_per_second;
+					raw_buffer[22] = (discstats.total_lost_packets & 0xff);
+						
 					raw_buffer[23] = (((glove0.yaw_compensated) >> 8) & 0xff);
 					raw_buffer[24] = (((glove0.yaw_compensated) >> 0) & 0xff);
 					raw_buffer[25] = (((glove0.pitch_compensated) >> 8) & 0xff);

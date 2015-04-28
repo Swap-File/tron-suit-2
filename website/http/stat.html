@@ -1,0 +1,161 @@
+
+<html>
+<head>
+    <title>Tron Suit 2.0</title>
+    <link rel="stylesheet" type="text/css" href="tronstyle.css">
+</head>
+<body>
+    Network status:
+    <div id="stat_div" style="height: 400px; width:100%"></div>
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
+    <script src="http://code.highcharts.com/highcharts.js"></script>
+</body>
+</html>
+
+
+<script>
+	refresh_rate = 3000;
+    datapoints = 8;
+    buffering = 0;
+    last_timestamp = 0;
+
+    get_more_data();
+
+    function get_more_data() {
+
+        jQuery.get('stat_get.php', null, function(tsv) {
+
+            var tsv = tsv.split(/\n/g);
+            var line = tsv[0].split(/\t/g);
+
+            var timestamp = 1000 * Number(line[0]);
+
+            var gloveppsout = Number(line[1]);
+            var glove0ppsin = Number(line[2]);
+            var glove1ppsin = Number(line[3]);
+            var glovelost = Number(line[4]);
+			
+            var disc0ppsout = Number(line[5]);
+            var disc0ppsin = Number(line[6]);
+			var disc0lost = Number(line[7]);
+			
+			//how many points are we loading into the graphs?
+			var points_to_load = 1;
+			
+			if ((timestamp - last_timestamp ) > (datapoints * refresh_rate)) {
+                points_to_load = datapoints;
+            }
+			
+			//add datapoints without redrawing
+			if (last_timestamp < timestamp) {
+				for (var i = 0; i < points_to_load; i++) {
+					stat_chart.series[0].addPoint([timestamp, gloveppsout], false, true);
+					stat_chart.series[1].addPoint([timestamp, glove0ppsin], false, true);
+					stat_chart.series[2].addPoint([timestamp, glove1ppsin], false, true);
+					stat_chart.series[3].addPoint([timestamp, glovelost], false, true);
+					stat_chart.series[4].addPoint([timestamp, disc0ppsout], false, true);
+					stat_chart.series[5].addPoint([timestamp, disc0ppsin], false, true);
+					stat_chart.series[6].addPoint([timestamp, disc0lost], false, true);
+				}
+			}
+
+			//set data as visible if this is our first time
+ 		
+            if (stat_chart.options.series[0].visible == false) {
+                stat_chart.series[0].show();
+                stat_chart.series[1].show();
+                stat_chart.series[2].show();
+                stat_chart.series[3].show();
+				stat_chart.series[4].show();
+                stat_chart.series[5].show();
+				stat_chart.series[6].show();
+            }
+			
+            //redraw here
+			stat_chart.redraw();
+			
+            last_timestamp = timestamp;
+        });
+        setTimeout(get_more_data, refresh_rate);
+    }
+
+    jQuery(function($) {
+			
+		   var options = {
+            chart: {
+                renderTo: 'stat_div',
+                defaultSeriesType: 'spline',
+                zoomType: 'x',
+            },
+            title: {
+                text: 'Packet Speed and Loss Data:'
+            },
+            xAxis: {
+
+                title: {
+                    text: 'Time'
+                },
+                type: 'datetime',
+                "labels": {
+                    "format": "{value:%m-%d-%y<br>%I:%M:%S%p}"
+                }
+            },
+            yAxis: {
+                title: {
+                    text: null
+                },
+                plotLines: [{
+                    value: 0,
+                    width: 1,
+                    color: '#808080'
+                }]
+            },
+            tooltip: {
+                headerFormat: '<b>{series.name}</b><br>',
+                pointFormat: '{point.x:%Y-%m-%d} <br> {point.x:%I:%M:%S %p} <br> {point.y}'
+            },
+            plotOptions: {
+                series: {
+                    marker: {
+                        enabled: true
+                    }
+                }
+            },
+            legend: {
+                layout: 'horizontal',
+            },
+            series: [{
+                name: 'Glove Out',
+                visible: false
+            }, {
+                name: 'L Glove In',
+                visible: false
+            }, {
+                name: 'R Glove In',
+                visible: false
+            }, {
+                name: 'Glove Lost',
+                visible: false
+            }, {
+                name: 'Disc Out',
+                visible: false
+            }, {
+                name: 'Disc In',
+                visible: false
+            }, {
+                name: 'Disc Lost',
+                visible: false
+            }]
+        };
+
+        options.series[0].data = Array.apply(null, new Array(datapoints)).map(Number.prototype.valueOf,0);
+        options.series[1].data = Array.apply(null, new Array(datapoints)).map(Number.prototype.valueOf,0);
+        options.series[2].data = Array.apply(null, new Array(datapoints)).map(Number.prototype.valueOf,0);
+        options.series[3].data = Array.apply(null, new Array(datapoints)).map(Number.prototype.valueOf,0);
+        options.series[4].data = Array.apply(null, new Array(datapoints)).map(Number.prototype.valueOf,0);
+        options.series[5].data = Array.apply(null, new Array(datapoints)).map(Number.prototype.valueOf,0);
+		options.series[6].data = Array.apply(null, new Array(datapoints)).map(Number.prototype.valueOf,0);
+		
+        stat_chart = new Highcharts.Chart(options);
+    });
+</script>

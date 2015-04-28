@@ -1,0 +1,155 @@
+
+<html>
+<head>
+    <title>Tron Suit 2.0</title>
+    <link rel="stylesheet" type="text/css" href="tronstyle.css">
+</head>
+<body>
+    Glove Yaw Pitch Roll:
+    <div id="ypr_div" style="height: 400px; width:100%"></div>
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
+    <script src="http://code.highcharts.com/highcharts.js"></script>
+</body>
+</html>
+
+
+<script>
+	refresh_rate = 3000;
+    datapoints = 8;
+    buffering = 0;
+    last_timestamp = 0;
+
+    get_more_data();
+
+    function get_more_data() {
+
+        jQuery.get('ypr_get.php', null, function(tsv) {
+
+            var tsv = tsv.split(/\n/g);
+            var line = tsv[0].split(/\t/g);
+
+            var timestamp = 1000 * Number(line[0]);
+
+            var glove0yaw = Number(line[1]);
+            var glove0pitch = Number(line[2]);
+            var glove0roll = Number(line[3]);
+
+            var glove1yaw = Number(line[4]);
+            var glove1pitch = Number(line[5]);
+            var glove1roll = Number(line[6]);
+
+		
+			//how many points are we loading into the graphs?
+			var points_to_load = 1;
+			
+			if ((timestamp - last_timestamp ) > (datapoints * refresh_rate)) {
+                points_to_load = datapoints;
+            }
+			
+			//add datapoints without redrawing
+			if (last_timestamp < timestamp) {
+				for (var i = 0; i < points_to_load; i++) {
+					ypr_chart.series[0].addPoint([timestamp, glove0yaw], false, true);
+					ypr_chart.series[1].addPoint([timestamp, glove0pitch], false, true);
+					ypr_chart.series[2].addPoint([timestamp, glove0roll], false, true);
+					ypr_chart.series[3].addPoint([timestamp, glove1yaw], false, true);
+					ypr_chart.series[4].addPoint([timestamp, glove1pitch], false, true);
+					ypr_chart.series[5].addPoint([timestamp, glove1roll], false, true);
+				}
+			}
+
+			//set data as visible if this is our first time
+ 		
+            if (ypr_chart.options.series[0].visible == false) {
+                ypr_chart.series[0].show();
+                ypr_chart.series[1].show();
+                ypr_chart.series[2].show();
+                ypr_chart.series[3].show();
+				ypr_chart.series[4].show();
+                ypr_chart.series[5].show();
+            }
+			
+            //redraw here
+			ypr_chart.redraw();
+			
+            last_timestamp = timestamp;
+        });
+        setTimeout(get_more_data, refresh_rate);
+    }
+
+    jQuery(function($) {
+			
+		   var options = {
+            chart: {
+                renderTo: 'ypr_div',
+                defaultSeriesType: 'spline',
+                zoomType: 'x',
+            },
+            title: {
+                text: 'Glove Data:'
+            },
+            xAxis: {
+
+                title: {
+                    text: 'Time'
+                },
+                type: 'datetime',
+                "labels": {
+                    "format": "{value:%m-%d-%y<br>%I:%M:%S%p}"
+                }
+            },
+            yAxis: {
+                title: {
+                    text: null
+                },
+                plotLines: [{
+                    value: 0,
+                    width: 1,
+                    color: '#808080'
+                }]
+            },
+            tooltip: {
+                headerFormat: '<b>{series.name}</b><br>',
+                pointFormat: '{point.x:%Y-%m-%d} <br> {point.x:%I:%M:%S %p} <br> {point.y}'
+            },
+            plotOptions: {
+                series: {
+                    marker: {
+                        enabled: true
+                    }
+                }
+            },
+            legend: {
+                layout: 'horizontal',
+            },
+            series: [{
+                name: 'Left Glove Yaw',
+                visible: false
+            }, {
+                name: 'Pitch',
+                visible: false
+            }, {
+                name: 'Roll',
+                visible: false
+            }, {
+                name: 'Right Glove Yaw',
+                visible: false
+            }, {
+                name: 'Pitch',
+                visible: false
+            }, {
+                name: 'Roll',
+                visible: false
+            }]
+        };
+
+        options.series[0].data = Array.apply(null, new Array(datapoints)).map(Number.prototype.valueOf,0);
+        options.series[1].data = Array.apply(null, new Array(datapoints)).map(Number.prototype.valueOf,0);
+        options.series[2].data = Array.apply(null, new Array(datapoints)).map(Number.prototype.valueOf,0);
+        options.series[3].data = Array.apply(null, new Array(datapoints)).map(Number.prototype.valueOf,0);
+        options.series[4].data = Array.apply(null, new Array(datapoints)).map(Number.prototype.valueOf,0);
+        options.series[5].data = Array.apply(null, new Array(datapoints)).map(Number.prototype.valueOf,0);
+		
+        ypr_chart = new Highcharts.Chart(options);
+    });
+</script>

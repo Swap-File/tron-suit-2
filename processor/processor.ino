@@ -140,6 +140,9 @@ typedef struct {
 	uint8_t local_packets_in_per_second = 0;
 	uint8_t local_packets_out_per_second = 0;
 
+	uint8_t saved_local_packets_in_per_second = 0;
+	uint8_t saved_local_packets_out_per_second = 0;
+
 	uint8_t local_framing_errors = 0;
 	uint8_t local_crc_errors = 0;
 
@@ -151,6 +154,10 @@ typedef struct {
 	uint8_t local_packets_in_per_second_glove0 = 0;
 	uint8_t local_packets_in_per_second_glove1 = 0;
 	uint8_t local_packets_out_per_second = 0;
+
+	uint8_t  saved_local_packets_in_per_second_glove0 = 0;
+	uint8_t  saved_local_packets_in_per_second_glove1 = 0;
+	uint8_t  saved_local_packets_out_per_second = 0;
 
 	uint8_t local_framing_errors = 0;
 	uint8_t local_crc_errors = 0;

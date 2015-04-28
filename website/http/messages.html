@@ -1,21 +1,16 @@
 <html>
-
 <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  
     <title>Tron Suit 2.0</title>
     <link rel="stylesheet" type="text/css" href="tronstyle.css">
 </head>
-
-<body>
-    <h1>Tron Suit 2.0 - CVG 2015</h1>
-    <input class="button" type="button" value="View Live Data" onclick="location.href='index.html'" />
-    <input class="button" type="button" value="Suit Data Archives" onclick="location.href='archive.html'" />
-    <br>
-    <br>New Message to send - Optional:
-    <br>
-    <input class="text_input" type="text" id="new_text" name="fname" maxlength="160">
-    <br>
-    <br>New Colors to send - Optional:
+	<body>
+	Last requested colors :
+    <div class="gradient" id="old_gradient"></div>
+	
+	<br>
+		Request a Color (Click to Select):
+	<br>
     <div class="gradient" id="new_gradient" onclick="gradientclick()"></div>
     <div>
         <span style="float: left;">
@@ -25,29 +20,18 @@
   		<input style="width:75px" onclick="mycolor2click()" class="color {hash:true, onImmediateChange:'updateInfo2(this);', pickerClosable:true }" id="myColor2" value="000000">
 		</span>
     </div>
-    <center>&lArr; Click to pick Colors &rArr;</center>
+    <center><input type="button" value="Request Color" id="sendbutton1" class="button" onclick="submit(this)" /></center>
+	<br>
+	Send a Message (Click to Type):
     <br>
+    <input class="text_input" type="text" id="new_text" name="fname" maxlength="160">
     <br>
-    <input type="button" value="Send Request" id="sendbutton" class="button" onclick="submit(this)" />
-    <input type="button" value="Clear Request" class="button" onclick="location.href='send.php'" />
-    <br>
-    <br>
-    <br>
+   <center><input type="button" value="Send Message" id="sendbutton2" class="button" onclick="submit(this)" /></center>
     <br>Last sent message:
     <br>
     <input class="text_input" type="text" id="old_text" value="Loading..." readonly>
     <br>
-    <br> Last requested colors :
-    <div class="gradient" id="old_gradient"></div>
-    <div>
-        <span style="float: left;width:75px;">
-		<input class="text_input" type="text" id="old_color1" value="Loading..." readonly>
- 		</span>
-        <span style="float: right;width:75px;"> 
-  		<input class="text_input" type="text" id="old_color2" value="Loading..." readonly>
-		</span>
-    </div>
-    <br>
+
     <br>
     <div id="Blame"></div>
     <script type="text/javascript" src="jscolor/jscolor.js"></script>
@@ -57,35 +41,29 @@
 </html>
 
 <script>
+	refresh_rate = 2000;
+
     sendingcolor = false;
     color1locked = false;
     color2locked = false;
     twocolor = false;
-
-    get_messages();
-
+	
+	get_messages();
+	
     function get_messages() {
 
-        jQuery.get('send_get.php', null, function(tsv) {
-            var tsv = tsv.split(/\n/g);
+        jQuery.get('messages_get.php', null, function(tsv) {
+		
+			var tsv = tsv.split(/\n/g);
 
             var line = tsv[0].split(/\t/g);
             var CreatedTime = String(line[0]);
             var user_msg = String(line[1]);
-            var color1_r = Number(line[2]);
-            var color1_g = Number(line[3]);
-            var color1_b = Number(line[4]);
-            var color2_r = Number(line[5]);
-            var color2_g = Number(line[6]);
-            var color2_b = Number(line[7]);
+			
+            var color1 = line[2];
+            var color2 = line[3];
 
-            var color1 = "#" + rgbToHex(color1_r, color1_g, color1_b);
-            var color2 = "#" + rgbToHex(color2_r, color2_g, color2_b);
-
-            document.getElementById('old_color1').value = color1;
-            document.getElementById('old_color2').value = color2;
-
-            document.getElementById("Blame").innerHTML = "Blame " + String(line[8]) + " on " + CreatedTime;
+            document.getElementById("Blame").innerHTML = "Blame " + String(line[4]) + " on " + CreatedTime;
 
             if (color1 == "#000000" || color1 == "#000000") {
                 $("#old_gradient").css({
@@ -97,35 +75,33 @@
                 });
             }
             document.getElementById("old_text").value = user_msg;
-
-
         });
-        setTimeout(get_messages, 5000);
+        setTimeout(get_messages , refresh_rate);
     }
 
     function submit(button) {
-        var new_text = $('#new_text').val();
 
+		if (button.id == 'sendbutton1'){
+			var new_text = '';
+			var color1 = '#'+ document.getElementById('myColor1').color;
+			var color2 = '#'+ document.getElementById('myColor2').color;
+		}
+		
+		if (button.id == 'sendbutton2'){
+			var new_text = $('#new_text').val();
+			var color1 = '#000000';
+			var color2 = '#000000';
+		}
+       
 
         var oldValue = button.value;
         button.setAttribute('disabled', true);
         button.value = 'Submitting...';
 
-        var color1_r = 255 * document.getElementById('myColor1').color.rgb[0];
-        var color1_g = 255 * document.getElementById('myColor1').color.rgb[1];
-        var color1_b = 255 * document.getElementById('myColor1').color.rgb[2];
-        var color2_r = 255 * document.getElementById('myColor2').color.rgb[0];
-        var color2_g = 255 * document.getElementById('myColor2').color.rgb[1];
-        var color2_b = 255 * document.getElementById('myColor2').color.rgb[2];
-
-        $.post('send_post.php', {
+        $.post('messages_post.php', {
             new_text: new_text,
-            color1_r: color1_r,
-            color1_g: color1_g,
-            color1_b: color1_b,
-            color2_r: color2_r,
-            color2_g: color2_g,
-            color2_b: color2_b
+			color1: color1,
+            color2: color2
         }, function(data) {
             callback(data);
         });
@@ -136,12 +112,15 @@
         var result = Number(data);
 
         if (result > 0) {
-            document.getElementById("sendbutton").value = "Stop Poking!";
+            document.getElementById("sendbutton1").value = "Stop Poking!";
+			document.getElementById("sendbutton2").value = "Stop Poking!";
             alert("Request ignored, Please slow down");
         }
         setTimeout(function() {
-            document.getElementById("sendbutton").value = "Send Request";
-            document.getElementById("sendbutton").removeAttribute('disabled');
+            document.getElementById("sendbutton1").value = "Request Color";
+			document.getElementById("sendbutton2").value = "Send Message";
+            document.getElementById("sendbutton1").removeAttribute('disabled');
+            document.getElementById("sendbutton2").removeAttribute('disabled');
         }, 3000 + (result * 10000))
     }
 
@@ -197,16 +176,5 @@
         $("#new_gradient").css({
             'background': 'linear-gradient(to right,  ' + document.getElementById("myColor1").value + ' 0%, ' + document.getElementById("myColor2").value + ' 100%)'
         });
-    }
-
-    function rgbToHex(R, G, B) {
-        return toHex(R) + toHex(G) + toHex(B)
-    }
-
-    function toHex(n) {
-        n = parseInt(n, 10);
-        if (isNaN(n)) return "00";
-        n = Math.max(0, Math.min(n, 255));
-        return "0123456789ABCDEF".charAt((n - n % 16) / 16) + "0123456789ABCDEF".charAt(n % 16);
     }
 </script>

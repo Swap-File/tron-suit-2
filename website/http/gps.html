@@ -1,0 +1,95 @@
+<html>
+<head>
+    <title>Tron Suit 2.0</title>
+    <link rel="stylesheet" type="text/css" href="tronstyle.css">
+</head>
+	<body>
+    Location:
+    <div class="boxed" height="300px" id="map_div"></div>
+	<script src="https://maps.googleapis.com/maps/api/js?v=3.exp"></script>
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
+</body>
+
+</html>
+
+<script>
+	refresh_rate = 2000;
+    datapoints = 8;
+    buffering = 0;
+    last_timestamp = 0;
+
+    get_more_data();
+
+    function get_more_data() {
+
+        jQuery.get('gps_get.php', null, function(tsv) {
+
+            var tsv = tsv.split(/\n/g);
+            var line = tsv[0].split(/\t/g);
+
+            var timestamp = 1000 * Number(line[0]);
+			
+            var latitude = Number(line[1]);
+            var longitude = Number(line[2]);
+            var accuracy = Number(line[3]);
+			
+            var myLatlng = new google.maps.LatLng(latitude + .001 * (.5 - Math.random()), longitude + .001 * (.5 - Math.random()));
+			
+			var points_to_load = 1;
+			
+			if ((timestamp - last_timestamp ) > (datapoints * refresh_rate)) {
+                points_to_load = datapoints;
+            }
+			
+			if (last_timestamp < timestamp) {
+				for (var i = 0; i < points_to_load; i++) {
+			    addMarker(myLatlng);
+				}
+			}
+			
+			last_timestamp = timestamp;
+        });
+        setTimeout(get_more_data, refresh_rate);
+    }
+
+    function initialize() {
+        markers = [];
+        var mapOptions = {
+			draggable: false,
+            zoom: 14,
+        };
+        map = new google.maps.Map(document.getElementById('map_div'),
+            mapOptions);
+        var polyOptions = {
+            strokeColor: '#000000',
+            strokeOpacity: 0.5,
+            strokeWeight: 3
+        };
+        poly = new google.maps.Polyline(polyOptions);
+        poly.setMap(map);
+    }
+
+    google.maps.event.addDomListener(window, 'load', initialize);
+
+    // Add a marker to the map and push to the array.
+
+    function addMarker(location) {
+        var marker = new google.maps.Marker({
+            position: location,
+            map: map
+        });
+        var path = poly.getPath();
+
+        path.push(marker.position);
+        markers.push(marker);
+        map.panTo(marker.position);
+
+        if (path.length > datapoints) {
+            path.removeAt(markers[0]);
+        }
+        if (markers.length > datapoints) {
+            markers[0].setMap(null);
+            markers.shift();
+        }
+    }
+</script>

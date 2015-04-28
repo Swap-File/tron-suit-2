@@ -10,10 +10,12 @@ try {
     $result = $stmt->fetchAll();
     
     foreach ($result as $row) {
-        echo date('m-d-Y \a\t h:i:sa', strtotime($row["CreatedTime"])) . "\t" . $row["user_msg"] . "\t" . $row["color1_r"] . "\t" . $row["color1_g"] . "\t" . $row["color1_b"] . "\t" . $row["color2_r"] . "\t" . $row["color2_g"] . "\t" . $row["color2_b"] . "\t" . $row["ip"] . "\n";
+        echo date('m-d-Y \a\t h:i:sa', strtotime($row["CreatedTime"])) . "\t" .
+		$row["user_msg"] . "\t" .
+		$row["color1"] . "\t" .
+		$row["color2"] . "\t" .
+		$row["ip"] . "\n";
     }
-    
-    
 }
 catch (PDOException $e) {
     print "Error: " . $e->getMessage();

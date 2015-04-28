@@ -4,235 +4,74 @@
     <title>Tron Suit 2.0</title>
     <link rel="stylesheet" type="text/css" href="tronstyle.css">
 </head>
-
 <body>
-    <h1>Tron Suit 2.0 - CVG 2015</h1>
-	<input class="button" type="button" value="Compose Message" onclick="location.href='send.html'"/>
-	<input class="button" type="button" value="Archives" onclick="location.href='archive.html'"/>
-	<br><br>
-	<div id="status_div">Buffering...</div>
+	<h2>Tron Suit 2.0 - CVG 2015</h2>
+	Temp Navigation:
+	<input type="button" value="MSG" onClick="document.getElementById('iframenav').src='messages.html'" />
+    <input type="button" value="GPS" onClick="document.getElementById('iframenav').src='gps.html'" />
+    <input type="button" value="CPU" onClick="document.getElementById('iframenav').src='cpu.html'" />
+	<input type="button" value="YPR" onClick="document.getElementById('iframenav').src='ypr.html'" />
+	<input type="button" value="STAT" onClick="document.getElementById('iframenav').src='stat.html'" />
+    <br><br><div id="status_div">Buffering...</div>
     <br>
-	<div id="points_div">Showing last known data...</div><br>
-	Colors Displayed:
-	<div class="gradient" id="grad1"></div><br>
-Location:
-    <div class="boxed" id="map_div" "></div><br>
-
-	CPU Usage:
-    <div id="graph_div" style="height: 400px; width: 900px"></div><br>
-
-	<script src="https://maps.googleapis.com/maps/api/js?v=3.exp"></script>
-    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
-    <script src="http://code.highcharts.com/highcharts.js"></script>
+    <div id="points_div">Showing last suit colors...</div>
+	<div class="gradient" id="current_gradient"></div>
+    <br>
+	<iframe id="iframenav" src="messages.html" width="100%" height="480" frameBorder="0"></iframe>
+	<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
 </body>
 
-</html>
 
 <script>
-lat = 44.861498;
-lon =  -93.353114;
-    datapoints = 8;
-buffering = 0;
-    jQuery(function($) {
-        var options = {
+	index_refresh_rate = 2000;
+	index_datapoints = 8;
+	index_last_timestamp = 0;
+	index_buffering = 2;
+	
+	get_colors();    
 
+	 function get_colors() {
 
-            chart: {
-                renderTo: 'graph_div',
-                defaultSeriesType: 'spline',
-                height: 400,
-                zoomType: 'x',
+        jQuery.get('index_get.php', null, function(tsv) {
+            var tsv = tsv.split(/\n/g);
 
-                events: {
-                    load: function() {
-                        console.log(this.series[0]);
+            var line = tsv[0].split(/\t/g);
+            var timestamp = 1000 * Number(line[0]);
 
-                        // set up the updating of the chart each second
-                        var series = this.series[0];
-                        var series2 = this.series[1];
+            var color1 = line[1];
+            var color2 = line[2];
 
-                        setInterval(function() {
-
-                            console.log(series.xAxis.dataMax);
-
-                            jQuery.get('index_live.php', null, function(tsv) {
-                                var traffic = [];
-                                var traffic2 = [];
-                                tsv = tsv.split(/\n/g);
-                               for (var row = 0, rows = tsv.length; row < rows; row++) {
-                                    var line = tsv[row].split(/\t/g);
-
-                                        x = 1000 * Number(line[0]);
-                                        y = Number(line[1]);
-                                    y2 = Number(line[2]);
-
-                                    if (line.length == 3) {
-									var myLatlng = new google.maps.LatLng(lat + .001*(.5-Math.random()),lon+.001*(.5-Math.random()));
-        addMarker(myLatlng);
-		
-                                        if (series.xAxis.dataMax < x) {
-										    document.getElementById("status_div").innerHTML="Suit is Live Streaming";
-										    document.getElementById("points_div").innerHTML="Showing live data...";
-											if (buffering == datapoints){  //dump entire buffer
-											   for (i = 0; i < datapoints-1; i++) {
-											series.addPoint([x, y], false, true); //dont redraw
-                                            series2.addPoint([x, y2], false, true);
-											  }
-											}
-											
-                                            series.addPoint([x, y], false, true); //dont redraw
-                                            series2.addPoint([x, y2], true, true);
-											
-											buffering=0;
-                                        }else{
-										if (buffering < datapoints){
-											buffering++;
-											if (buffering>2){
-											document.getElementById("status_div").innerHTML="Buffering...";
-										    document.getElementById("points_div").innerHTML="Showing last known data...";
-												}
-											}else{
-											document.getElementById("status_div").innerHTML="Buffering... The suit is probably offline.  Maybe look at the archives?";
-										    document.getElementById("points_div").innerHTML="Showing last known data...";
-											}
-										}
-										
-                                    }
-                                }
-
-                            });
-                        }, 5000);
-                    }
-                }
-            },
-            title: {
-                text: 'Tron Live Test v0.1'
-            },
-            xAxis: {
-
-                title: {
-                    text: 'Time'
-                },
-                type: 'datetime',
-                "labels": {
-                    "format": "{value:%m-%d-%y<br>%I:%M:%S%p}"
-                }
-            },
-            yAxis: {
-                title: {
-                    text: 'Number 1'
-                },
-                plotLines: [{
-                    value: 0,
-                    width: 1,
-                    color: '#808080'
-                }]
-            },
-            tooltip: {
-                headerFormat: '<b>{series.name}</b><br>',
-                pointFormat: '{point.x:%Y-%m-%d} <br> {point.x:%I:%M:%S %p} <br> {point.y}'
-            },
-            plotOptions: {
-                series: {
-                    marker: {
-                        enabled: true
-                    }
-                }
-            },
-            legend: {
-                layout: 'vertical',
-                align: 'right',
-                verticalAlign: 'top',
-                x: 40,
-                y: 100,
-                borderWidth: 0,
-                width: 300
-            },
-            series: [{
-                name: 'Jacket CPU Usage'
-            }, {
-                name: 'Disc CPU Usage'
-            }]
-        };
-
-        jQuery.get('index_live.php', null, function(tsv) {
-            var traffic = [];
-            var traffic2 = [];
-            tsv = tsv.split(/\n/g);
-            for (var row = 0, rows = tsv.length; row < rows; row++) {
-                var line = tsv[row].split(/\t/g),
-                    x = 1000 * Number(line[0]),
-                    y = Number(line[1]);
-                y2 = Number(line[2]);
-                if (line.length == 3) {
-                    for (i = 0; i < datapoints; i++) {
-                        traffic.push([x, y]);
-                        traffic2.push([x, y2]);
-                    }
-                }
+            if (color1 == "#000000" || color1 == "#000000") {
+                $("#current_gradient").css({
+                    'background': 'linear-gradient(to right, rgba(255,0,0,0),rgba(255,0,0,0))'
+                });
+            } else {
+                $("#current_gradient").css({
+                    'background': 'linear-gradient(to right, ' + color1 + ' 0%, ' + color2 + ' 100%)'
+                });
             }
 
-            options.series[0].data = traffic;
-            options.series[1].data = traffic2;
-
-            chart = new Highcharts.Chart(options);
+	        if (index_last_timestamp < timestamp && index_last_timestamp != 0) {
+                document.getElementById("status_div").innerHTML = "Suit is Online.";
+                document.getElementById("points_div").innerHTML = "Showing live suit colors:";
+                index_buffering = 0;
+            } else {
+                if (index_buffering < index_datapoints) {
+                    index_buffering++;
+                    if (index_buffering > 2) {  //give a little leeway for missed uploads
+                        document.getElementById("status_div").innerHTML = "Suit Buffering...";
+                        document.getElementById("points_div").innerHTML = "Showing live suit colors:";
+                    }
+                } else {
+                    document.getElementById("status_div").innerHTML = "Suit is Offline.";
+                    document.getElementById("points_div").innerHTML = "Showing last suit colors:";
+                }
+            }
+			index_last_timestamp = timestamp;
         });
-
-    });
-
-    function initialize() {
-
-
-
-        markers = [];
-
-        var myLatlng = new google.maps.LatLng(lat,lon);
-        var mapOptions = {
-            zoom: 14,
-            center: myLatlng
-        };
-        map = new google.maps.Map(document.getElementById('map_div'),
-            mapOptions);
-
-        var polyOptions = {
-            strokeColor: '#000000',
-            strokeOpacity: 0.5,
-            strokeWeight: 3
-        };
-        poly = new google.maps.Polyline(polyOptions);
-        poly.setMap(map);
-
-        addMarker(myLatlng);
-
-    }
-
-    google.maps.event.addDomListener(window, 'load', initialize);
-
-    // Add a marker to the map and push to the array.
-
-    function addMarker(location) {
-        var marker = new google.maps.Marker({
-            position: location,
-            map: map
-        });
-        var path = poly.getPath();
-
-        path.push(marker.position);
-        markers.push(marker);
-
-        map.panTo(marker.position);
-
-        if (path.length > datapoints) {
-            path.removeAt(markers[0]);
-        }
-        if (markers.length > datapoints) {
-            markers[0].setMap(null);
-            markers.shift();
-        }
-
+        setTimeout(get_colors, index_refresh_rate);
     }
 </script>
-
 <script>
     //Google Analytics Stuff
     (function(i, s, o, g, r, a, m) {
