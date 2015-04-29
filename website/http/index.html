@@ -1,12 +1,14 @@
 <html>
 <head>
+	<meta content="text/html;charset=utf-8" http-equiv="Content-Type">
+	<meta content="utf-8" http-equiv="encoding">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
     <title>Tron Suit 2.0</title>
     <link rel="stylesheet" type="text/css" href="tronstyle.css">
 </head>
 <body>
 	<h2>Tron Suit 2.0 - CVG 2015</h2>
-	Temp Navigation:
+	Navigation:
 	<input type="button" value="MSG" onClick="document.getElementById('iframenav').src='messages.html'" />
     <input type="button" value="GPS" onClick="document.getElementById('iframenav').src='gps.html'" />
     <input type="button" value="CPU" onClick="document.getElementById('iframenav').src='cpu.html'" />
@@ -19,6 +21,7 @@
     <br>
 	<iframe id="iframenav" src="messages.html" width="100%" height="480" frameBorder="0"></iframe>
 	<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
+	<script type='text/javascript' src='tinycolor.js'></script>
 </body>
 
 
@@ -46,9 +49,9 @@
                     'background': 'linear-gradient(to right, rgba(255,0,0,0),rgba(255,0,0,0))'
                 });
             } else {
-                $("#current_gradient").css({
-                    'background': 'linear-gradient(to right, ' + color1 + ' 0%, ' + color2 + ' 100%)'
-                });
+   			    $("#current_gradient").css({
+					'background': 'linear-gradient(to right, ' + generate_gradient(tinycolor(color1), tinycolor(color2)) + ')'
+				});
             }
 
 	        if (index_last_timestamp < timestamp && index_last_timestamp != 0) {
@@ -71,6 +74,41 @@
         });
         setTimeout(get_colors, index_refresh_rate);
     }
+	
+	function generate_gradient(color1, color2) {
+        //hard coded resolution of 8
+        hsvcolor1 = color1.toHsv();
+        hsvcolor2 = color2.toHsv();
+
+        var shortest_path = hsvcolor2.h;
+
+        if (((hsvcolor2.h + 360) - hsvcolor1.h <= 180) && ((hsvcolor2.h + 360) - hsvcolor1.h) > 0) {
+            shortest_path += 360;
+        } else if ((hsvcolor1.h - (hsvcolor2.h - 360) <= 180) && (hsvcolor1.h - (hsvcolor2.h - 360)) > 0) {
+            shortest_path -= 360;
+        }
+
+        var color_str = ''
+        var temp_color = new Object;
+        for (i = 0; i < 8; i++) {
+            temp_color.h = map(i, 0, 7, hsvcolor1.h, shortest_path);
+            temp_color.s = map(i, 0, 7, hsvcolor1.s, hsvcolor2.s);
+            temp_color.v = map(i, 0, 7, hsvcolor1.v, hsvcolor2.v);
+
+            if (temp_color.h > 360) temp_color.h -= 360;
+            else if (temp_color.h < 0) temp_color.h += 360;
+
+            color_str = color_str.concat(tinycolor(temp_color).toHexString());
+            if (i < 7) color_str = color_str.concat(",");
+        }
+
+        return color_str;
+    }
+
+    function map(x, in_min, in_max, out_min, out_max) {
+        return ((x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min);
+    }
+	
 </script>
 <script>
     //Google Analytics Stuff

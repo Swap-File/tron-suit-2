@@ -59,16 +59,28 @@ try {
     }
     
     if ($score <= $threshold) {
-        // prepare sql and bind parameters
-        $stmt = $conn->prepare("INSERT INTO messages (user_msg, ip, color1, color2) 
-        VALUES (:user_msg, :ip, :color1, :color2)");
         
-        $stmt->bindParam(':user_msg', $_POST["new_text"], PDO::PARAM_STR);
-		$stmt->bindParam(':color2', strtoupper ($_POST["color2"]), PDO::PARAM_STR);
-        $stmt->bindParam(':color1', strtoupper ($_POST["color1"]), PDO::PARAM_STR);
-        $stmt->bindParam(':ip', $_SERVER['REMOTE_ADDR'], PDO::PARAM_STR);
+        if ($_POST["color2"] != "#000000" && $_POST["color2"] != "#000000") {
+		
+            // prepare sql and bind parameters
+            $stmt = $conn->prepare("INSERT INTO req_color (ip, color1, color2) 
+            VALUES (:ip, :color1, :color2)");
+            
+            $stmt->bindParam(':color2', strtoupper($_POST["color2"]), PDO::PARAM_STR);
+            $stmt->bindParam(':color1', strtoupper($_POST["color1"]), PDO::PARAM_STR);
+            $stmt->bindParam(':ip', $_SERVER['REMOTE_ADDR'], PDO::PARAM_STR);
+            $stmt->execute();
+        }
         
-        $stmt->execute();
+        if (strlen(trim($_POST["new_text"])) > 0) {
+            // prepare sql and bind parameters
+            $stmt = $conn->prepare("INSERT INTO req_msg (user_msg, ip) 
+        VALUES (:user_msg, :ip)");
+            
+            $stmt->bindParam(':user_msg', $_POST["new_text"], PDO::PARAM_STR);
+            $stmt->bindParam(':ip', $_SERVER['REMOTE_ADDR'], PDO::PARAM_STR);
+            $stmt->execute();
+        }
     }
     print max($score - $threshold, 0);
 }

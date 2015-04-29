@@ -1,6 +1,6 @@
 #qpy:console
 BT_DEVICE_ID = '20:14:04:18:25:68'
-auth = ('username', 'password')
+auth = ('', '')
 
 
 def read_bytes( number):
@@ -150,7 +150,7 @@ while True:
 	
 	if (len(payload) > 0):
 		try:
-			r = s.post('https://site.com/add.php', data=payload ,auth=auth)
+			r = s.post('https://.com/add.php', data=payload ,auth=auth)
 			response =  str( r.content, encoding=r.encoding ) 
 			r.close()
 		except:
@@ -160,13 +160,13 @@ while True:
 	if (len(response) > 0):
 		response = response[0].split('\t')		
 		if (len(response) > 2):
-			color1_temp = Color(response[2])
+			color1_temp = Color(response[1])
 			(color1r,color1g,color1b) = color1_temp.rgb
 			color1r = int(color1r * 255)
 			color1g = int(color1g * 255)
 			color1b = int(color1b * 255)
 			
-			color2_temp = Color(response[3])
+			color2_temp = Color(response[2])
 			(color2r,color2g,color2b) = color2_temp.rgb
 			color2r = int(color2r * 255)
 			color2g = int(color2g * 255)
@@ -176,10 +176,10 @@ while True:
 				new_web_color = True
 				color_array = bytearray([color1r,color1g,color1b,color2r,color2g,color2b])
 				
-			if (len(response[1].strip()) > 1):
+			if (len(response[0].strip()) > 0):
 				new_web_message=True
-				message_firsthalf = response[1][:70].ljust(70)
-				message_secondhalf = response[1][70:160].ljust(90)
+				message_firsthalf = response[0][:70].ljust(70)
+				message_secondhalf = response[0][70:160].ljust(90)
 	
 	#check for cellphone requests
 	

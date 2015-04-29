@@ -39,25 +39,40 @@ try {
     $stmt->bindParam(':accuracy', $_POST["accuracy"], PDO::PARAM_INT);
 	
 	$stmt->bindParam(':ip', $_SERVER['REMOTE_ADDR'], PDO::PARAM_STR);
-	
+
     $stmt->execute();
 			
-    $stmt = $conn->prepare("SELECT * FROM messages WHERE sent IS FALSE ORDER BY id ASC LIMIT 1");
+			
+	$color1 = '';
+	$color2 = '';
+	$msg = '';
+	
+    $stmt = $conn->prepare("SELECT * FROM req_color WHERE sent IS FALSE ORDER BY id ASC LIMIT 1");
     $stmt->execute();
-    $result = $stmt->fetchAll();
+    $req_color = $stmt->fetchAll();
     
-    if (count($result) > 0) {
-        $row = $result[0];
-        echo date('m-d-Y \a\t h:i:sa', strtotime($row["CreatedTime"])) . "\t" .
-		$row["user_msg"] . "\t" .
-		$row["color1"] . "\t" .
-		$row["color2"] . "\t" .
-		$row["ip"] . "\n";
+	if (count($req_color) > 0) {
+		$color1 = $req_color[0]["color1"];
+		$color2 = $req_color[0]["color2"];
         
-        $stmt = $conn->prepare("UPDATE messages SET sent=TRUE WHERE id=(:id)");
-        $stmt->bindParam(':id', $row["id"], PDO::PARAM_INT);
+        $stmt = $conn->prepare("UPDATE req_color SET sent=TRUE WHERE id=(:id)");
+        $stmt->bindParam(':id', $req_color[0]["id"], PDO::PARAM_INT);
         $stmt->execute();
     }
+	
+	$stmt = $conn->prepare("SELECT * FROM req_msg WHERE sent IS FALSE ORDER BY id ASC LIMIT 1");
+    $stmt->execute();
+    $req_msg = $stmt->fetchAll();
+	
+	if (count($req_msg) > 0) {
+		$msg = $req_msg[0]["user_msg"];
+        
+        $stmt = $conn->prepare("UPDATE req_msg SET sent=TRUE WHERE id=(:id)");
+        $stmt->bindParam(':id', $req_msg[0]["id"], PDO::PARAM_INT);
+        $stmt->execute();
+    }
+	
+    echo $msg . "\t" .	$color1 . "\t" . $color2 . "\n";
 }
 catch (PDOException $e) {
     print "Error: " . $e->getMessage();

@@ -2,6 +2,7 @@
 void setup() {
 
 	display.begin(SSD1306_SWITCHCAPVCC);
+	display.setRotation(2);
 	display.display();
 
 	//must go first so Serial.begin can override pins!!!
