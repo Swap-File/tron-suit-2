@@ -1,13 +1,22 @@
 body {
+	background: transparent;
     font-family: Sans-Serif;
-    max-width: 450px;
-    padding-top: 3px;
-    padding-left: 3px;
+    max-width: 100%;
+	margin:0;
+	padding-right: 2px;
+
 }
+
+#index-page  {
+    font-family: Sans-Serif;
+	margin:5px;
+	 max-width: 700px;
+}
+
 /* gradient specific stuff */
 .gradient {
     height: 10px;
-    background: linear-gradient(to right, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0));
+    background: linear-gradient(to right, rgba(0,0, 0,0), rgba(0,0, 0,0));
 }
 /* box outline */
 .gradient, .boxed  {
@@ -17,22 +26,21 @@ body {
 }
 /* std button */
 .button {
-    width: 150px;
+    width: 100px;
 }
 /* width of stuff */
-.gradient, .text_input, .boxed{
+.gradient,.boxed,.text_input{
  width:100%;
 }
-
 /* grayed out stuff */
-body, #old_text, #old_color1, #old_color2{
+#old_text{
 background-color: #F0F0F0;
 }
 
 .boxed {
-width: 100%;
-height: 300px;
+height: 350px;
 }
+
 #blame {
 font-size: small;
 }
