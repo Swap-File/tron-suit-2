@@ -6,6 +6,7 @@
     <link rel="stylesheet" type="text/css" href="tronstyle.css">
 </head>
 <body>
+
     Last requested colors :
     <div class="gradient" id="old_gradient"></div>
 
@@ -14,10 +15,10 @@
     <div class="gradient" id="new_gradient" onclick="gradientclick()"></div>
     <div>
         <span style="float: left;">
-		<input readonly  style="width:75px" onmousedown="mycolor1click()" class="color {hash:true, onImmediateChange:'updateInfo1(this);', pickerClosable:true }" id="myColor1" value="000000">
+		<input readonly  style="width:75px" onfocus="mycolor1click()" class="color {hash:true, onImmediateChange:'updateInfo1(this);', pickerClosable:true }" id="myColor1" value="000000">
  		</span>
         <span style="float: right;"> 
-  		<input readonly  style="width:75px" onmousedown="mycolor2click()" class="color {hash:true, onImmediateChange:'updateInfo2(this);', pickerClosable:true }" id="myColor2" value="000000">
+  		<input readonly  style="width:75px" onfocus="mycolor2click()" class="color {hash:true, onImmediateChange:'updateInfo2(this);', pickerClosable:true }" id="myColor2" value="000000">
 		</span>
     </div>
     <center>
@@ -25,7 +26,7 @@
     </center>
     <br> Send a Message (Click to Type):
     <br>
-    <input class="text_input" type="text" id="new_text" name="fname" maxlength="160">
+    <input class="text_input" type="text" id="new_text" maxlength="160">
     <br>
     <center>
         <input type="button" value="Send Message" id="sendbutton2" class="button" onclick="submit(this)" />
@@ -174,9 +175,9 @@
 
         var shortest_path = hsvcolor2.h;
 
-        if (((hsvcolor2.h + 360) - hsvcolor1.h <= 180) && ((hsvcolor2.h + 360) - hsvcolor1.h) > 0) {
+        if ((hsvcolor2.h + 360) - hsvcolor1.h <= 180) {
             shortest_path += 360;
-        } else if ((hsvcolor1.h - (hsvcolor2.h - 360) <= 180) && (hsvcolor1.h - (hsvcolor2.h - 360)) > 0) {
+        } else if (hsvcolor1.h - (hsvcolor2.h - 360) <= 180) {
             shortest_path -= 360;
         }
 

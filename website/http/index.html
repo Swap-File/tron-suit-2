@@ -6,7 +6,7 @@
     <title>Tron Suit 2.0</title>
     <link rel="stylesheet" type="text/css" href="tronstyle.css">
 </head>
-<body>
+<body id="index-page">
 	<h2>Tron Suit 2.0 - CVG 2015</h2>
 	Navigation:
 	<input type="button" value="MSG" onClick="document.getElementById('iframenav').src='messages.html'" />
@@ -19,7 +19,7 @@
     <div id="points_div">Showing last suit colors...</div>
 	<div class="gradient" id="current_gradient"></div>
     <br>
-	<iframe id="iframenav" src="messages.html" width="100%" height="480" frameBorder="0"></iframe>
+	<iframe id="iframenav" src="messages.html" width="100%" height="400" frameBorder="0" allowtransparency="true"></iframe>
 	<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
 	<script type='text/javascript' src='tinycolor.js'></script>
 </body>
@@ -82,9 +82,9 @@
 
         var shortest_path = hsvcolor2.h;
 
-        if (((hsvcolor2.h + 360) - hsvcolor1.h <= 180) && ((hsvcolor2.h + 360) - hsvcolor1.h) > 0) {
+        if ((hsvcolor2.h + 360) - hsvcolor1.h <= 180) {
             shortest_path += 360;
-        } else if ((hsvcolor1.h - (hsvcolor2.h - 360) <= 180) && (hsvcolor1.h - (hsvcolor2.h - 360)) > 0) {
+        } else if (hsvcolor1.h - (hsvcolor2.h - 360) <= 180) {
             shortest_path -= 360;
         }
 
