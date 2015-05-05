@@ -17,21 +17,22 @@
 
 
 <script>
-	refresh_rate = 3000;
+	refresh_rate = 2000;
     datapoints = 8;
     buffering = 0;
     last_timestamp = 0;
+	
+	make_chart();
+    get_data();
 
-    get_more_data();
-
-    function get_more_data() {
+    function get_data() {
 
         jQuery.get('ypr_get.php', null, function(tsv) {
 
-            var tsv = tsv.split(/\n/g);
-            var line = tsv[0].split(/\t/g);
 
-            var timestamp = 1000 * Number(line[0]);
+            var line = tsv.split("\t");
+
+            var timestamp = Number(line[0]);
 
             var glove0yaw = Number(line[1]);
             var glove0pitch = Number(line[2]);
@@ -77,16 +78,16 @@
 			
             last_timestamp = timestamp;
         });
-        setTimeout(get_more_data, refresh_rate);
+        setTimeout(get_data, refresh_rate);
     }
 
-    jQuery(function($) {
+    function make_chart(){
 			
 		   var options = {
             chart: {
                 renderTo: 'ypr_div',
                 defaultSeriesType: 'spline',
-                zoomType: 'x',
+                zoomType: 'x',     
             },
             title: {
                 text: 'Glove Data:'
@@ -154,5 +155,6 @@
         options.series[5].data = Array.apply(null, new Array(datapoints)).map(Number.prototype.valueOf,0);
 		
         ypr_chart = new Highcharts.Chart(options);
-    });
+		
+    };
 </script>

@@ -27,7 +27,7 @@ try {
 			$req_msg[0]["user_msg"] . "\t" .
 			$req_color[0]["color1"] . "\t" .
 			$req_color[0]["color2"]  . "\t" .
-			$newest_ip . "\n";
+			$newest_ip . "\t";
 		}
 }
 catch (PDOException $e) {

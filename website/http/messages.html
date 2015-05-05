@@ -15,10 +15,10 @@
     <div class="gradient" id="new_gradient" onclick="gradientclick()"></div>
     <div>
         <span style="float: left;">
-		<input readonly  style="width:75px" onfocus="mycolor1click()" class="color {hash:true, onImmediateChange:'updateInfo1(this);', pickerClosable:true }" id="myColor1" value="000000">
+		<input readonly  style="width:75px" id="myColor1" >
  		</span>
         <span style="float: right;"> 
-  		<input readonly  style="width:75px" onfocus="mycolor2click()" class="color {hash:true, onImmediateChange:'updateInfo2(this);', pickerClosable:true }" id="myColor2" value="000000">
+  		<input readonly  style="width:75px" id="myColor2">
 		</span>
     </div>
     <center>
@@ -47,18 +47,21 @@
 
 <script>
     refresh_rate = 2000;
-    color1locked = false;
-    color2locked = false;
+	myPicker1 = new jscolor.color(document.getElementById('myColor1'), {hash:true, onImmediateChange:'updateInfo1();' });
+	myPicker1.fromString('000000');
+	myPicker2 = new jscolor.color(document.getElementById('myColor2'),  {hash:true, onImmediateChange:'updateInfo2();' });
+    myPicker2.fromString('000000');
 
+    color1set = false;
+	color2set = false;
+	
     get_messages();
 
     function get_messages() {
 
         jQuery.get('messages_get.php', null, function(tsv) {
 
-            var tsv = tsv.split(/\n/g);
-
-            var line = tsv[0].split(/\t/g);
+            var line = tsv.split("\t");
             var CreatedTime = String(line[0]);
             var user_msg = String(line[1]);
 
@@ -85,8 +88,8 @@
 
         if (button.id == 'sendbutton1') {
             var new_text = '';
-            var color1 = '#' + document.getElementById('myColor1').color;
-            var color2 = '#' + document.getElementById('myColor2').color;
+            var color1 = '#' + myPicker1;
+            var color2 = '#' + myPicker2;
         }
 
         if (button.id == 'sendbutton2') {
@@ -125,38 +128,28 @@
     }
 
     function gradientclick() {
-        document.getElementById('myColor1').color.showPicker();
+        myPicker1.showPicker();
     }
-
-	function mycolor1click() {
-	    if (color1locked == false && color2locked == false) color2locked = true;
-        if (color1locked == true && color2locked == false) color2locked = true;
+	
+	function updateInfo1(color) {
+		color1set = true;
+		if (color2set == false) {
+            myPicker2.fromRGB(myPicker1.rgb[0], myPicker1.rgb[1], myPicker1.rgb[2]);
+        }
+		updateInfo();	
+	}
+	function updateInfo2(color) {		 
+		color2set = true;
+		if (color1set  == false) {
+            myPicker1.fromRGB(myPicker2.rgb[0], myPicker2.rgb[1], myPicker2.rgb[2]);
+        }
+		updateInfo();		
 	}
 	
-	function mycolor2click() {
-	    if (color2locked == false && color1locked == false) color1locked = true;
-        if (color2locked == true && color1locked == false) color1locked = true;
-	}
 	
-    function updateInfo1(color) {
-        if (color2locked == true && color1locked == false) {
-            document.getElementById('myColor2').color.fromRGB(color.rgb[0], color.rgb[1], color.rgb[2]);
-        }
-        var color2 = document.getElementById('myColor2').color;
-
+    function updateInfo() {
         $("#new_gradient").css({
-            'background': 'linear-gradient(to right, ' + generate_gradient(jsc2tinyc(color), jsc2tinyc(color2)) + ')'
-        });
-    }
-
-    function updateInfo2(color) {
-        if (color1locked == true && color2locked == false) {
-            document.getElementById('myColor1').color.fromRGB(color.rgb[0], color.rgb[1], color.rgb[2]);
-        }
-        var color1 = document.getElementById('myColor1').color;
-
-        $("#new_gradient").css({
-            'background': 'linear-gradient(to right, ' + generate_gradient(jsc2tinyc(color1), jsc2tinyc(color)) + ')'
+            'background': 'linear-gradient(to right, ' + generate_gradient(jsc2tinyc(myPicker1), jsc2tinyc(myPicker2)) + ')'
         });
     }
 

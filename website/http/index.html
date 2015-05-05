@@ -36,9 +36,9 @@
 	 function get_colors() {
 
         jQuery.get('index_get.php', null, function(tsv) {
-            var tsv = tsv.split(/\n/g);
+            //var tsv = tsv.split(/\n/g);
 
-            var line = tsv[0].split(/\t/g);
+            var line = tsv.split("\t");
             var timestamp = 1000 * Number(line[0]);
 
             var color1 = line[1];

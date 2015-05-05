@@ -20,16 +20,15 @@
     buffering = 0;
     last_timestamp = 0;
 
-    get_more_data();
+    get_data();
 
-    function get_more_data() {
+    function get_data() {
 
         jQuery.get('gps_get.php', null, function(tsv) {
 
-            var tsv = tsv.split(/\n/g);
-            var line = tsv[0].split(/\t/g);
+            var line = tsv.split("\t");
 
-            var timestamp = 1000 * Number(line[0]);
+            var timestamp = Number(line[0]);
 			
             var latitude = Number(line[1]);
             var longitude = Number(line[2]);
@@ -51,7 +50,7 @@
 			
 			last_timestamp = timestamp;
         });
-        setTimeout(get_more_data, refresh_rate);
+        setTimeout(get_data, refresh_rate);
     }
 
     function initialize() {

@@ -10,7 +10,7 @@ try {
     $result = $stmt->fetchAll();
     
     foreach ($result as $row) {
-        echo strtotime($row["timeStamp"]. ' GMT') ."\t" . 
+        echo (1000 *strtotime($row["timeStamp"]. ' GMT')) ."\t" . 
 		$row["glove0cpu"]. "\t" . $row["glove1cpu"]."\t" . $row["disc0cpu"]."\t" . $row["suit0cpu"]."\t" ."\n";
 
     }

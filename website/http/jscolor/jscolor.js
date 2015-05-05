@@ -615,6 +615,10 @@ var jscolor = {
 
 			var p = jscolor.picker;
 
+			if (typeof handle_touchmove !== 'undefined') {
+				p.box.removeEventListener('touchmove', handle_touchmove, false);
+			}
+			
 			// controls interaction
 			p.box.onmouseup =
 			p.box.onmouseout = function() { target.focus(); };
@@ -632,7 +636,7 @@ var jscolor = {
 				}
 			};
 			if('ontouchstart' in window) { // if touch device
-				var handle_touchmove = function(e) {
+				handle_touchmove = function(e) {
 					var event={
 						'offsetX': e.touches[0].pageX-touchOffset.X,
 						'offsetY': e.touches[0].pageY-touchOffset.Y
@@ -648,6 +652,7 @@ var jscolor = {
 				p.box.removeEventListener('touchmove', handle_touchmove, false)
 				p.box.addEventListener('touchmove', handle_touchmove, false)
 			}
+	
 			p.padM.onmouseup =
 			p.padM.onmouseout = function() { if(holdPad) { holdPad=false; jscolor.fireEvent(valueElement,'change'); } };
 			p.padM.onmousedown = function(e) {

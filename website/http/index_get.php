@@ -9,9 +9,10 @@ try {
     $stmt->execute();
     $result = $stmt->fetchAll();
     
-    foreach ($result as $row) {
+    if (count($result) > 0) {
+		$row = $result[0];
         echo strtotime($row["timeStamp"]. ' GMT') ."\t" . 
-		$row["color1"]. "\t" . $row["color2"]."\t" ."\n";
+		$row["color1"]. "\t" . $row["color2"]."\t";
     }
 }
 catch (PDOException $e) {

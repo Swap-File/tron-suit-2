@@ -9,10 +9,11 @@ try {
     $stmt->execute();
     $result = $stmt->fetchAll();
     
-    foreach ($result as $row) {
-        echo strtotime($row["timeStamp"]. ' GMT') ."\t" . 
+    if (count($result) > 0) {
+		$row = $result[0];
+        echo (1000 * strtotime($row["timeStamp"]. ' GMT')) ."\t" . 
 		$row["gloveppsout"]. "\t" . $row["glove0ppsin"]."\t" . $row["glove1ppsin"]."\t" . $row["glovelost"]."\t" . 
-		$row["disc0ppsout"]. "\t" . $row["disc0ppsin"]."\t" . $row["disc0lost"] ."\n";
+		$row["disc0ppsout"]. "\t" . $row["disc0ppsin"]."\t" . $row["disc0lost"] ."\t";
     }
 }
 
