@@ -29,7 +29,18 @@ def btconfirmation():
 		return False	
 	return True
 	
-
+#max limits for colours
+def brighten_color(color):
+	if color == colour.Color("black"):
+		raise Exception
+	if (color.saturation < .5):
+		color.saturation = .5
+	if (color.luminance < .25):
+		color.luminance = .25
+	if (color.luminance > .75):
+		color.luminance = .75
+	return color
+	
 import os
 os.system('clear')
 print ("Loading...")
@@ -48,7 +59,7 @@ s = requests.Session()
 #droid = Android() #old way
 droid = sl4a.Android() #new way? seems to work the same
 
-
+blacklist = []
 
 print ('Turning Bluetooth off...')
 droid.toggleBluetoothState(False,False)  #turn BT off to kill old connections
@@ -82,7 +93,6 @@ while True:
 			if(droid.bluetoothReadReady(connID).result == True):
 				droid.bluetoothReadBinary(256,connID)
 
-				
 	cycle_time = time.time()
 	
 	#ask suit for data
@@ -154,40 +164,55 @@ while True:
 			response =  str( r.content, encoding=r.encoding ) 
 			r.close()
 		except:
-			print ("BLAME URLLIB3")
+			print ("Blame urllib3!")
 
-	response = response.split('\n')
-	if (len(response) > 0):
-		response = response[0].split('\t')		
-		if (len(response) > 2):
-			color1_temp = Color(response[1])
-			(color1r,color1g,color1b) = color1_temp.rgb
-			color1r = int(color1r * 255)
-			color1g = int(color1g * 255)
-			color1b = int(color1b * 255)
-			
-			color2_temp = Color(response[2])
-			(color2r,color2g,color2b) = color2_temp.rgb
-			color2r = int(color2r * 255)
-			color2g = int(color2g * 255)
-			color2b = int(color2b * 255)
-				
-			if (color1r + color1g + color1b + color2r + color2g + color2b != 0):
-				new_web_color = True
-				color_array = bytearray([color1r,color1g,color1b,color2r,color2g,color2b])
-				
-			if (len(response[0].strip()) > 0):
-				new_web_message=True
-				message_firsthalf = response[0][:70].ljust(70)
-				message_secondhalf = response[0][70:160].ljust(90)
 	
-	#check for cellphone requests
-	
+	response = response.strip()
+	if (len(response) == 0):
+		#check for cellphone requests if no web requests
+		input = droid.smsGetMessages(True)	
+		if (len(input.result) != 0):
 		
-	
+			#put banning code here
 
+			response = input.result[0]['body']
+		
+		
+	colors = []
+	words = []
+	#split into segments
+	for item in re.findall(r"#\w+|\w+", body):
+		try:#try to make it a color
+			colors.append(brighten_color(colour.Color(item)))
+		except:#if it fails, we have a word
+			words.append(item)
+
+	#dupe color if we got just one
+	if (len(colors) == 1):
+		colors.append(colors[0])
+	
+	if (len(colors) >= 2):
+		color_array = bytearray()
+		for data in (colors[0].rgb + colors[1].rgb):
+			color_array.append(int(data*255))
+			
+		if (sum(color_array) > 0 and len(color_array) == 6):
+			new_color = True
+			
+	#strip HTML color codes (3 and 6 character with leading #)
+	response = re.compile( r'#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})\b').sub("", body)
+	
+	#collapse extra spaces between words
+	response = ' '.join(response.split())
+	
+	if (len(response) > 0):
+		new_message=True
+		message_firsthalf = response[:70].ljust(70)
+		message_secondhalf = response[70:160].ljust(90)
+
+		
 	#execute requests
-	if (new_web_color or new_sms_color):
+	if (new_color):
 		print ("Color Incoming")
 		item_sent = False
 		retries = 0
@@ -196,7 +221,7 @@ while True:
 			item_sent = btconfirmation()
 			retries = retries + 1
 
-	if (new_web_message or new_sms_message):
+	if (new_message):
 		print ("Message Incoming")
 		item_sent = False
 		retries = 0
