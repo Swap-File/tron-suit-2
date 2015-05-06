@@ -2,6 +2,7 @@
 BT_DEVICE_ID = '20:14:04:18:25:68'
 auth = ('', '')
 
+blacklist = {}
 
 def read_bytes( number):
 	start_time = time.time()
@@ -51,16 +52,29 @@ import pprint
 import cobs
 from base64 import b64encode
 from base64 import b64decode
+import sl4a 
 
-#from androidhelper import Android  #old way
-import sl4a  #new way? seems to work the same
 
+#fire up Requests and flush old req
 s = requests.Session()
-#droid = Android() #old way
-droid = sl4a.Android() #new way? seems to work the same
+try:
+	r = s.get('https:///flush.php', auth=auth)
+	r.close()
+	print ("Flushed old web messages!")
+except:
+	print ("Unable to flush web messages!")
 
-blacklist = []
+	
+#fire up sl4a and flush old texts			
+droid = sl4a.Android() 
+while True:
+	input = droid.smsGetMessages(True)	
+	if (len(input.result) == 0):
+		break
+	droid.smsMarkMessageRead([input.result[0]['_id']],True)
+print ("Flushed old SMS messages!")
 
+#start bluetooth
 print ('Turning Bluetooth off...')
 droid.toggleBluetoothState(False,False)  #turn BT off to kill old connections
 time.sleep(0.1)
@@ -72,6 +86,8 @@ while (droid.checkBluetoothState().result == False): #turn BT on
 print ('Bluetooth is on.')
 
 while True:
+	cycle_time = time.time()
+	
 	#stay awake
 	droid.wakeLockAcquirePartial()	
 	
@@ -93,7 +109,7 @@ while True:
 			if(droid.bluetoothReadReady(connID).result == True):
 				droid.bluetoothReadBinary(256,connID)
 
-	cycle_time = time.time()
+	
 	
 	#ask suit for data
 	#pre calculated COBs packet of 0x00 with CRC of 0x01 signifies request for data
@@ -148,19 +164,12 @@ while True:
 			else:
 				payload['accuracy'] = loc_result['accuracy']
 			
-	pprint.pprint(payload)
-	
-	#get data from suit and post to web
-	new_web_color = False
-	new_sms_color = False
-	new_web_message = False
-	new_sms_message = False
 	
 	response = ''
 	
 	if (len(payload) > 0):
 		try:
-			r = s.post('https://.com/add.php', data=payload ,auth=auth)
+			r = s.post('https:///add.php', data=payload ,auth=auth)
 			response =  str( r.content, encoding=r.encoding ) 
 			r.close()
 		except:
@@ -168,26 +177,76 @@ while True:
 
 	
 	response = response.strip()
+	
 	if (len(response) == 0):
 		#check for cellphone requests if no web requests
 		input = droid.smsGetMessages(True)	
 		if (len(input.result) != 0):
 		
-			#put banning code here
-
-			response = input.result[0]['body']
-		
+			phone = input.result[0]['address']
+			droid.smsMarkMessageRead([input.result[0]['_id']],True)
+			
+			#add new users to blacklist database
+			if phone not in blacklist:
+				user = {}
+				user['score'] = 0
+				user['warned'] = False
+				user['time'] = time.time()
+				blacklist[phone] = user
+				
+			#lookup user
+			user = blacklist[phone]
+			
+			#calculate time
+			elapsed_time = time.time() - user['time']
+			
+			#prevent time travel
+			if elapsed_time < 0:
+				elapsed_time = 0
+				user['score'] = 0
+			
+			#drop score by 1 every 10 seconds
+			user['score'] = max(user['score'] - (elapsed_time/100),0)
+			
+			#increase score by 1 for every request
+			user['score'] = user['score'] + 1
+			
+			#if score is over 10, blacklist hard
+			if user['score'] > 10:
+				user['score'] = min(user['score'] * user['score'],14400)
+			#if score under 5, reset warning message
+			elif user['score'] < 5:
+				user['warned'] = False
+			
+			#if score under 5, process command
+			if user['score'] <= 5:
+				print ("Got Valid SMS")
+				#send confirmation
+				droid.smsSend(input.result[0]['address'] ,"Request Confirmed! www.tronsuit.com for more information!")
+				response = input.result[0]['body']
+			else:
+				print ("Got Blacklisted SMS")
+				if user['warned'] == False:
+					#send warning
+					droid.smsSend(input.result[0]['address'] ,"Your messages will be ignored for " + str(int(user['score']*10)) + " seconds! This increases exponentially if ignored!")
+					user['warned'] = True;
+				
+			blacklist[phone] = user	
+			
+			
+	new_color = False
+	new_message = False
 		
 	colors = []
 	words = []
-	#split into segments
+	#split into words, make exception for color codes 
 	for item in re.findall(r"#\w+|\w+", body):
-		try:#try to make it a color
+		try:#try to make everything a color
 			colors.append(brighten_color(colour.Color(item)))
 		except:#if it fails, we have a word
 			words.append(item)
 
-	#dupe color if we got just one
+	#dupe first colour if we got just one
 	if (len(colors) == 1):
 		colors.append(colors[0])
 	
@@ -198,7 +257,7 @@ while True:
 			
 		if (sum(color_array) > 0 and len(color_array) == 6):
 			new_color = True
-			
+	
 	#strip HTML color codes (3 and 6 character with leading #)
 	response = re.compile( r'#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})\b').sub("", body)
 	
@@ -209,7 +268,6 @@ while True:
 		new_message=True
 		message_firsthalf = response[:70].ljust(70)
 		message_secondhalf = response[70:160].ljust(90)
-
 		
 	#execute requests
 	if (new_color):
