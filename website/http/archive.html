@@ -1,0 +1,97 @@
+<html>
+
+<head>
+    <meta content="text/html;charset=utf-8" http-equiv="Content-Type">
+    <meta content="utf-8" http-equiv="encoding">
+    <title>Tron Suit 2.0</title>
+    <link rel="stylesheet" type="text/css" href="tronstyle.css">
+</head>
+
+<body>
+    <center>
+        Archived Data
+        <br>
+        <select id="selected_table" onchange="resetandload()">
+           
+            <option value="color">Color Request</option>
+            <option value="message">Messages Sent</option>
+			<option value="jacket">Jacket Log</option>
+        </select>
+
+        Record:
+        <input id="lowerlimit" type="number" min="0" value="0" style="width:50px;" onchange="updatelimit(this);"> to
+        <span id="upperlimit"></span>
+        <input id="buttonload" type="button" onclick="loaddata2();"  style="width:175px;"></input>
+        <div id="archive_div"></div>
+    </center>
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
+    <script src="http://code.highcharts.com/highcharts.js"></script>
+</body>
+
+</html>
+
+<script>
+    internal_val = 1;
+
+	function updatebutton(lower_limit) {
+		if (internal_val == lower_limit){
+		document.getElementById("buttonload").value = "Load Next 100 Records";
+		}else{
+		document.getElementById("buttonload").value = "Load Records";
+		}
+	}
+
+    function updatelimit(el) {
+		var lower_limit = Number(el.value);
+	    document.getElementById("upperlimit").innerHTML = 100 + lower_limit;
+		updatebutton(lower_limit);
+	}
+	
+    function loaddata2() {
+        var new_value = Number(document.getElementById("lowerlimit").value);
+        if (new_value == internal_val) {
+            new_value = new_value + 100;
+            document.getElementById("lowerlimit").value = new_value;
+        }
+        internal_val = new_value;
+        document.getElementById("upperlimit").innerHTML = 100 + new_value;
+        loaddata(internal_val);
+		updatebutton(internal_val);
+    }
+
+    function resetandload() {
+        internal_val = 1;
+        document.getElementById("lowerlimit").value = 0;
+        loaddata2();
+    }
+
+    function loaddata(number) {
+        var selectedValue = document.getElementById("selected_table").value;
+
+        if (selectedValue == "jacket") {
+            $.post('archive_get_log.php', {
+                starting_record: number
+            }, function(data) {
+                $('#archive_div').html(data);
+            });
+        }
+        if (selectedValue == "color") {
+            $.post('archive_get_color.php', {
+                starting_record: number
+            }, function(data) {
+                $('#archive_div').html(data);
+            });
+        }
+        if (selectedValue == "message") {
+            $.post('archive_get_text.php', {
+                starting_record: number
+            }, function(data) {
+                $('#archive_div').html(data);
+            });
+        }
+
+    }
+
+    resetandload();
+	
+</script>

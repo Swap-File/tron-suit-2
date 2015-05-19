@@ -1,39 +1,142 @@
 <html>
+
 <head>
-	<meta content="text/html;charset=utf-8" http-equiv="Content-Type">
-	<meta content="utf-8" http-equiv="encoding">
+    <meta content="text/html;charset=utf-8" http-equiv="Content-Type">
+    <meta content="utf-8" http-equiv="encoding">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
     <title>Tron Suit 2.0</title>
     <link rel="stylesheet" type="text/css" href="tronstyle.css">
 </head>
+
 <body id="index-page">
-	<h2>Tron Suit 2.0 - CVG 2015</h2>
-	Navigation:
-	<input type="button" value="MSG" onClick="document.getElementById('iframenav').src='messages.html'" />
-    <input type="button" value="GPS" onClick="document.getElementById('iframenav').src='gps.html'" />
-    <input type="button" value="CPU" onClick="document.getElementById('iframenav').src='cpu.html'" />
-	<input type="button" value="YPR" onClick="document.getElementById('iframenav').src='ypr.html'" />
-	<input type="button" value="STAT" onClick="document.getElementById('iframenav').src='stat.html'" />
-    <br><br><div id="status_div">Buffering...</div>
-    <br>
-    <div id="points_div">Showing last suit colors...</div>
-	<div class="gradient" id="current_gradient"></div>
-    <br>
-	<iframe id="iframenav" src="messages.html" width="100%" height="400" frameBorder="0" allowtransparency="true"></iframe>
-	<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
-	<script type='text/javascript' src='tinycolor.js'></script>
+
+    <div id="intro">
+
+        <center>
+            <h1>Tron Suit 2.0<br>CVG 2015</h2>
+	<h2><div id="status_div">Suit Buffering...</div></h1>
+
+            <table style="width:300px">
+                <tr>
+                    <td>
+                        <div class="button" onClick="click_msg();">
+                            <img class="buttonfront" id="msg-icon" src="/icon/msg_b.png" />MSG
+                        </div>
+
+                    </td>
+                    <td>
+                        <div class="button" onClick="click_gps();">
+                            <img class="buttonfront" id="gps-icon" src="/icon/gps_b.png" />GPS</div>
+                    </td>
+                    <td>
+                        <div class="button" onClick="click_cpu();">
+                            <img class="buttonfront" id="cpu-icon" src="/icon/cpu_b.png" />CPU</div>
+
+                    </td>
+                    <td>
+                        <div class="button" onClick="click_stat();">
+                            <img class="buttonfront" id="network-icon" src="/icon/network_b.png" />NET</div>
+                    </td>
+                    <td>
+                        <div class="button" onClick="click_archive();">
+                            <img class="buttonfront" id="archive-icon" src="/icon/archive_b.png" />HIST</div>
+                    </td>
+                    <td>
+                        <div class="button" onClick="click_ypr();">
+                            <img class="buttonfront" id="ypr-icon" src="/icon/ypr_b.png" />GLOVE</div>
+                    </td>
+                </tr>
+            </table>
+
+            <br>
+            <div id="points_div">Last Suit Colors</div>
+            <div class="gradient" id="current_gradient"></div>
+            <br>
+            <iframe id="iframenav" src="" width="100%" height="400" frameBorder="0" allowtransparency="true"></iframe>
+            <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
+            <script type='text/javascript' src='tinycolor.js'></script>
+        </center>
+    </div>
 </body>
 
 
 <script>
-	index_refresh_rate = 2000;
-	index_datapoints = 8;
-	index_last_timestamp = 0;
-	index_buffering = 2;
-	
-	get_colors();    
+      $(document).ready(function() {
 
-	 function get_colors() {
+            $('.button').hover(
+				
+               function () {
+                  $(this).css({"background-color":"#707070"});
+               }, 
+				
+               function () {
+                  $(this).css({"background-color":"#404040"});
+               }
+            );
+         });
+    function click_msg() {
+
+        clear_all();
+        $("#msg-icon").attr("src", "/icon/msg_c.png");
+        document.getElementById('iframenav').src = 'messages.html';
+    }
+
+    function click_gps() {
+
+        clear_all();
+        $("#gps-icon").attr("src", "/icon/gps_c.png");
+        document.getElementById('iframenav').src = 'gps.html';
+
+    }
+
+    function click_cpu() {
+
+        clear_all();
+        $("#cpu-icon").attr("src", "/icon/cpu_c.png");
+        document.getElementById('iframenav').src = 'cpu.html';
+    }
+
+    function click_stat() {
+
+        clear_all();
+        $("#network-icon").attr("src", "/icon/network_c.png");
+        document.getElementById('iframenav').src = 'stat.html';
+
+    }
+
+    function click_archive() {
+
+        clear_all();
+        $("#archive-icon").attr("src", "/icon/archive_c.png");
+        document.getElementById('iframenav').src = 'archive.html';
+    }
+
+    function click_ypr() {
+
+        clear_all();
+        $("#ypr-icon").attr("src", "/icon/ypr_c.png");
+        document.getElementById('iframenav').src = 'ypr.html';
+    }
+
+    function clear_all() {
+        $("#msg-icon").attr("src", "/icon/msg_b.png");
+        $("#gps-icon").attr("src", "/icon/gps_b.png");
+        $("#cpu-icon").attr("src", "/icon/cpu_b.png");
+        $("#network-icon").attr("src", "/icon/network_b.png");
+        $("#archive-icon").attr("src", "/icon/archive_b.png");
+        $("#ypr-icon").attr("src", "/icon/ypr_b.png");
+    }
+
+    click_msg();
+
+    index_refresh_rate = 2000;
+    index_datapoints = 8;
+    index_last_timestamp = 0;
+    index_buffering = 2;
+
+    get_colors();
+
+    function get_colors() {
 
         jQuery.get('index_get.php', null, function(tsv) {
             //var tsv = tsv.split(/\n/g);
@@ -49,33 +152,33 @@
                     'background': 'linear-gradient(to right, rgba(255,0,0,0),rgba(255,0,0,0))'
                 });
             } else {
-   			    $("#current_gradient").css({
-					'background': 'linear-gradient(to right, ' + generate_gradient(tinycolor(color1), tinycolor(color2)) + ')'
-				});
+                $("#current_gradient").css({
+                    'background': 'linear-gradient(to right, ' + generate_gradient(tinycolor(color1), tinycolor(color2)) + ')'
+                });
             }
 
-	        if (index_last_timestamp < timestamp && index_last_timestamp != 0) {
-                document.getElementById("status_div").innerHTML = "Suit is Online.";
-                document.getElementById("points_div").innerHTML = "Showing live suit colors:";
+            if (index_last_timestamp < timestamp && index_last_timestamp != 0) {
+                document.getElementById("status_div").innerHTML = "Suit is Online!";
+                document.getElementById("points_div").innerHTML = "Current Suit Colors";
                 index_buffering = 0;
             } else {
                 if (index_buffering < index_datapoints) {
                     index_buffering++;
-                    if (index_buffering > 2) {  //give a little leeway for missed uploads
+                    if (index_buffering > 2) { //give a little leeway for missed uploads
                         document.getElementById("status_div").innerHTML = "Suit Buffering...";
-                        document.getElementById("points_div").innerHTML = "Showing live suit colors:";
+                        document.getElementById("points_div").innerHTML = "Current Suit Colors";
                     }
                 } else {
                     document.getElementById("status_div").innerHTML = "Suit is Offline.";
-                    document.getElementById("points_div").innerHTML = "Showing last suit colors:";
+                    document.getElementById("points_div").innerHTML = "Last Suit Colors";
                 }
             }
-			index_last_timestamp = timestamp;
+            index_last_timestamp = timestamp;
         });
         setTimeout(get_colors, index_refresh_rate);
     }
-	
-	function generate_gradient(color1, color2) {
+
+    function generate_gradient(color1, color2) {
         //hard coded resolution of 8
         hsvcolor1 = color1.toHsv();
         hsvcolor2 = color2.toHsv();
@@ -108,7 +211,6 @@
     function map(x, in_min, in_max, out_min, out_max) {
         return ((x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min);
     }
-	
 </script>
 <script>
     //Google Analytics Stuff

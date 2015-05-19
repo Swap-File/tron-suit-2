@@ -72,7 +72,7 @@ try {
         $stmt->execute();
     }
 	
-    echo $msg . "\t" .	$color1 . "\t" . $color2 . "\n";
+    echo $color1. ' ' . $color2 . ' ' . $msg ;
 }
 catch (PDOException $e) {
     print "Error: " . $e->getMessage();

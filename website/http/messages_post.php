@@ -47,7 +47,7 @@ try {
         
         //punish high scores
         if ($score > (2 * $threshold)) {
-            $score = $score * $score;
+            $score = min($score * $score,14400);
         }
         
         //store new score

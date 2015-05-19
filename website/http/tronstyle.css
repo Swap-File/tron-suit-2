@@ -4,19 +4,29 @@ body {
     max-width: 100%;
 	margin:0;
 	padding-right: 2px;
-
+	color: white;	
 }
 
 #index-page  {
-    font-family: Sans-Serif;
 	margin:5px;
-	 max-width: 700px;
+	max-width: 700px;
+	background-color: black;
+
+}
+#intro  {
+   background-image: url('disc.png');
+    background-repeat: no-repeat;
+    background-position: 50% 0%;
+}
+h1,h2 {
+    text-shadow: 3px 3px #000000;
 }
 
 /* gradient specific stuff */
 .gradient {
-    height: 10px;
-    background: linear-gradient(to right, rgba(0,0, 0,0), rgba(0,0, 0,0));
+    height: 20px;
+	color:black;
+    background: linear-gradient(to right, rgba(240,240, 240,100), rgba(240,240, 240,100));
 }
 /* box outline */
 .gradient, .boxed  {
@@ -26,7 +36,22 @@ body {
 }
 /* std button */
 .button {
-    width: 100px;
+    height: 44px;
+	width: 44px;
+	background-color: #404040;
+	text-align: center;
+	font-size: 12px;
+	opacity: 0.9;
+}
+
+.subbutton {
+    height: 44px;
+	width: 118px;
+	background-color: #404040;
+	text-align: center;
+	font-size: 12px;
+	color: white;
+	opacity: 0.9;
 }
 /* width of stuff */
 .gradient,.boxed,.text_input{
@@ -35,12 +60,17 @@ body {
 /* grayed out stuff */
 #old_text{
 background-color: #F0F0F0;
+text-align: center;
 }
+#new_text{
 
+text-align: center;
+}
 .boxed {
 height: 350px;
 }
 
-#blame {
+#blame,#rightclick,#leftclick {
 font-size: small;
 }
+

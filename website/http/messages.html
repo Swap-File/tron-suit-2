@@ -1,60 +1,83 @@
 <html>
+
 <head>
     <meta content="text/html;charset=utf-8" http-equiv="Content-Type">
     <meta content="utf-8" http-equiv="encoding">
     <title>Tron Suit 2.0</title>
     <link rel="stylesheet" type="text/css" href="tronstyle.css">
 </head>
+
 <body>
+    <center>
+        Last Requested Colors
+        <div class="gradient" id="old_gradient"></div>
+        <br>Request a Color
+        <br>
+        <div class="gradient" id="new_gradient">
+            <div>
+                <span style="float: left;">
+		 <div id="leftclick" style="padding-LEFT: 10px; PADDING-TOP: 3px" >
+		Pick Color 1 Here
+		</div>
+ 		</span>
+                <span style="float: right;"> 
+		 <div id="rightclick" style="padding-RIGHT: 10px; PADDING-TOP: 3px" >
+  		Pick Color 2 Here
+		</div>
+		</span>
+            </div>
 
-    Last requested colors :
-    <div class="gradient" id="old_gradient"></div>
-
-    <br> Request a Color (Click to Select):
-    <br>
-    <div class="gradient" id="new_gradient" onclick="gradientclick()"></div>
-    <div>
-        <span style="float: left;">
+        </div>
+        <div>
+            <span style="float: left;">
+		
 		<input readonly  style="width:75px" id="myColor1" >
  		</span>
-        <span style="float: right;"> 
+            <span style="float: right;"> 
   		<input readonly  style="width:75px" id="myColor2">
 		</span>
-    </div>
-    <center>
-        <input type="button" value="Request Color" id="sendbutton1" class="button" onclick="submit(this)" />
-    </center>
-    <br> Send a Message (Click to Type):
-    <br>
-    <input class="text_input" type="text" id="new_text" maxlength="160">
-    <br>
-    <center>
-        <input type="button" value="Send Message" id="sendbutton2" class="button" onclick="submit(this)" />
-    </center>
-    <br>Last sent message:
-    <br>
-    <input readonly class="text_input" type="text" id="old_text" value="Loading...">
-    <br>
+        </div>
+        <center>
+            <input type="button" value="Submit Color" id="sendbutton1" class="subbutton" onclick="submit(this)" />
+        </center>
+        <br> Send a Message
+        <br>
+        <input class="text_input" type="text" id="new_text" maxlength="160" value="Compose Message Here" onClick="document.getElementById('new_text').value= '';">
+        <br>
+        <center>
+            <input type="button" value="Submit Message" id="sendbutton2" class="subbutton" onclick="submit(this)" />
+        </center>
+        <br>Last Sent Message:
+        <br>
+        <input readonly class="text_input" type="text" id="old_text" value="Loading...">
+        <br>
 
-    <br>
-    <div id="Blame"></div>
-    <script type="text/javascript" src="jscolor/jscolor.js"></script>
-    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
-    <script type='text/javascript' src='tinycolor.js'></script>
+        <br>
+        <div id="Blame"></div>
+        <script type="text/javascript" src="jscolor/jscolor.js"></script>
+        <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
+        <script type='text/javascript' src='tinycolor.js'></script>
+    </center>
 </body>
 
 </html>
 
 <script>
     refresh_rate = 2000;
-	myPicker1 = new jscolor.color(document.getElementById('myColor1'), {hash:true, onImmediateChange:'updateInfo1();' });
-	myPicker1.fromString('000000');
-	myPicker2 = new jscolor.color(document.getElementById('myColor2'),  {hash:true, onImmediateChange:'updateInfo2();' });
+    myPicker1 = new jscolor.color(document.getElementById('myColor1'), {
+        hash: true,
+        onImmediateChange: 'updateInfo1();'
+    });
+    myPicker1.fromString('000000');
+    myPicker2 = new jscolor.color(document.getElementById('myColor2'), {
+        hash: true,
+        onImmediateChange: 'updateInfo2();'
+    });
     myPicker2.fromString('000000');
 
     color1set = false;
-	color2set = false;
-	
+    color2set = false;
+
     get_messages();
 
     function get_messages() {
@@ -72,12 +95,12 @@
 
             if (color1 == "#000000" || color1 == "#000000") {
                 $("#old_gradient").css({
-                    'background': 'linear-gradient(to right, rgba(255,0,0,0),rgba(255,0,0,0))'
+                    'background': 'linear-gradient(to right, rgba(96,96,96,255),rgba(96,96,96,255))'
                 });
             } else {
-			    $("#old_gradient").css({
-					'background': 'linear-gradient(to right, ' + generate_gradient(tinycolor(color1), tinycolor(color2)) + ')'
-				});
+                $("#old_gradient").css({
+                    'background': 'linear-gradient(to right, ' + generate_gradient(tinycolor(color1), tinycolor(color2)) + ')'
+                });
             }
             document.getElementById("old_text").value = user_msg;
         });
@@ -88,12 +111,30 @@
 
         if (button.id == 'sendbutton1') {
             var new_text = '';
+			if ('#' + myPicker1 === "#000000" || '#' + myPicker2 === "#000000"){
+				            document.getElementById("sendbutton1").value = "Blank Color!";
+				setTimeout(function() {
+				document.getElementById("sendbutton1").value = "Submit Color";
+				}, 5000)
+		
+				return;
+			} 
             var color1 = '#' + myPicker1;
             var color2 = '#' + myPicker2;
         }
 
         if (button.id == 'sendbutton2') {
             var new_text = $('#new_text').val();
+			if (new_text === "Compose Message Here" || new_text === "" ) {
+				
+            document.getElementById("sendbutton2").value = "Blank Message!";
+        
+				setTimeout(function() {
+					document.getElementById("sendbutton2").value = "Send Message";
+				}, 5000)
+		
+			return;
+			} 
             var color1 = '#000000';
             var color2 = '#000000';
         }
@@ -120,33 +161,45 @@
             alert("Request ignored, Please slow down");
         }
         setTimeout(function() {
-            document.getElementById("sendbutton1").value = "Request Color";
-            document.getElementById("sendbutton2").value = "Send Message";
+            document.getElementById("sendbutton1").value = "Submit Color";
+            document.getElementById("sendbutton2").value = "Submit Message";
             document.getElementById("sendbutton1").removeAttribute('disabled');
             document.getElementById("sendbutton2").removeAttribute('disabled');
         }, 3000 + (result * 10000))
     }
 
-    function gradientclick() {
-        myPicker1.showPicker();
-    }
-	
-	function updateInfo1(color) {
-		color1set = true;
-		if (color2set == false) {
+    $('#new_gradient').click(function(e) {
+
+        var howFarFromLeft = (e.pageX - $(this).offset().left) / $('#new_gradient').width();
+
+        if (howFarFromLeft > .5) {
+            myPicker2.showPicker();
+        } else {
+            myPicker1.showPicker();
+        }
+
+    });
+
+    function updateInfo1(color) {
+        document.getElementById("leftclick").innerHTML = "";
+
+        color1set = true;
+        if (color2set == false) {
             myPicker2.fromRGB(myPicker1.rgb[0], myPicker1.rgb[1], myPicker1.rgb[2]);
         }
-		updateInfo();	
-	}
-	function updateInfo2(color) {		 
-		color2set = true;
-		if (color1set  == false) {
+        updateInfo();
+    }
+
+    function updateInfo2(color) {
+        document.getElementById("rightclick").innerHTML = "";
+        color2set = true;
+        if (color1set == false) {
             myPicker1.fromRGB(myPicker2.rgb[0], myPicker2.rgb[1], myPicker2.rgb[2]);
         }
-		updateInfo();		
-	}
-	
-	
+        updateInfo();
+    }
+
+
     function updateInfo() {
         $("#new_gradient").css({
             'background': 'linear-gradient(to right, ' + generate_gradient(jsc2tinyc(myPicker1), jsc2tinyc(myPicker2)) + ')'

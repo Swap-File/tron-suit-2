@@ -784,6 +784,7 @@ var jscolor = {
 			p.btn.onmousedown = function () {
 				THIS.hidePicker();
 			};
+
 			p.btnS.style.lineHeight = p.btn.style.height;
 
 			// load images in optimal order
