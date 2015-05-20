@@ -41,22 +41,23 @@ void loop() {
 
 	long start_time = micros();
 
+	
 
 	if (ADC_Switch_Sample.check()){
 
 		switch (adc1_mode){
 		case BATTERY_METER:
-			voltage = voltage * .95 + .05 * (((uint16_t)adc->analogReadContinuous(ADC_1)) / 4083.375); //voltage
+			voltage = voltage * .95 + .05 * (((uint16_t)adc->analogReadContinuous(ADC_1)) / 4083.375 * (12.05/10.55)); //voltage
 			adc->stopContinuous(ADC_1);
-			adc->setReference(ADC_REF_INTERNAL, ADC_1);  //modified this to remove calibration, drops time from 2ms to ~2ns
-			adc->startContinuous(38, ADC_1);
+			adc->setReference(ADC_REF_1V2, ADC_1);  //modified this to remove calibration, drops time from 2ms to ~2ns
+			adc->startContinuous(ADC_TEMP_SENSOR, ADC_1);
 			adc1_mode = TEMP_SENSOR;
 			break;
 		case TEMP_SENSOR:
 			// temp sensor from https ://github.com/manitou48/teensy3/blob/master/chiptemp.pde
 			temperature = temperature * .95 + .05 * (25 - (((uint16_t)adc->analogReadContinuous(ADC_1)) - 38700) / -35.7); //temp in C
 			adc->stopContinuous(ADC_1);
-			adc->setReference(ADC_REF_EXTERNAL, ADC_1);  //modified this to remove calibration
+			adc->setReference(ADC_REF_DEFAULT, ADC_1);  //modified this to remove calibration
 			adc->startContinuous(A3, ADC_1);
 			adc1_mode = BATTERY_METER;
 			break;
@@ -103,7 +104,7 @@ void loop() {
 		Serial.print(" ");
 		Serial.print(glovestats.local_packets_out_per_second);
 		Serial.print(" ");
-		Serial.println(discstats.total_lost_packets);
+		Serial.println(voltage);
 
 
 		glovestats.total_lost_packets += (glovestats.local_packets_out_per_second << 1); //add in both gloves
@@ -255,7 +256,7 @@ void loop() {
 			//}
 
 
-			if ((final_color.r & 0xff == 0xff) | ((final_color.g >> 16) & 0xff == 0xff) | ((final_color.b >> 8) & 0xff == 0xff)){
+			if ((((final_color.r & 0xff) == 0xff) | (((final_color.g >> 16) & (0xff)) == 0xff) | (((final_color.b >> 8) & (0xff)) == 0xff))){
 				display.drawPixel(realtime_location_x + x, realtime_location_y + 7 - y, WHITE);
 			}
 
@@ -350,10 +351,19 @@ void loop() {
 
 CHSV map_hsv(uint8_t input, uint8_t in_min, uint8_t in_max, CHSV* out_starting, CHSV* out_ending){
 
-	return CHSV(
-	(input - in_min) * (out_ending->h - out_starting->h) / (in_max - in_min) + out_starting->h, \
-	(input - in_min) * (out_ending->s - out_starting->s) / (in_max - in_min) + out_starting->s, \
-	(input - in_min) * (out_ending->v - out_starting->v) / (in_max - in_min) + out_starting->v);
-}
+	//calculate shortest path between colors
 
+	int16_t shortest_path = out_ending->h; //no rollover
+	if ((((int16_t)out_ending->h) + 255) - ((int16_t)out_starting->h) <= 127) {
+		shortest_path += 255;  //rollover 
+	}
+	else if ((int16_t)(out_starting->h) - (((int16_t)out_ending->h) - 255) <= 127) {
+		shortest_path -= 255; //rollunder
+	}
+
+	return CHSV(
+		(uint8_t)((input - in_min) * (shortest_path - out_starting->h) / (in_max - in_min) + out_starting->h), \
+		(input - in_min) * (out_ending->s - out_starting->s) / (in_max - in_min) + out_starting->s, \
+		(input - in_min) * (out_ending->v - out_starting->v) / (in_max - in_min) + out_starting->v);
+}
 

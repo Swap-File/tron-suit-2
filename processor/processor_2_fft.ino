@@ -55,7 +55,7 @@ inline void fftmath(void){
 				EQdisplay[x][y-1] = EQdisplay[x][y];
 			}
 		}
-	}
+	} 
 	else if (fftmode == FFT_MODE_OFF){
 		for (uint8_t y = 0; y < 8; y++) {
 			for (uint8_t x = 0; x < 16; x++) {

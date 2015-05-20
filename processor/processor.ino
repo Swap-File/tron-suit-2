@@ -8,12 +8,12 @@
 
 #define USE_OCTOWS2811
 #include <OctoWS2811.h> //DMA strip output
-#include <FastLED.h> //LED handling
+#include <FastLED.h> //LED handling  use 3.1 beta
 
 #include <Metro.h> //timers
 
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
+#include <Adafruit_GFX.h> //use modified version with pixelread
+#include <Adafruit_SSD1306.h> //use modified version for 64x48 OLED
 
 #include <ADC.h>
 
@@ -31,7 +31,7 @@
 #define FFT_MODE_VERT_BARS_DOWN 4
 #define FFT_MODE_VERT_BARS_STATIC 5
 #define FFT_MODE_OFF 6
-uint8_t fftmode = FFT_MODE_OFF;
+uint8_t fftmode = FFT_MODE_HORZ_BARS_RIGHT;
 
 #define MENU_DEFAULT 1
 #define MENU_FFT_H_or_V 2
@@ -212,7 +212,7 @@ Adafruit_SSD1306 display(OLED_DC, OLED_RESET, OLED_CS);
 uint8_t mask_mode = 0;
 
 float temperature = 0.0;
-float voltage = 0.0;
+float voltage = 14.4;
 char sms_message1[160] = "TESTING TEXT MESSAGE";
 char sms_message2[160];
 char *front_sms = sms_message1;

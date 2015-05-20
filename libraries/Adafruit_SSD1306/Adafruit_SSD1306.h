@@ -39,7 +39,7 @@ All text above, and the splash screen must be included in any redistribution
 #define WHITE 1
 #define INVERSE 2
 
-#define SSD1306_I2C_ADDRESS   0x3c	// 011110+SA0+RW - 0x3C or 0x3D
+#define SSD1306_I2C_ADDRESS   0x3C	// 011110+SA0+RW - 0x3C or 0x3D
 // Address for 128x32 is 0x3C
 // Address for 128x64 is 0x3D (default) or 0x3C (if SA0 is grounded)
 
@@ -57,16 +57,16 @@ All text above, and the splash screen must be included in any redistribution
     SSD1306_96_16
 
     -----------------------------------------------------------------------*/
-  // #define SSD1306_128_64
- //  #define SSD1306_128_32
+//   #define SSD1306_128_64
+//   #define SSD1306_128_32
 //   #define SSD1306_96_16
- #define SSD1306_64_48
+#define SSD1306_64_48
 /*=========================================================================*/
 
 #if defined SSD1306_128_64 && defined SSD1306_128_32
   #error "Only one SSD1306 display can be specified at once in SSD1306.h"
 #endif
-#if !defined SSD1306_128_64 && !defined SSD1306_128_32 && !defined SSD1306_96_16 && !defined SSD1306_64_48
+#if !defined SSD1306_128_64 && !defined SSD1306_128_32 && !defined SSD1306_96_16 & !defined SSD1306_64_48
   #error "At least one SSD1306 display must be specified in SSD1306.h"
 #endif
 
@@ -74,7 +74,6 @@ All text above, and the splash screen must be included in any redistribution
   #define SSD1306_LCDWIDTH                  64
   #define SSD1306_LCDHEIGHT                 48
 #endif
-
 #if defined SSD1306_128_64
   #define SSD1306_LCDWIDTH                  128
   #define SSD1306_LCDHEIGHT                 64
@@ -144,8 +143,6 @@ class Adafruit_SSD1306 : public Adafruit_GFX {
   void ssd1306_command(uint8_t c);
   void ssd1306_data(uint8_t c);
 
-  
-  
   void clearDisplay(void);
   void invertDisplay(uint8_t i);
   void display();
@@ -157,10 +154,11 @@ class Adafruit_SSD1306 : public Adafruit_GFX {
   void startscrolldiagleft(uint8_t start, uint8_t stop);
   void stopscroll(void);
 
-  void dim(uint8_t contrast);
+  void dim(boolean dim);
 
   void drawPixel(int16_t x, int16_t y, uint16_t color);
   boolean readPixel(int16_t x, int16_t y);
+  
   virtual void drawFastVLine(int16_t x, int16_t y, int16_t h, uint16_t color);
   virtual void drawFastHLine(int16_t x, int16_t y, int16_t w, uint16_t color);
 

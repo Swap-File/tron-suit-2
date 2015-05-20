@@ -3,7 +3,7 @@ inline void SerialUpdate(void){
 		disc0.packet_beam--;
 		//if (disc0.packet_beam > 16)  disc0.packet_beam = 16;
 
-		uint8_t raw_buffer[14];
+		uint8_t raw_buffer[15];
 
 		raw_buffer[0] = disc0.color1.h;
 		raw_buffer[1] = disc0.color1.s;

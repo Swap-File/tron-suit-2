@@ -5,6 +5,8 @@
 #ifndef __INC_LIB8TION_H
 #define __INC_LIB8TION_H
 
+FASTLED_NAMESPACE_BEGIN
+
 /*
 
  Fast, efficient 8-bit math functions specifically
@@ -160,7 +162,7 @@
      beat88( BPM88) = 16-bit repeating sawtooth wave
    BPM is beats per minute in either simple form
    e.g. 120, or Q8.8 fixed-point form.
-   BPM88 is beats per minute in ONLY Q8.8 fixed-point 
+   BPM88 is beats per minute in ONLY Q8.8 fixed-point
    form.
 
 Lib8tion is pronounced like 'libation': lie-BAY-shun
@@ -178,7 +180,7 @@ Lib8tion is pronounced like 'libation': lie-BAY-shun
 // for memmove, memcpy, and memset if not defined here
 #endif
 
-#if defined(__AVR_ATtiny24__) || defined(__AVR_ATtiny44__) || defined(__AVR_ATtiny84__) || defined(__AVR_ATtiny25__) || defined(__AVR_ATtiny45__) || defined(__AVR_ATtiny85__)
+#if defined(__AVR_ATmega32U2__) || defined(__AVR_ATmega16U2__) || defined(__AVR_ATmega8U2__) || defined(__AVR_AT90USB162__) || defined(__AVR_ATtiny24__) || defined(__AVR_ATtiny44__) || defined(__AVR_ATtiny84__) || defined(__AVR_ATtiny25__) || defined(__AVR_ATtiny45__) || defined(__AVR_ATtiny85__)
 #define LIB8_ATTINY 1
 #endif
 
@@ -1745,6 +1747,30 @@ LIB8STATIC uint8_t cubicwave8(uint8_t in)
     return ease8InOutCubic( triwave8( in));
 }
 
+// squarewave8: square wave generator.  Useful for
+//           turning a one-byte ever-increasing value
+//           into a one-byte value that is either 0 or 255.
+//           The width of the output 'pulse' is
+//           determined by the pulsewidth argument:
+//           If pulsewidth is 255, output is always 255.
+//           If pulsewidth < 255, then
+//             if input < pulsewidth  then output is 255
+//             if input >= pulsewidth then output is 0
+//
+// 255   +--pulsewidth--+
+//  .    |              |
+//  0    0              +--------(256-pulsewidth)--------
+//
+LIB8STATIC uint8_t squarewave8( uint8_t in, uint8_t pulsewidth=128)
+{
+    if( in < pulsewidth || (pulsewidth == 255)) {
+        return 255;
+    } else {
+        return 0;
+    }
+}
+
+
 
 
 // sqrt16: square root for 16-bit integers
@@ -1781,12 +1807,12 @@ LIB8STATIC uint8_t sqrt16(uint16_t x)
 }
 
 
-template<class T, int F, int I> class q3 {
+template<class T, int F, int I> class q {
   T i:I;
   T f:F;
 public:
-  q3(float fx) { i = fx; f = (fx-i) * (1<<F); }
-  q3(uint8_t _i, uint8_t _f) {i=_i; f=_f; }
+  q(float fx) { i = fx; f = (fx-i) * (1<<F); }
+  q(uint8_t _i, uint8_t _f) {i=_i; f=_f; }
   uint32_t operator*(uint32_t v) { return (v*i) + ((v*f)>>F); }
   uint16_t operator*(uint16_t v) { return (v*i) + ((v*f)>>F); }
   int32_t operator*(int32_t v) { return (v*i) + ((v*f)>>F); }
@@ -1796,18 +1822,18 @@ public:
 #endif
 };
 
-template<class T, int F, int I> static uint32_t operator*(uint32_t v, q3<T,F,I> & q3) { return q3 * v; }
-template<class T, int F, int I> static uint16_t operator*(uint16_t v, q3<T,F,I> & q3) { return q3 * v; }
-template<class T, int F, int I> static int32_t operator*(int32_t v, q3<T,F,I> & q3) { return q3 * v; }
-template<class T, int F, int I> static int16_t operator*(int16_t v, q3<T,F,I> & q3) { return q3 * v; }
+template<class T, int F, int I> static uint32_t operator*(uint32_t v, q<T,F,I> & q) { return q * v; }
+template<class T, int F, int I> static uint16_t operator*(uint16_t v, q<T,F,I> & q) { return q * v; }
+template<class T, int F, int I> static int32_t operator*(int32_t v, q<T,F,I> & q) { return q * v; }
+template<class T, int F, int I> static int16_t operator*(int16_t v, q<T,F,I> & q) { return q * v; }
 #ifdef FASTLED_ARM
-template<class T, int F, int I> static int operator*(int v, q3<T,F,I> & q3) { return q3 * v; }
+template<class T, int F, int I> static int operator*(int v, q<T,F,I> & q) { return q * v; }
 #endif
 
-typedef q3<uint8_t, 4,4> q44;
-typedef q3<uint8_t, 6,2> q62;
-typedef q3<uint16_t, 8,8> q88;
-typedef q3<uint16_t, 12,4> q124;
+typedef q<uint8_t, 4,4> q44;
+typedef q<uint8_t, 6,2> q62;
+typedef q<uint16_t, 8,8> q88;
+typedef q<uint16_t, 12,4> q124;
 
 
 
@@ -1864,7 +1890,7 @@ typedef q3<uint16_t, 12,4> q124;
 // that provides similar functionality.
 // You can also force use of the get_millisecond_timer function
 // by #defining USE_GET_MILLISECOND_TIMER.
-#if defined(ARDUINO) && !defined(USE_GET_MILLISECOND_TIMER)
+#if (defined(ARDUINO) || defined(SPARK)) && !defined(USE_GET_MILLISECOND_TIMER)
 // Forward declaration of Arduino function 'millis'.
 uint32_t millis();
 #define GET_MILLIS millis
@@ -2069,7 +2095,7 @@ class CEveryNTimePeriods {
 public:
     timeType mPrevTrigger;
     timeType mPeriod;
-    
+
     CEveryNTimePeriods() { reset(); mPeriod = 1; };
     CEveryNTimePeriods(timeType period) { reset(); setPeriod(period); };
     void setPeriod( timeType period) { mPeriod = period; };
@@ -2085,7 +2111,7 @@ public:
     }
     void reset() { mPrevTrigger = getTime(); };
     void trigger() { mPrevTrigger = getTime() - mPeriod; };
-    
+
     operator bool() { return ready(); }
 };
 typedef CEveryNTimePeriods<uint16_t,seconds16> CEveryNSeconds;
@@ -2111,5 +2137,7 @@ typedef CEveryNTimePeriods<uint8_t,hours8> CEveryNHours;
 
 #define CEveryNMilliseconds CEveryNMillis
 #define EVERY_N_MILLISECONDS(N) EVERY_N_MILLIS(N)
+
+FASTLED_NAMESPACE_END
 
 #endif

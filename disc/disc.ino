@@ -116,7 +116,7 @@ uint16_t fifoCount;     // count of all bytes currently in FIFO
 uint8_t fifoBuffer[64]; // FIFO storage buffer
 
 // orientation/motion vars
-Quaternion q;           // [w, x, y, z]         quaternion container
+Quaternion q2;           // [w, x, y, z]         quaternion container
 VectorInt16 aa;         // [x, y, z]            accel sensor measurements
 VectorInt16 aaReal;     // [x, y, z]            gravity-free accel sensor measurements
 VectorFloat gravity;    // [x, y, z]            gravity vector
@@ -134,16 +134,16 @@ void setup() {
 
 	//battery meter pin
 	pinMode(A9, INPUT);
-	adc->setReference(ADC_REF_EXTERNAL, ADC_0);
+	adc->setReference(ADC_REF_DEFAULT, ADC_0);
 	adc->setAveraging(32, ADC_0);
 	adc->setResolution(16, ADC_0);
 	adc->startContinuous(A9, ADC_0);
 
 	//temp sensor
-	adc->setReference(ADC_REF_INTERNAL, ADC_1);
+	adc->setReference(ADC_REF_1V2, ADC_1);
 	adc->setAveraging(32, ADC_1);
 	adc->setResolution(16, ADC_1);
-	adc->startContinuous(38, ADC_1);
+	adc->startContinuous(ADC_TEMP_SENSOR, ADC_1);
 
 	//Inner LEDs are 0 to 29
 	//Outer LEDs are 120 to 129
@@ -299,9 +299,9 @@ void loop() {
 		// (this lets us immediately read more without waiting for an interrupt)
 		fifoCount -= packetSize;
 
-		mpu.dmpGetQuaternion(&q, fifoBuffer);
-		mpu.dmpGetGravity(&gravity, &q);
-		//mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
+		mpu.dmpGetQuaternion(&q2, fifoBuffer);
+		mpu.dmpGetGravity(&gravity, &q2);
+		//mpu.dmpGetYawPitchRoll(ypr, &q2, &gravity);
 		mpu.dmpGetAccel(&aa, fifoBuffer);
 		mpu.dmpGetLinearAccel(&aaReal, &aa, &gravity);
 

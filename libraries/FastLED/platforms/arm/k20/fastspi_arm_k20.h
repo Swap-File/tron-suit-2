@@ -1,12 +1,17 @@
 #ifndef __INC_FASTSPI_ARM_H
 #define __INC_FASTSPI_ARM_H
 
+FASTLED_NAMESPACE_BEGIN
 
 #if defined(FASTLED_TEENSY3) && defined(CORE_TEENSY)
 
 // Version 1.20 renamed SPI_t to KINETISK_SPI_t
 #if TEENSYDUINO >= 120
 #define SPI_t KINETISK_SPI_t
+#endif
+
+#ifndef KINETISK_SPI0
+#define KINETISK_SPI0 SPI0
 #endif
 
 #ifndef SPI_PUSHR_CONT
@@ -88,30 +93,34 @@ class ARMHardwareSPIOutput {
 	// Borrowed from the teensy3 SPSR emulation code
 	static inline void enable_pins(void) __attribute__((always_inline)) {
 		//serial_print("enable_pins\n");
-		if(_DATA_PIN == 11) {
-			CORE_PIN11_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(2);
-			CORE_PIN12_CONFIG = PORT_PCR_MUX(2);
-			CORE_PIN13_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(2);
-		} else if(_DATA_PIN == 7) {
-			CORE_PIN7_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(2);
-			CORE_PIN8_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(2);
-			CORE_PIN14_CONFIG =  PORT_PCR_DSE | PORT_PCR_MUX(2);
+		switch(_DATA_PIN) {
+			case 7: CORE_PIN7_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(2); break;
+			// case 8: CORE_PIN8_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(2); break;
+			case 11: CORE_PIN11_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(2); break;
+			// case 12: CORE_PIN12_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(2); break;
+		}
+
+		switch(_CLOCK_PIN) {
+			case 13: CORE_PIN13_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(2); break;
+			case 14: CORE_PIN14_CONFIG = PORT_PCR_DSE | PORT_PCR_MUX(2); break;
 		}
 	}
 
 	// Borrowed from the teensy3 SPSR emulation code
 	static inline void disable_pins(void) __attribute__((always_inline)) {
-		//serial_print("disable_pins\n");
-		if(_DATA_PIN == 11) {
-			CORE_PIN11_CONFIG = PORT_PCR_SRE | PORT_PCR_DSE | PORT_PCR_MUX(1);
-			CORE_PIN12_CONFIG = PORT_PCR_SRE | PORT_PCR_DSE | PORT_PCR_MUX(1);
-			CORE_PIN13_CONFIG = PORT_PCR_SRE | PORT_PCR_DSE | PORT_PCR_MUX(1);
-		} else if(_DATA_PIN == 7) {
-			CORE_PIN7_CONFIG = PORT_PCR_SRE | PORT_PCR_DSE | PORT_PCR_MUX(1);
-			CORE_PIN8_CONFIG = PORT_PCR_SRE | PORT_PCR_DSE | PORT_PCR_MUX(1);
-			CORE_PIN14_CONFIG = PORT_PCR_SRE | PORT_PCR_DSE | PORT_PCR_MUX(1);
+		switch(_DATA_PIN) {
+			case 7: CORE_PIN7_CONFIG = PORT_PCR_SRE | PORT_PCR_DSE | PORT_PCR_MUX(1); break;
+			// case 8: CORE_PIN8_CONFIG = PORT_PCR_SRE | PORT_PCR_DSE | PORT_PCR_MUX(1); break;
+			case 11: CORE_PIN11_CONFIG = PORT_PCR_SRE | PORT_PCR_DSE | PORT_PCR_MUX(1); break;
+			// case 12: CORE_PIN12_CONFIG = PORT_PCR_SRE | PORT_PCR_DSE | PORT_PCR_MUX(1); break;
 		}
-}
+
+		switch(_CLOCK_PIN) {
+			case 13: CORE_PIN13_CONFIG = PORT_PCR_SRE | PORT_PCR_DSE | PORT_PCR_MUX(1); break;
+			case 14: CORE_PIN14_CONFIG = PORT_PCR_SRE | PORT_PCR_DSE | PORT_PCR_MUX(1); break;
+		}
+	}
+
 public:
 	ARMHardwareSPIOutput() { m_pSelect = NULL; }
 	ARMHardwareSPIOutput(Selectable *pSelect) { m_pSelect = pSelect; }
@@ -191,7 +200,7 @@ public:
 
 		// Enable SPI0 clock
 		uint32_t sim6 = SIM_SCGC6;
-		if((SPI_t*)pSPIX == &SPI0) {
+		if((SPI_t*)pSPIX == &KINETISK_SPI0) {
 			if (!(sim6 & SIM_SCGC6_SPI0)) {
 				//serial_print("init1\n");
 				SIM_SCGC6 = sim6 | SIM_SCGC6_SPI0;
@@ -212,7 +221,8 @@ public:
 		SPIX.MCR |= SPI_MCR_MSTR; // | SPI_MCR_CONT_SCKE);
 		SPIX.MCR &= ~(SPI_MCR_MDIS | SPI_MCR_HALT);
 
-		enable_pins();
+		// don't enable the pins until we're ready to write out!
+		// enable_pins();
 	}
 
 	static void waitFully() __attribute__((always_inline)) {
@@ -381,5 +391,7 @@ public:
 	}
 };
 #endif
+
+FASTLED_NAMESPACE_END
 
 #endif

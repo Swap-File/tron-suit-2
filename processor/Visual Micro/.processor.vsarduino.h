@@ -10,28 +10,27 @@
 
 #ifndef _VSARDUINO_H_
 #define _VSARDUINO_H_
-#define ARDUINO 106
-#define ARDUINO_MAIN
-#define __AVR__
-#define __avr__
-#define __cplusplus
-#define GCC_VERSION 40702
-#define ARDUINO_ARCH_AVR
-#define ARDUINO_AVR_TEENSY31
+#define __PROGRAM FILES (X86)_MK20dx256__
+#define __PROGRAM FILES (X86)_MK20DX256__
 #define __MK20DX256__
-#define TEENSYDUINO 120
+#define TEENSYDUINO 123
+#define ARDUINO 164
 #define F_CPU 96000000
+#define ARDUINO_ARCH_AVR
 #define USB_SERIAL
 #define LAYOUT_US_ENGLISH
+#define __cplusplus
 #define __inline__
 #define __asm__(x)
 #define __extension__
-#define __ATTR_PURE__
-#define __ATTR_CONST__
+//#define __ATTR_PURE__
+//#define __ATTR_CONST__
 #define __inline__
-#define __asm__ 
+//#define __asm__ 
 #define __volatile__
-
+#define GCC_VERSION 40801
+#define volatile(va_arg) 
+#define _CONST
 typedef void *__builtin_va_list;
 #define __builtin_va_start
 #define __builtin_va_end
@@ -40,14 +39,40 @@ typedef void *__builtin_va_list;
 #define NOINLINE __attribute__((noinline))
 #define prog_void
 #define PGM_VOID_P int
-
+#ifndef __builtin_constant_p
+#define __builtin_constant_p __attribute__((__const__))
+#endif
+#ifndef __builtin_strlen
+#define __builtin_strlen  __attribute__((__const__))
+#endif
 #define NEW_H
-            
+/*
+#ifndef __ATTR_CONST__
+#define __ATTR_CONST__ __attribute__((__const__))
+#endif
+
+#ifndef __ATTR_MALLOC__
+#define __ATTR_MALLOC__ __attribute__((__malloc__))
+#endif
+
+#ifndef __ATTR_NORETURN__
+#define __ATTR_NORETURN__ __attribute__((__noreturn__))
+#endif
+
+#ifndef __ATTR_PURE__
+#define __ATTR_PURE__ __attribute__((__pure__))
+#endif            
+*/
 typedef unsigned char byte;
 extern "C" void __cxa_pure_virtual() {;}
+
+
+
 #include <arduino.h>
 #undef F
 #define F(string_literal) ((const PROGMEM char *)(string_literal))
+#undef PSTR
+#define PSTR(string_literal) ((const PROGMEM char *)(string_literal))
 #undef cli
 #define cli()
 #define pgm_read_byte(address_short)
