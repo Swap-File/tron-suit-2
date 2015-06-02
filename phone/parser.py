@@ -1,6 +1,6 @@
 #qpy:console
 BT_DEVICE_ID = '20:14:04:18:25:68'
-auth = ('', '')
+auth = ('','')
 
 blacklist = {}
 
@@ -38,16 +38,18 @@ def brighten_color(color):
 		color.saturation = .5
 	if (color.luminance < .25):
 		color.luminance = .25
-	if (color.luminance > .75):
-		color.luminance = .75
+	if (color.luminance > .8):
+		color.luminance = .8
 	return color
 	
 import os
 os.system('clear')
 print ("Loading...")
-from colour import Color
+
+import colour
 import requests
 import time
+import re
 import pprint
 import cobs
 from base64 import b64encode
@@ -58,7 +60,7 @@ import sl4a
 #fire up Requests and flush old req
 s = requests.Session()
 try:
-	r = s.get('https:///flush.php', auth=auth)
+	r = s.get('https://tronsuit.asuscomm.com/flush.php', auth=auth)
 	r.close()
 	print ("Flushed old web messages!")
 except:
@@ -71,8 +73,8 @@ while True:
 	input = droid.smsGetMessages(True)	
 	if (len(input.result) == 0):
 		break
+	print ("Flushed 1 old SMS message!")
 	droid.smsMarkMessageRead([input.result[0]['_id']],True)
-print ("Flushed old SMS messages!")
 
 #start bluetooth
 print ('Turning Bluetooth off...')
@@ -122,8 +124,8 @@ while True:
 	if len(bytes_rec) > 0:
 		if cobs.getcrc(bytes_rec[:-1]) == bytes_rec[-1]:
 			#print ("Good CRC!")
-			payload['color1'] = Color(rgb=(int(bytes_rec[0])/255, int(bytes_rec[1])/255, int(bytes_rec[2])/255)).hex_l 
-			payload['color2'] = Color(rgb=(int(bytes_rec[3])/255, int(bytes_rec[4])/255, int(bytes_rec[5])/255)).hex_l 
+			payload['color1'] = colour.Color(rgb=(int(bytes_rec[0])/255, int(bytes_rec[1])/255, int(bytes_rec[2])/255)).hex_l 
+			payload['color2'] = colour.Color(rgb=(int(bytes_rec[3])/255, int(bytes_rec[4])/255, int(bytes_rec[5])/255)).hex_l 
 			
 			payload['glove0cpu'] = int(bytes_rec[6])
 			payload['glove1cpu'] = int(bytes_rec[7])
@@ -169,7 +171,7 @@ while True:
 	
 	if (len(payload) > 0):
 		try:
-			r = s.post('https:///add.php', data=payload ,auth=auth)
+			r = s.post('https://add.php', data=payload ,auth=auth)
 			response =  str( r.content, encoding=r.encoding ) 
 			r.close()
 		except:
@@ -177,7 +179,7 @@ while True:
 
 	
 	response = response.strip()
-	
+
 	if (len(response) == 0):
 		#check for cellphone requests if no web requests
 		input = droid.smsGetMessages(True)	
@@ -240,12 +242,12 @@ while True:
 	colors = []
 	words = []
 	#split into words, make exception for color codes 
-	for item in re.findall(r"#\w+|\w+", body):
+	for item in re.findall(r"#\w+|\w+", response):
 		try:#try to make everything a color
 			colors.append(brighten_color(colour.Color(item)))
 		except:#if it fails, we have a word
 			words.append(item)
-
+			
 	#dupe first colour if we got just one
 	if (len(colors) == 1):
 		colors.append(colors[0])
@@ -254,12 +256,12 @@ while True:
 		color_array = bytearray()
 		for data in (colors[0].rgb + colors[1].rgb):
 			color_array.append(int(data*255))
-			
+				
 		if (sum(color_array) > 0 and len(color_array) == 6):
 			new_color = True
 	
 	#strip HTML color codes (3 and 6 character with leading #)
-	response = re.compile( r'#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})\b').sub("", body)
+	response = re.compile( r'#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})\b').sub("", response)
 	
 	#collapse extra spaces between words
 	response = ' '.join(response.split())
@@ -284,16 +286,16 @@ while True:
 		item_sent = False
 		retries = 0
 		while (item_sent == False and retries < 2):
-			message_firsthalf = bytearray(map(ord, message_firsthalf))
-			droid.bluetoothWriteBinary(b64encode(cobs.encode(message_firsthalf)).decode(),connID)
+			message_firsthalf2 = bytearray(map(ord, message_firsthalf))
+			droid.bluetoothWriteBinary(b64encode(cobs.encode(message_firsthalf2)).decode(),connID)
 			item_sent = btconfirmation()
 			retries = retries + 1
 
 		item_sent = False
 		retries = 0
 		while (item_sent == False and retries < 2):
-			message_secondhalf = bytearray(map(ord, message_secondhalf))
-			droid.bluetoothWriteBinary(b64encode(cobs.encode(message_secondhalf)).decode(),connID)
+			message_secondhalf2 = bytearray(map(ord, message_secondhalf))
+			droid.bluetoothWriteBinary(b64encode(cobs.encode(message_secondhalf2)).decode(),connID)
 			item_sent = btconfirmation()
 			retries = retries + 1
 			

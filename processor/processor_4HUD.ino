@@ -26,15 +26,15 @@ inline void draw_HUD(void){
 
 	//hand display dots - its important to always know where your hands are.
 	display.drawRect(hand_location_x - 1, hand_location_y - 1, 18, 10, WHITE);
-	display.drawPixel(hand_location_x + 8 + glove0.gloveX, hand_location_y + 7 - glove0.gloveY, WHITE);
-	display.drawPixel(hand_location_x + glove1.gloveX, hand_location_y + 7 - glove1.gloveY, WHITE);
+	display.drawPixel(hand_location_x + 15-( 8 + glove0.gloveX), hand_location_y + 7 - glove0.gloveY, WHITE);
+	display.drawPixel(hand_location_x +15- glove1.gloveX, hand_location_y + 7 - glove1.gloveY, WHITE);
 
 	//background overlay with trails, also shows HUD changes
 	display.drawRect(trails_location_x - 1, trails_location_y - 1, 18, 10, WHITE);
 	for (int x = 0; x < 16; x++) {
 		for (int y = 0; y < 8; y++) {
 			if (gloveindicator[x][y] >= 50){  //This sets where decayed pixels disappear from HUD
-				display.drawPixel(trails_location_x + x, trails_location_y + y, WHITE);
+				display.drawPixel(trails_location_x + (15-x), trails_location_y + y, WHITE);
 			}
 		}
 	}
@@ -55,9 +55,14 @@ inline void draw_HUD(void){
 	//this gets updated during writing out the main LED display, its the last thing to do
 	display.drawRect(realtime_location_x - 1, realtime_location_y - 1, 18, 10, WHITE);
 
-	draw_disc(disc0.inner_offset_requested, disc0.inner_magnitude_requested, inner_disc_location_x, inner_disc_location_y);
-
-	draw_disc(disc0.outer_offset_requested, disc0.outer_magnitude_requested, outer_disc_location_x, outer_disc_location_y);
+	if (disc0.disc_mode == DISC_MODE_SWIPE){ //swiping
+		draw_disc(29-scale8(disc0.current_index,30), disc0.current_mag, inner_disc_location_x, inner_disc_location_y);
+		draw_disc(29-scale8(disc0.current_index, 30), disc0.current_mag, outer_disc_location_x, outer_disc_location_y);
+	}
+	else{ //normal idle mode
+		draw_disc(disc0.inner_offset_requested, disc0.inner_magnitude_requested, inner_disc_location_x, inner_disc_location_y);
+		draw_disc(disc0.outer_offset_requested, disc0.outer_magnitude_requested, outer_disc_location_x, outer_disc_location_y);
+	}
 
 }
 
@@ -106,25 +111,8 @@ void draw_disc(uint8_t index_offset, uint8_t magnitude, uint8_t x_offset, uint8_
 			}
 		}
 	}
-	else if (magnitude > 32 && magnitude <= 47){
-		for (uint8_t i = 0; i < 16; i++) {
-			if (i <= magnitude - 32) display.drawPixel(x_offset + circle_x[i], y_offset + circle_y[i], WHITE);
-			if (i <= magnitude - 32) display.drawPixel(x_offset + circle_x[i + 15], y_offset + circle_y[i + 15], WHITE);
-		}
-	}
-	else if (magnitude > 47 && magnitude <= 62){
-		for (uint8_t i = 0; i < 16; i++) {
-			if (i > magnitude - 47) display.drawPixel(x_offset + circle_x[i], y_offset + circle_y[i], WHITE);
-			if (i > magnitude - 47) display.drawPixel(x_offset + circle_x[i + 15], y_offset + circle_y[i + 15], WHITE);
-		}
-	}
-	else if (magnitude > 62 && magnitude <= 77){
-		for (uint8_t i = 0; i < 16; i++) {
 
-		}
-	}
-
-	//blank the beam pixel
+	//blank the beam pixel?
 	//if (disc0.packet_beam < 17 && disc0.packet_beam > 0 && disc0.fade_level < 255){
 	//	display.drawPixel(circle_xcoord(disc0.packet_beam), circle_ycoord(disc0.packet_beam), BLACK);
 	//	display.drawPixel(circle_xcoord(30 - disc0.packet_beam), circle_ycoord(30 - disc0.packet_beam), BLACK);
@@ -160,6 +148,11 @@ void menu_map(uint8_t direction){
 		menu_scroll_start_down();
 		menu_scroll_end_down();
 		break;
+	}
+
+	//silent modes for 2nd finger
+	if (glove0.gesture_finger == 2 || glove1.gesture_finger == 2){
+		scroll_mode = SCROLL_MODE_COMPLETE;
 	}
 
 

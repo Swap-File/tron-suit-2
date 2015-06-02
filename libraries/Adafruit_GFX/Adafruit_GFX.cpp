@@ -469,14 +469,7 @@ void Adafruit_GFX::setRotation(uint8_t x) {
 int16_t Adafruit_GFX::width(void) {
   return _width;
 }
-
-int16_t Adafruit_GFX::getCursorX(void) {
-  return cursor_x;
-}
-
- int16_t Adafruit_GFX::getCursorY(void) {
-  return cursor_y;
-}
+ 
 int16_t Adafruit_GFX::height(void) {
   return _height;
 }
@@ -485,3 +478,10 @@ void Adafruit_GFX::invertDisplay(boolean i) {
   // Do nothing, must be subclassed if supported
 }
 
+int16_t Adafruit_GFX::getCursorX(void) {
+  return cursor_x;
+}
+ 
+int16_t Adafruit_GFX::getCursorY(void) {
+  return cursor_y;
+}

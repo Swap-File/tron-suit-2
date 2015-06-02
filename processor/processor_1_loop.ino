@@ -18,7 +18,7 @@ void setup() {
 	Serial3.begin(115200);  //BT
 
 	//audio library setup
-	AudioMemory(4);
+	AudioMemory(3);
 	fft256_1.windowFunction(AudioWindowHanning256);
 	fft256_1.averageTogether(4);
 
@@ -41,13 +41,13 @@ void loop() {
 
 	long start_time = micros();
 
-	
+
 
 	if (ADC_Switch_Sample.check()){
 
 		switch (adc1_mode){
 		case BATTERY_METER:
-			voltage = voltage * .95 + .05 * (((uint16_t)adc->analogReadContinuous(ADC_1)) / 4083.375 * (12.05/10.55)); //voltage
+			voltage = voltage * .95 + .05 * (((uint16_t)adc->analogReadContinuous(ADC_1)) / 4083.375 * (12.05 / 10.55)); //voltage
 			adc->stopContinuous(ADC_1);
 			adc->setReference(ADC_REF_1V2, ADC_1);  //modified this to remove calibration, drops time from 2ms to ~2ns
 			adc->startContinuous(ADC_TEMP_SENSOR, ADC_1);
@@ -66,41 +66,14 @@ void loop() {
 		//keep re-initing the screen for hot plug support.
 		display.reinit();
 
-
-		if (0){
-
-			Serial.print("ypr\t");
-			Serial.print(sin(glove1.roll_raw * PI / 18000));
-			Serial.print("ypr\t");
-			Serial.print(glove1.finger1);
-			Serial.print("\t");
-			Serial.print(glove1.yaw_compensated);
-			Serial.print("\t");
-			Serial.print(glove1.pitch_compensated);
-			Serial.print("\t");
-			Serial.print(glove1.roll_compensated);
-			Serial.print("\t");
-			Serial.print(glove1.yaw_raw);
-			Serial.print("\t");
-			Serial.print(glove1.pitch_raw);
-			Serial.print("\t");
-			Serial.print(glove1.roll_raw);
-			Serial.print("\t");
-			Serial.print(glove1.yaw_offset);
-			Serial.print("\t");
-			Serial.print(glove1.pitch_offset);
-			Serial.print("\t");
-			Serial.println(glove1.roll_offset);
-		}
 	}
-
-
-
-
 	if (FPSdisplay.check()){
-
-
-		Serial.print((average_time / 100));
+	
+		Serial.print(disc0.disc_mode);
+		Serial.print(" ");
+		Serial.print(disc0.active_primary);
+		Serial.print(" ");
+		Serial.print(leading_glove);
 		Serial.print(" ");
 		Serial.print(glovestats.local_packets_out_per_second);
 		Serial.print(" ");
@@ -130,7 +103,7 @@ void loop() {
 		discstats.local_packets_out_per_second = 0;
 		discstats.local_packets_in_per_second = 0;
 		if (discstats.total_lost_packets > 255) discstats.total_lost_packets = 0;
-
+		
 		bluetoothstats.total_lost_packets += bluetoothstats.local_packets_out_per_second;
 		bluetoothstats.total_lost_packets -= bluetoothstats.local_packets_in_per_second;
 		bluetoothstats.local_packets_in_per_second = 0;
@@ -145,6 +118,9 @@ void loop() {
 		// local_packets_out_counter_1 = 0;
 		// local_packets_in_counter_1 = 0;
 	}
+
+
+	// temp camera stuff
 
 	if (glove1.finger3 == 1){
 
@@ -182,6 +158,7 @@ void loop() {
 	}
 
 
+	//decay the trails of the glove indicator
 	if (glovedisplayfade.check()){
 		for (int x = 0; x < 16; x++) {
 			for (int y = 0; y < 8; y++) {
@@ -192,32 +169,28 @@ void loop() {
 		}
 	}
 
+	//make new trails
+	if (glove0.finger1 == 1){
+		gloveindicator[8 + glove0.gloveX][7 - glove0.gloveY] = 100;
+
+	}
 	if (glove1.finger1 == 1){
-		gloveindicator[8 + glove0.gloveX][7 - glove0.gloveY] = 100;// flip Y for helmet external display by subtracting from 7
-		gloveindicator[glove1.gloveX][7 - glove1.gloveY] = 100;// flip Y for helmet external display by subtracting from 7
+		gloveindicator[glove1.gloveX][7 - glove1.gloveY] = 100;
 	}
 
 
-	if ((glove1.finger1 || glove1.finger2) && menu_mode == MENU_MAG){
-		disc0.outer_magnitude_requested = glove1.calculated_mag;
-	}
-
-
-	if ((glove1.finger1 || glove1.finger2) && menu_mode == MENU_SPIN){
-		disc0.inner_offset_requested = glove1.disc_offset;
-		disc0.outer_offset_requested = glove1.disc_offset;
-	}
-
-
-	if (menu_mode != MENU_MAG && menu_mode != MENU_SPIN){
-		disc0.outer_magnitude_requested = 16;
-		disc0.inner_offset_requested = 0;
-		disc0.outer_offset_requested = 0;
+	//check for gestures
+	if (glove1.finger4 == 1){
+		disc0.disc_mode = 0;
+			menu_mode = MENU_DEFAULT;
+		fftmode = FFT_MODE_OFF;
+		scroll_mode = SCROLL_MODE_COMPLETE;
 	}
 
 	//draw most of hud, last bit will be drawn in external helmet bit
 	draw_HUD();
 
+	//draw the helmet
 	for (uint8_t y = 0; y < 8; y++) {
 		for (uint8_t x = 0; x < 16; x++) {
 
@@ -256,22 +229,45 @@ void loop() {
 			//}
 
 
-			if ((((final_color.r & 0xff) == 0xff) | (((final_color.g >> 16) & (0xff)) == 0xff) | (((final_color.b >> 8) & (0xff)) == 0xff))){
-				display.drawPixel(realtime_location_x + x, realtime_location_y + 7 - y, WHITE);
+			if ((final_color.r & 0xff == 0xff) | ((final_color.g >> 16) & 0xff == 0xff) | ((final_color.b >> 8) & 0xff == 0xff)){
+				display.drawPixel(realtime_location_x + (15 - x), realtime_location_y + 7 - y, WHITE);
 			}
 
 			uint8_t tempindex;  //HUD is only 128 LEDs so it will fit in a byte
 
-			//determin if row is even or odd
+			//determine if row is even or odd abd place pixel
 			if ((y & 0x01) == 1)  tempindex = (y << 4) + 15 - x;  //<< 4 is multiply by 16 pixels per row
 			else                  tempindex = (y << 4) + x; //<< 4 is multiply by 16 pixels per row
 
 			actual_output[tempindex] = final_color;
+
 		}
 	}
 
-	//advance scrolling if timer reached or stop
+	//set internal indicators
+	actual_output[128] = color1;
+	actual_output[129] = color2;
 
+
+	//draw the suit strips
+	for (uint16_t i = 0; i < 38; i++) { 
+	
+		if (disc0.disc_mode == DISC_MODE_SWIPE){
+			mask_blur_and_output((5 * 130) + ((i + (37 - scale8(disc0.current_index, 38))) % 38), &color1, i, disc0.current_mag);
+			mask_blur_and_output((4 * 130) + ((i + (37 - scale8(disc0.current_index, 38))) % 38), &color2, i, disc0.current_mag);
+		}
+		else{
+			mask_blur_and_output((5 * 130) + i, &stream1[(stream_head + i) % 38], i, 19);
+			mask_blur_and_output((4 * 130) + i, &stream2[(stream_head + i) % 38], i, 19);
+
+		}
+
+		actual_output[(6 * 130) + i] = actual_output[i];
+		actual_output[(7 * 130) + i] = actual_output[i];
+	}
+
+
+	//advance scrolling if timer reached or stop
 	if (ScrollSpeed.check()){
 		sms_scroll_pos--;
 		if (sms_text_ending_pos < 0){
@@ -320,21 +316,39 @@ void loop() {
 		CORE_PIN8_CONFIG = PORT_PCR_DSE | PORT_PCR_SRE | PORT_PCR_MUX(3);
 	}
 
-	if (DiscSend.check()){
 
-		//bounce flow_offet between 0 and 16
-		if (flow_offset == 0)		flow_direction_positive = true;
-		else if (flow_offset == 16)	flow_direction_positive = false;
+	if (Flow.check()){
 
-		flow_direction_positive ? flow_offset++ : flow_offset--;
+		uint8_t curoff = quadwave8(flow_offset++);
+		discwave = scale8(curoff, 16);
+		uint8_t suitwave = scale8(curoff, 38);
+
 
 		//calculate current pixels and add to array
-		disc0.color1 = map_hsv(flow_offset, 0, 16, &color1, &color2);
-		disc0.color2 = map_hsv(flow_offset, 0, 16, &color1, &color2);
-		disc0.fade_level++;
-		disc0.packet_sequence_number++;
+		if (disc0.disc_mode == DISC_MODE_SWIPE){
 
+			//to suit
+			for (uint8_t current_pixel = 0; current_pixel < 38; current_pixel++) {
+				stream1[current_pixel] = color1;
+				stream2[current_pixel] = color2;
+			}
+		}
+		else{
+			//to suit
+			stream1[stream_head] = map_hsv(suitwave, 0, 37, &color1, &color2);
+			stream2[stream_head] = map_hsv(suitwave, 0, 37, &color1, &color2);
+			
+	
+			if (stream_head == 37){
+				stream_head = 0;
+			}
+			else{
+				stream_head++;
+			}
+		}
 	}
+
+
 
 
 	if (fft256_1.available()) {
@@ -367,3 +381,42 @@ CHSV map_hsv(uint8_t input, uint8_t in_min, uint8_t in_max, CHSV* out_starting, 
 		(input - in_min) * (out_ending->v - out_starting->v) / (in_max - in_min) + out_starting->v);
 }
 
+// 	int i = (current_pixel + loc_offset) % 38;// wrap around to get actual location
+void mask_blur_and_output(uint16_t i, CHSV* color, uint8_t current_pixel, uint8_t magnitude){
+	int blur_modifier = 0;
+	//convert HSV to RGB
+	CRGB temp_rgb = *color;
+
+	//masking code
+	if (magnitude < 19){  //basic open
+		if (current_pixel >= magnitude  && current_pixel <= (38 - magnitude)) temp_rgb = CRGB(0, 0, 0);
+	}
+	else if (magnitude > 19){ //basic close
+		if (current_pixel < (magnitude - 19) || current_pixel >(37 - (magnitude - 20))) temp_rgb = CRGB(0, 0, 0);
+	}
+
+	//determine beam pattern
+	bool blur = true;
+
+
+	if (disc0.packet_beam == current_pixel) blur = false;
+
+	//dont blur or fade pixels that are turning on
+	//dont blur or fade beam pixels
+	//turn leds off immediately
+	if (blur && color->v != 0 && actual_output[i] != CRGB(0, 0, 0)){
+
+		temp_rgb.fadeToBlackBy(disc0.fade_level); // fade_level
+
+		if (actual_output[i].r < temp_rgb.r) temp_rgb.r = min(actual_output[i].r + (blur_rate + blur_modifier), temp_rgb.r);
+		else if (actual_output[i].r > temp_rgb.r) temp_rgb.r = max(actual_output[i].r - (blur_rate + blur_modifier), temp_rgb.r);
+
+		if (actual_output[i].g < temp_rgb.g) temp_rgb.g = min(actual_output[i].g + (blur_rate + blur_modifier), temp_rgb.g);
+		else if (actual_output[i].g > temp_rgb.g) temp_rgb.g = max(actual_output[i].g - (blur_rate + blur_modifier), temp_rgb.g);
+
+		if (actual_output[i].b < temp_rgb.b) temp_rgb.b = min(actual_output[i].b + (blur_rate + blur_modifier), temp_rgb.b);
+		else if (actual_output[i].b > temp_rgb.b) temp_rgb.b = max(actual_output[i].b - (blur_rate + blur_modifier), temp_rgb.b);
+	}
+
+	actual_output[i] = temp_rgb;
+}

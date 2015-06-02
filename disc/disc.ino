@@ -18,7 +18,9 @@
 #include "Wire.h"
 #endif
 
-//#define TESTING
+//strip is offset from accelerometer by this percentage of the full 255 circle
+#define INNER_STRIP_OFFSET 5
+#define OUTER_STRIP_OFFSET 10
 
 MPU6050 mpu;
 
@@ -29,28 +31,30 @@ ADC *adc = new ADC(); // adc object
 CRGB actual_output[NUM_STRIPS * NUM_LEDS_PER_STRIP];
 
 #define DISC_MODE_SWIPE 3
+#define DISC_MODE_IDLE 2
+#define DISC_MODE_OPENING 1
 #define DISC_MODE_OFF 0
 
-uint8_t disc_mode = 2;
-uint8_t effect_mode = 0x10;
+uint8_t disc_mode = DISC_MODE_OFF;
+uint8_t last_disc_mode = DISC_MODE_OFF;
+uint8_t requested_disc_mode = DISC_MODE_OFF;
+uint8_t fresh_mode = 0;  //counter for datachange
+
+uint32_t opening_time = 0;
+
+uint8_t effect_mode = 0x00;
 uint8_t fade_level = 0;
-uint8_t  packet_beam = 0;
-//pacman opening data
-uint32_t inner_opening_time = 0;
-uint32_t outer_opening_time = 0;
-boolean opening_inner = false;
-boolean opening_outer = false;
-uint8_t opening_inner_index = 0;
-uint8_t opening_outer_index = 0;
+uint8_t packet_beam = 0;
 
 uint8_t flow_offset = 0;
-uint8_t saved_outer_index_acceleration = 0;
-uint8_t saved_inner_index_acceleration = 0;
+uint8_t saved_outer_index_acceleration_29 = 0;
+uint8_t saved_inner_index_acceleration_29 = 0;
 
 //main two colors with starter values
 CHSV color1 = CHSV(128, 255, 255);
 CHSV color2 = CHSV(0, 255, 255);
 
+//blue constant and decaying modifier
 uint8_t blur_rate = 2;
 uint8_t blur_modifier = 0;
 
@@ -64,15 +68,31 @@ CHSV *outer_stream = color2_streaming;
 CHSV *inner_stream = color1_streaming;
 
 //effect mode 2 variables
-uint8_t inner_offset_requested = 0;
-uint8_t outer_offset_requested = 0;
+uint8_t live_gravity_index_255 = 0;
+uint8_t inner_gravity_index_29 = 0;
+uint8_t outer_gravity_index_29 = 0;
+
+uint8_t live_acceleration_index_255 = 0;
+uint8_t inner_acceleration_index_29 = 0;
+uint8_t outer_acceleration_index_29 = 0;
+
 uint8_t inner_magnitude_displayed = 0;
-uint8_t outer_magnitude_displayed = 90;
-uint8_t inner_index = 16;
-int8_t outer_index = 16;
+uint8_t outer_magnitude_displayed = 0;
+
+uint8_t inner_index_displayed = 0;
+uint8_t outer_index_displayed = 0;
+uint8_t saved_outer_index_displayed_255 = 0;
+
 uint8_t inner_magnitude_requested = 16;
 uint8_t outer_magnitude_requested = 16;
+uint8_t last_inner_magnitude_requested = 16;
+uint8_t last_outer_magnitude_requested = 16;
 
+uint8_t inner_offset_requested = 0;
+uint8_t outer_offset_requested = 0;
+uint8_t last_inner_offset_requested = 0;
+uint8_t last_outer_offset_requested = 0;
+uint8_t reported_index_255 = 0;
 //serial com data
 #define INCOMING_BUFFER_SIZE 128
 uint8_t incoming_raw_buffer[INCOMING_BUFFER_SIZE];
@@ -157,7 +177,7 @@ void setup() {
 #endif
 
 	Serial.begin(115200); //Debug
-	Serial1.begin(57600); //Wixel
+	Serial1.begin(57600); //Xbee
 
 	// initialize device
 	Serial.println(F("Initializing I2C devices..."));
@@ -208,10 +228,7 @@ void setup() {
 		Serial.println(F(")"));
 	}
 
-
-
-
-
+	
 	//wipe and then put a single color in the streaming buffer for debug
 	for (int i = 0; i < 16; i++) {
 		color2_streaming[i] = CHSV(0, 0, 0);
@@ -247,10 +264,6 @@ void loop() {
 			packets_in_counter = 0;
 			packets_out_per_second = packets_out_counter;
 			packets_out_counter = 0;
-			Serial.print(packets_in_per_second);
-			Serial.print(" ");
-			Serial.print(packets_out_per_second);
-			Serial.print(" ");
 			Serial.print(disc_mode);
 			Serial.print(" ");
 			Serial.print(outer_magnitude_displayed);
@@ -265,14 +278,14 @@ void loop() {
 		inner_stream = bitRead(effect_mode, 1) ? color2_streaming : color1_streaming;
 
 		if (idle_start_timer == 0){
-			
+
 			idle_start_timer = micros();
 		}
 	}
 
 	idle_microseconds = idle_microseconds + (micros() - idle_start_timer);
 
-	
+
 	// reset interrupt flag and get INT_STATUS byte
 	mpuInterrupt = false;
 	mpuIntStatus = mpu.getIntStatus();
@@ -305,139 +318,137 @@ void loop() {
 		mpu.dmpGetAccel(&aa, fifoBuffer);
 		mpu.dmpGetLinearAccel(&aaReal, &aa, &gravity);
 
-		//4.77 = (30/2) / PI + 0.5 physical offset
-		float temp = (atan2(gravity.x, gravity.y) * 4.77) + 15;
+		//graivty calculations Note: (255/2)/PI = 40.5845104884
+		live_gravity_index_255 = (uint8_t)(atan2(gravity.x, gravity.y) * 40.5845104884 + 128); //0-255
+		inner_gravity_index_29 = scale8(live_gravity_index_255 + INNER_STRIP_OFFSET, 30); //0-29
+		outer_gravity_index_29 = scale8((255 - live_gravity_index_255) + OUTER_STRIP_OFFSET, 30); //0-29
 
-		while (temp < 0){
-			temp = temp + 29;
-		}
-		while (temp > 29){
-			temp = temp - 29;
-		}
+		//acceleration calculations Note: (255/2)/PI = 40.5845104884
+		live_acceleration_index_255 = (uint8_t)(atan2(aaReal.x, aaReal.y)  * 40.5845104884 + 128); //0-255
+		inner_acceleration_index_29 = scale8(live_acceleration_index_255 + INNER_STRIP_OFFSET, 30); //0-29
+		outer_acceleration_index_29 = scale8((255 - live_acceleration_index_255) + OUTER_STRIP_OFFSET, 30); //0-29
 
-		inner_index = ((int)floor((temp + 0.5) + 30)) % 30;
-		outer_index = ((29 - inner_index) + 32) % 30;
-
-		//instant accel mag
-		float xy_accel_magnitude = sqrt((long)aaReal.x*aaReal.x + aaReal.y*aaReal.y);
-
-		//smooth a bit...
+		//magnitude calculations
+		float xy_accel_magnitude = sqrt(((long)aaReal.x)*((long)aaReal.x) + ((long)aaReal.y)*((long)aaReal.y));
 		xy_accel_magnitude_smoothed = xy_accel_magnitude_smoothed * .8 + xy_accel_magnitude * .2;
 
-		float temp2 = (atan2(aaReal.x, aaReal.y) * 4.77) + 15;
-		int inner_index_acceleration = ((int)floor((temp2 + 0.5) + 30)) % 30;
-		int outer_index_acceleration = ((29 - inner_index_acceleration) + 32) % 30;
-
-
 		boolean cooldowncomplete = false;
-		if (millis() - cooldown > 250){
-			cooldowncomplete = true;
-		}
+		if (millis() - cooldown > 250) cooldowncomplete = true;
 
-		if (disc_mode == 0 && opening_outer == false){
-			inner_magnitude_displayed = 0;
+		Serial.println(xy_accel_magnitude);
+		//mode changing code here
+		if (disc_mode == DISC_MODE_OFF){
 			outer_magnitude_displayed = 0;
-
-			if (xy_accel_magnitude > 4000){
-				outer_opening_time = millis();
-				opening_outer = true;
-				opening_outer_index = outer_index_acceleration;
-				cooldown = millis();
-			}
-		}
-
-
-		if (disc_mode == 1 && opening_inner == false && cooldowncomplete){
-
-			inner_magnitude_displayed = 0;
-
-			if (xy_accel_magnitude > 4000){
-				inner_opening_time = millis();
-				opening_inner = true;
-				opening_inner_index = inner_index_acceleration;
-
-			}
-		}
-
-		if (opening_outer == true){
-
-			disc_mode = 1;
-			outer_index = opening_outer_index;
-
-			int location = map(millis() - outer_opening_time, 0, 500, 0, 16);
-
-			if (location < 16){
-				outer_magnitude_displayed = location;
-			}
-			else {
-				opening_outer = false;
-			}
-		}
-
-
-		if (opening_inner == true){
-			inner_index = opening_inner_index;
-
-			int location = map(millis() - inner_opening_time, 0, 500, 0, 16);
-
-			if (location < 16){
-				inner_magnitude_displayed = location;
-			}
-			else {
-				disc_mode = 2;
-				opening_inner = false;
-			}
-		}
-
-
-		if (disc_mode >= 2){
-			if (abs(aaReal.z) > 8000 && cooldowncomplete){
-				disc_mode = 2;
-			}
-
+			inner_magnitude_displayed = 0;  //blanked
+	
 			if (xy_accel_magnitude > 5000 && cooldowncomplete){
-				disc_mode = DISC_MODE_SWIPE;
+
+				inner_index_displayed = saved_inner_index_acceleration_29 = inner_acceleration_index_29;
+				outer_index_displayed = saved_outer_index_acceleration_29 = outer_acceleration_index_29;
+
+				saved_outer_index_displayed_255 = live_acceleration_index_255 + INNER_STRIP_OFFSET;
+
+				requested_disc_mode = DISC_MODE_OPENING;
+				fresh_mode++;
 			}
-
 		}
 
-		if (disc_mode == 2){
-			blur_rate = 2;
-			inner_magnitude_displayed = inner_magnitude_requested;
-			outer_magnitude_displayed = outer_magnitude_requested;
+		if (disc_mode == DISC_MODE_SWIPE || disc_mode == DISC_MODE_IDLE){
+			if (abs(aaReal.z) > 8000 && cooldowncomplete){
+				requested_disc_mode = DISC_MODE_IDLE;
+				fresh_mode++;
+			}
+			if (xy_accel_magnitude > 5000 && cooldowncomplete){
+				saved_inner_index_acceleration_29 = inner_acceleration_index_29;
+				saved_outer_index_acceleration_29 = outer_acceleration_index_29;
+				saved_outer_index_displayed_255 = live_acceleration_index_255 + INNER_STRIP_OFFSET;
+
+				requested_disc_mode = DISC_MODE_SWIPE;
+				fresh_mode++;
+			}
 		}
 
-		if (disc_mode == DISC_MODE_SWIPE){
+		//mode reactions here
+		if (disc_mode == DISC_MODE_OPENING){
+
+			//disable blur
 			blur_rate = 255;
-			//maybe adjust the effect for range 
+
 			//stuff the streaming buffers with color data
 			for (uint8_t current_pixel = 0; current_pixel < 16; current_pixel++) {
 				color1_streaming[current_pixel] = color1;
 				color2_streaming[current_pixel] = color2;
 			}
 
+			//capture opening mode entry time
+			if (last_disc_mode != DISC_MODE_OPENING) opening_time = millis();
+
+			//calculate how many pixels should be lit
+			uint8_t effect_progression = map(millis() - opening_time, 0, 500, 0, 16);
+
+			//animate here
+			if (effect_progression < 17){
+				
+				outer_magnitude_displayed =  effect_progression;  //closing pacman mouth
+				inner_magnitude_displayed = effect_progression;  //blanked
+			}
+			else{
+				requested_disc_mode = DISC_MODE_SWIPE;
+				//stufff the saved mag with a high value
+				saved_xy_accel_magnitude_smoothed = 20000;
+			}
+		}
+
+		if (disc_mode == DISC_MODE_IDLE){
+			//enable heavy blur
+			blur_rate = 2;
+
+			//set index
+			inner_index_displayed = inner_gravity_index_29;
+			outer_index_displayed = outer_gravity_index_29;
+			reported_index_255 = live_gravity_index_255;
+			inner_magnitude_displayed = 16;
+			outer_magnitude_displayed = 16;
+
+		}
+
+		if (disc_mode == DISC_MODE_SWIPE){
+			//disable blur
+			blur_rate = 255;
+
+			//stuff the streaming buffers with color data
+			for (uint8_t current_pixel = 0; current_pixel < 16; current_pixel++) {
+				color1_streaming[current_pixel] = color1;
+				color2_streaming[current_pixel] = color2;
+			}
+
+			//enter accel threshold once in swip mode here
 			if (xy_accel_magnitude > 3000){
-				uint8_t magnitude_temp = constrain(map(xy_accel_magnitude, 3000, 10000, 1, 10), 1, 10);
+				uint8_t magnitude_temp = constrain(map(xy_accel_magnitude, 3000, 10000, 1, 10), 1, 16);
 
 				inner_magnitude_displayed = magnitude_temp;
 				outer_magnitude_displayed = magnitude_temp;
 
-				saved_inner_index_acceleration = inner_index_acceleration;
-				saved_outer_index_acceleration = outer_index_acceleration;
+				saved_inner_index_acceleration_29 = inner_acceleration_index_29;
+				saved_outer_index_acceleration_29 = outer_acceleration_index_29;
+
+				saved_outer_index_displayed_255 = live_acceleration_index_255 + INNER_STRIP_OFFSET;
+
 				saved_xy_accel_magnitude_smoothed = xy_accel_magnitude_smoothed;
 			}
 			else{
-				uint8_t magnitude_temp = constrain(map(saved_xy_accel_magnitude_smoothed, 3000, 10000, 1, 20), 1, 20);
+				uint8_t magnitude_temp = constrain(map(saved_xy_accel_magnitude_smoothed, 3000, 10000, 1,10), 1, 16);
 
 				inner_magnitude_displayed = magnitude_temp;
 				outer_magnitude_displayed = magnitude_temp;
+				
 			}
 
-			inner_index = saved_inner_index_acceleration;
-			outer_index = saved_outer_index_acceleration;
-
-
+			inner_index_displayed = saved_inner_index_acceleration_29;
+			outer_index_displayed = saved_outer_index_acceleration_29;
+			reported_index_255 = saved_outer_index_displayed_255;
 		}
+
 
 
 
@@ -453,7 +464,7 @@ void loop() {
 			else LED_color = &inner_stream[((15 - (current_pixel - 16)) + (stream_head - 1) + 15) % 16];
 
 			//set inner LEDs
-			absolute_LED_index = ((60 + inner_index + current_pixel - inner_offset_requested) % 30);
+			absolute_LED_index = ((60 + inner_index_displayed + current_pixel) % 30);
 			mask_blur_and_output(absolute_LED_index, LED_color, current_pixel, inner_magnitude_displayed);
 
 			//first half of outer circle	
@@ -462,24 +473,25 @@ void loop() {
 			else LED_color = &outer_stream[((15 - (current_pixel - 16)) + (stream_head - 1) + 15) % 16];
 
 			//set outer LEDs
-			absolute_LED_index = 120 + ((30 + outer_index + current_pixel + outer_offset_requested) % 30);
+			absolute_LED_index = 120 + ((30 + outer_index_displayed + current_pixel) % 30);
 			mask_blur_and_output(absolute_LED_index, LED_color, current_pixel, outer_magnitude_displayed);
 		}
 
 
 		//called at 100hz max
 		LEDS.show();
-		
+
 		//906 * 64 is low when plugged into batteries, about 3.55 v per cell
 		voltage = voltage * .95 + .05 * (((uint16_t)adc->analogReadContinuous(ADC_0)) / 4083.375); //voltage
 
 		//temp sensor from https://github.com/manitou48/teensy3/blob/master/chiptemp.pde
 		temperature = temperature * .95 + .05 * (25 - (((uint16_t)adc->analogReadContinuous(ADC_1)) - 38700) / -35.7); //temp in C
 
+		//decaying blur modifier that can be set during events
 		blur_modifier = blur_modifier * .9;
-		//Serial.println(blur_modifier);
 
-		
+		if (last_disc_mode != disc_mode) Serial.println(disc_mode);
+		last_disc_mode = disc_mode;
 	}
 }
 
@@ -516,9 +528,9 @@ void sendPacket(){
 
 	//send reply
 	byte raw_buffer[11];
-	raw_buffer[0] = inner_index;
-	raw_buffer[1] = inner_magnitude_displayed;
-	raw_buffer[2] = disc_mode; //add disc_mode and indicator together
+	raw_buffer[0] = reported_index_255 - live_gravity_index_255; //used to see swipe mode on HUD
+	raw_buffer[1] = inner_magnitude_displayed; //used to see swipe mode on HUD
+	raw_buffer[2] = requested_disc_mode | (fresh_mode << 4);  //used to request Swipe mode from suit
 	raw_buffer[3] = packets_in_per_second;
 	raw_buffer[4] = packets_out_per_second;
 	raw_buffer[5] = cpu_usage;
@@ -545,7 +557,7 @@ void receivePacket(const uint8_t* buffer, size_t size)
 	//format of packet is
 	//H-0 S-0 V-0 H-1 S-1 V-1 INNER-INDEX-OFFSET INNER-MAGNITUDE OUTER-INDEX-OFFSET OUTER-MAGNITUDE
 	//PACKET_INDEX FADE MODE CRC
-	
+
 	//Packet index can double as pulse beam
 
 	//mode bits
@@ -580,36 +592,37 @@ void receivePacket(const uint8_t* buffer, size_t size)
 			color1 = CHSV(buffer[0], buffer[1], buffer[2]);
 			color2 = CHSV(buffer[3], buffer[4], buffer[5]);
 
-			uint8_t offset_temp;
-				
-			offset_temp = ((uint8_t)buffer[6]) % 30;
+			inner_offset_requested = ((uint8_t)buffer[6]) % 30;
+			outer_offset_requested = ((uint8_t)buffer[7]) % 30;
 
-			if (offset_temp != inner_offset_requested){
-				inner_offset_requested = offset_temp;
-				blur_modifier = qadd8(blur_modifier, 3);
+			//background stuff the swipe data if it changes remotely for glove control
+			if (last_inner_offset_requested != inner_offset_requested){
+				saved_inner_index_acceleration_29 = inner_offset_requested;
+				last_inner_offset_requested = inner_offset_requested;
 			}
 
-			offset_temp = ((uint8_t)buffer[7]) % 30;
-			
-			if (offset_temp != outer_offset_requested){
-					outer_offset_requested = offset_temp;
-
-					blur_modifier = qadd8(blur_modifier, 3);
-				}
 
 			inner_magnitude_requested = ((uint8_t)buffer[8]) % 17;
 			outer_magnitude_requested = ((uint8_t)buffer[9]) % 17;
 
+			//background stuff the swipe data if it changes remotely for glove control
+			if (last_inner_magnitude_requested != inner_magnitude_requested){
+				inner_magnitude_displayed = inner_magnitude_requested;
+				last_inner_magnitude_requested = inner_magnitude_requested;
+			}
+
+
 			fade_level = buffer[10];
-			effect_mode = buffer[11];
+			effect_mode = (buffer[11] >> 4) & 0x0F;
+			disc_mode = buffer[11] & 0x0F;
 
 			if (last_packet_sequence_number != buffer[12]){
 				last_packet_sequence_number = buffer[12];
 				increment_stream();
 			}
 			packet_beam = buffer[13];
-	
-			
+
+
 		}
 	}
 }
@@ -618,7 +631,7 @@ void increment_stream(){
 	//don't update the streams with incoming data if in mode 3 for smooth exit
 	if (disc_mode != DISC_MODE_SWIPE){
 		//sender MUST change to std stream direction when disc enters mode 3 or exit from mode will look odd
-		boolean invert_stream_direction = bitRead(effect_mode, 4);
+		boolean invert_stream_direction = bitRead(effect_mode, 3);
 
 		//adjust indexes based on direction
 		invert_stream_direction ? stream_head++ : stream_head--;
@@ -641,50 +654,20 @@ void increment_stream(){
 }
 
 
+
 void mask_blur_and_output(uint8_t i, CHSV* color, uint8_t current_pixel, uint8_t magnitude){
 
 	//convert HSV to RGB
 	CRGB temp_rgb = *color;
 
 	//masking code
-
-	//reverse basic modes
-	if (magnitude > 92){
-		magnitude = 31 - (magnitude - 93);
-	}
-	
-	if (magnitude >= 0 && magnitude < 16){  //basic open
+	if (magnitude < 16){  //basic open
 		if (current_pixel >= magnitude  && current_pixel <= (30 - magnitude)) temp_rgb = CRGB(0, 0, 0);
 	}
 	else if (magnitude > 16 && magnitude < 33){ //basic close
 		if (current_pixel < (magnitude - 16) || current_pixel >(29 - (magnitude - 17))) temp_rgb = CRGB(0, 0, 0);
 	}
-	else if (magnitude > 32 && magnitude < 47){ // ccw corkscrew open
-		if (current_pixel < 15){
-			if (current_pixel > (magnitude - 33)) temp_rgb = CRGB(0, 0, 0);
-		}
-		else if (current_pixel - 15 >(magnitude - 33)) temp_rgb = CRGB(0, 0, 0);
-	}
-	else if (magnitude > 47 && magnitude <= 62){ // ccw corkscrew close
-		if (current_pixel < 15){
-			if (current_pixel < (magnitude - 47)) temp_rgb = CRGB(0, 0, 0);
-		}
-		else if (current_pixel - 15 < (magnitude - 47)) temp_rgb = CRGB(0, 0, 0);
-	}
-	else if (magnitude > 62 && magnitude < 77){ //cw corkscrew open
-		if (current_pixel < 15 && current_pixel > 0) {
-			if (current_pixel < 15 - (magnitude - 63)) temp_rgb = CRGB(0, 0, 0);
-		}
-		else if (current_pixel > 15) if (current_pixel < 30 - (magnitude - 63)) temp_rgb = CRGB(0, 0, 0);
-	}
-	else if (magnitude > 77){ //cw corkscrew close
-		if (current_pixel < 15) {
-			if (current_pixel > 14-(magnitude - 78) || current_pixel == 0) temp_rgb = CRGB(0, 0, 0);
-		}
-		else if (current_pixel - 15 >  14 - (magnitude - 78) || current_pixel == 15) temp_rgb = CRGB(0, 0, 0);
-	}
 
-	
 	//determine beam pattern
 	bool blur = true;
 	if (packet_beam < 16){
@@ -692,14 +675,14 @@ void mask_blur_and_output(uint8_t i, CHSV* color, uint8_t current_pixel, uint8_t
 			if (current_pixel == packet_beam) blur = false;
 		}
 		else{
-			if (30-current_pixel == packet_beam) blur = false;
+			if (30 - current_pixel == packet_beam) blur = false;
 		}
 	}
-	
+
 	//dont blur or fade pixels that are turning on
 	//dont blur or fade beam pixels
 	//turn leds off immediately
-	if (blur && color->v != 0 && actual_output[i] != CRGB(0,0,0) && disc_mode < 3){
+	if (blur && color->v != 0 && actual_output[i] != CRGB(0, 0, 0) && disc_mode < 3){
 
 		temp_rgb.fadeToBlackBy(fade_level); // fade_level
 

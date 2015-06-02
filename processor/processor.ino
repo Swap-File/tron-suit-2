@@ -46,6 +46,31 @@ uint8_t menu_mode = MENU_DEFAULT;
 
 boolean flow_direction_positive = true;
 
+#define DISC_MODE_SWIPE 3
+#define DISC_MODE_IDLE 2
+#define DISC_MODE_OPENING 1
+#define DISC_MODE_OFF 0
+
+#define SUIT_MODE_AUDIO 5
+#define SUIT_MODE_CAMFLOW 4
+#define SUIT_MODE_SWIPE 3
+#define SUIT_MODE_IDLE 2
+
+#define SUIT_MODE_OFF 0
+
+//buffers to hold data as it streams in
+int8_t stream_head = 0;
+CHSV color1_streaming[38];
+CHSV color2_streaming[38];
+
+//pointers to colors, set by effect modes
+CHSV *stream2 = color2_streaming;
+CHSV *stream1 = color1_streaming;
+
+uint8_t discwave = 0;
+uint8_t last_discwave = 0;
+
+uint8_t blur_rate = 255;
 typedef struct {
 	boolean gesture_in_progress = false;
 	uint8_t gesture_finger;
@@ -88,7 +113,7 @@ typedef struct {
 	//calculated results
 	int8_t gloveX;
 	int8_t gloveY;
-	int8_t calculated_mag;
+	uint8_t calculated_mag;
 	uint8_t disc_offset; // 0 to 29
 	int16_t magnitude; //about 3000 is edges
 
@@ -105,15 +130,21 @@ typedef struct {
 	uint8_t framing_errors;
 	uint8_t crc_errors;
 
+
+
 	uint8_t cpu_usage;
 	uint8_t cpu_temp;
 
-	uint8_t saved_angle;
-	uint8_t saved_magnitude;
+
+	//detect a swipe and adjust
+
+	int8_t current_mag;
+	int8_t last_index;
+	uint8_t current_index;
 
 	uint8_t battery_voltage;
-	uint8_t current_mode;
-
+	
+	boolean active_primary = true;
 	//sending data
 	CHSV color1;
 	CHSV color2;
@@ -128,12 +159,14 @@ typedef struct {
 	uint8_t inner_magnitude_reported = 0;
 	uint8_t outer_magnitude_reported = 0;
 
-	uint8_t fade_level;
-	uint8_t requested_mode;
+	uint8_t fade_level =128;
+	uint8_t disc_mode = 2;
+	uint8_t requested_mode = 2;
+	uint8_t last_requested_mode =2;
 
 	uint8_t packet_sequence_number;
 	uint8_t packet_beam;
-
+	
 } DISC;
 
 typedef struct {
@@ -283,7 +316,7 @@ Metro glovedisplayfade = Metro(10);
 Metro ADC_Switch_Sample = Metro(100);
 Metro ScrollSpeed = Metro(40);
 Metro GloveSend = Metro(10);
-Metro DiscSend = Metro(50);
+Metro Flow = Metro(50);
 Metro DiscSend3 = Metro(20);
 Metro LEDdisplay = Metro(10);
 
@@ -291,3 +324,10 @@ Metro LEDdisplay = Metro(10);
 #define TEMP_SENSOR 0
 #define BATTERY_METER 1
 uint8_t adc1_mode = TEMP_SENSOR;
+
+
+boolean MENU_MAG_entering = false;
+uint8_t MENU_MAG_entering_starting_inner = 0;
+uint8_t MENU_MAG_entering_starting_outer = 0;
+
+uint8_t leading_glove = 1;

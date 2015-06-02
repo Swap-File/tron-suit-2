@@ -1,7 +1,23 @@
 inline void SerialUpdate(void){
 	if (DiscSend3.check()){
+
 		disc0.packet_beam--;
-		//if (disc0.packet_beam > 16)  disc0.packet_beam = 16;
+
+		//calculate current pixels and add to array
+		if (disc0.disc_mode == DISC_MODE_SWIPE){
+			//to disc
+			disc0.color1 = color1;
+			disc0.color2 = color2;
+		}
+		else{
+			if (last_discwave != discwave){
+				disc0.color1 = map_hsv(discwave, 0, 16, &color1, &color2);
+				disc0.color2 = map_hsv(discwave, 0, 16, &color1, &color2);
+
+				disc0.packet_sequence_number++;
+				last_discwave = discwave;
+			}
+		}
 
 		uint8_t raw_buffer[15];
 
@@ -15,8 +31,15 @@ inline void SerialUpdate(void){
 		raw_buffer[7] = disc0.outer_offset_requested;
 		raw_buffer[8] = disc0.inner_magnitude_requested;
 		raw_buffer[9] = disc0.outer_magnitude_requested;
-		raw_buffer[10] = 128; //disc0.fade_level;  //fade
-		raw_buffer[11] = 0x00;  //mode
+		raw_buffer[10] = disc0.fade_level; //disc0.fade_level;  //fade
+
+		raw_buffer[11] = disc0.disc_mode & 0x0F; // lower 4 are disc mode itself
+
+		if (!disc0.active_primary){ //flip the colors
+			bitSet(raw_buffer[11], 5);
+			bitSet(raw_buffer[11], 4);
+		}
+
 		raw_buffer[12] = disc0.packet_sequence_number;  //sequence
 		raw_buffer[13] = disc0.packet_beam;  //sequence
 		raw_buffer[14] = OneWire::crc8(raw_buffer, 14);
@@ -169,12 +192,99 @@ inline void onPacket2(const uint8_t* buffer, size_t size)
 				discstats.local_packets_in_per_second++;
 			}
 
+			disc0.current_index = buffer[0];
+			disc0.current_mag = buffer[1];
+			disc0.requested_mode = buffer[2];  //upper 4 bits are a counter, lower 4 are data
+
 			disc0.cpu_usage = buffer[5];
 
 			disc0.battery_voltage = buffer[6];
 			disc0.cpu_temp = buffer[7];
 			disc0.crc_errors = buffer[8];
 			disc0.framing_errors = buffer[9];
+
+			//upper 4 bits are a counter, lower 4 are data
+			if (disc0.last_requested_mode != disc0.requested_mode){
+				disc0.disc_mode = disc0.requested_mode & 0x0F;
+				disc0.last_requested_mode = disc0.requested_mode;
+				Serial.println(disc0.disc_mode);
+			}
+
+			//read glove
+			if ((glove1.finger1 || glove1.finger2) && menu_mode == MENU_MAG){
+
+				if (MENU_MAG_entering == true){
+					disc0.disc_mode = 3;
+					MENU_MAG_entering_starting_inner = disc0.inner_magnitude_requested;
+					MENU_MAG_entering = false;
+				}
+				if (leading_glove == 1){
+					disc0.inner_magnitude_requested = glove1.calculated_mag;
+				}
+				else{
+					disc0.inner_magnitude_requested = glove0.calculated_mag;
+				}
+			}
+			else{
+
+				MENU_MAG_entering = true;
+			}
+
+
+
+			if ((glove1.finger1 || glove1.finger2) && menu_mode == MENU_SPIN){
+				disc0.inner_offset_requested = glove1.disc_offset;
+				disc0.outer_offset_requested = glove1.disc_offset;
+			}
+
+			uint8_t temp = 29 - scale8(disc0.current_index, 30);
+			//swiping control code
+			if (disc0.disc_mode == DISC_MODE_SWIPE){
+
+				if (disc0.last_index != temp){
+					//color spincode ccw
+
+					if ((disc0.last_index + 1) % 30 == temp){
+						Serial.println("cw");
+						if (!disc0.active_primary){
+							color1.h = color1.h + 1;
+							color1.v =qadd8(color1.v, 2);
+							color1.s = qadd8(color1.s, 2);
+
+						}
+						else{
+							color2.h = color2.h + 1;
+							color2.v = qadd8(color2.v, 2);
+							color2.s = qadd8(color2.s, 2);
+						}
+					}
+					else if ((disc0.last_index + 29) % 30 == temp){
+						if (!disc0.active_primary){
+							color1.h = color1.h - 1;
+							color1.v = qadd8(color1.v, 2);
+							color1.s = qadd8(color1.s, 2);
+						}
+						else{
+							color2.h = color2.h - 1;
+							color2.v = qadd8(color2.v, 2);
+							color2.s = qadd8(color2.s, 2);
+						}
+						Serial.println("ccw");
+					}
+					//swap active colors
+					else if (abs(disc0.last_index - temp) > 10 && abs(disc0.last_index - temp) < 20){
+						Serial.println("flip");
+						disc0.active_primary = !disc0.active_primary;
+					}
+				}
+			}
+			else{ //normal idle mode
+
+			}
+			disc0.last_index = temp;
+
+
+
 
 		}
 	}
@@ -240,8 +350,6 @@ inline void onPacket3(const uint8_t* buffer, size_t size)
 			}
 			else if (size == 2){
 				if (buffer[0] == 0x00){
-					Serial.println("got request!");
-
 					uint8_t raw_buffer[128];
 
 					CRGB temp_color;
@@ -271,11 +379,11 @@ inline void onPacket3(const uint8_t* buffer, size_t size)
 					raw_buffer[17] = glovestats.saved_local_packets_in_per_second_glove1;
 					raw_buffer[18] = glovestats.saved_local_packets_out_per_second;
 					raw_buffer[19] = (glovestats.total_lost_packets & 0xff);
-				
+
 					raw_buffer[20] = discstats.saved_local_packets_in_per_second;
 					raw_buffer[21] = discstats.saved_local_packets_out_per_second;
 					raw_buffer[22] = (discstats.total_lost_packets & 0xff);
-						
+
 					raw_buffer[23] = (((glove0.yaw_compensated) >> 8) & 0xff);
 					raw_buffer[24] = (((glove0.yaw_compensated) >> 0) & 0xff);
 					raw_buffer[25] = (((glove0.pitch_compensated) >> 8) & 0xff);
@@ -364,6 +472,7 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 			current_glove->color_sensor_B = buffer[10] << 8 | buffer[11];
 			current_glove->color_sensor_Clear = buffer[12] << 8 | buffer[13];
 
+
 			//only allow one finger at a time
 			if ((buffer[14] & 0x0F) == 0x0E){
 				current_glove->finger1 = true;
@@ -398,6 +507,18 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 				current_glove->finger2 = false;
 				current_glove->finger3 = false;
 				current_glove->finger4 = false;
+			}
+
+			//figure out who the leader is
+			if (current_glove == &glove1){
+				if (((buffer[14] & 0x0F) != 0x0F) && (glove0.finger1 == 0 && glove0.finger2 == 0 && glove0.finger3 == 0 && glove0.finger4 == 0)){
+					leading_glove = 1;
+				}
+			}
+			else{
+				if (((buffer[14] & 0x0F) != 0x0F) && (glove1.finger1 == 0 && glove1.finger2 == 0 && glove1.finger3 == 0 && glove1.finger4 == 0)){
+					leading_glove = 0;
+				}
 			}
 
 
@@ -460,15 +581,12 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 
 			// calc mag stuff
 			temp_gloveY = map((current_glove->pitch_compensated), 18000 - GLOVE_DEADZONE, 18000 + GLOVE_DEADZONE, 0, 32);
-			current_glove->calculated_mag = constrain(temp_gloveY, 0, 32);
+			current_glove->calculated_mag = constrain(temp_gloveY, -16, 16);
 
-			//check for gestures
-			if (current_glove->finger4 == 1){
 
-				menu_mode = MENU_DEFAULT;
-				fftmode = FFT_MODE_OFF;
-				scroll_mode = SCROLL_MODE_COMPLETE;
-			}
+
+
+
 
 			if (!current_glove->finger1 &&  !current_glove->finger2 && !current_glove->finger3 && current_glove->gesture_in_progress == true){
 				if (current_glove->gloveY <= 0)      menu_map(HAND_DIRECTION_DOWN);
