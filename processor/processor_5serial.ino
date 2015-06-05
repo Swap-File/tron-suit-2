@@ -211,30 +211,70 @@ inline void onPacket2(const uint8_t* buffer, size_t size)
 			}
 
 			//read glove
-			if ((glove1.finger1 || glove1.finger2) && menu_mode == MENU_MAG){
 
-				if (MENU_MAG_entering == true){
-					disc0.disc_mode = 3;
-					MENU_MAG_entering_starting_inner = disc0.inner_magnitude_requested;
-					MENU_MAG_entering = false;
+
+			//spin code
+			if (menu_mode == MENU_SPIN){
+				if (leading_glove == 0){
+					if (glove0.finger1 || glove0.finger2){
+		
+						if (MENU_SWIPE_entering == true){
+							disc0.disc_mode = DISC_MODE_SWIPE;
+							MENU_SWIPE_entering = false;
+							if (millis() - disc0.taptimer <300 && disc0.current_mag == 16) disc0.active_primary = !disc0.active_primary;
+							disc0.taptimer = millis();
+						}
+						disc0.inner_offset_requested = glove0.disc_offset;
+						disc0.outer_offset_requested = glove0.disc_offset;
+
+						if (glove1.finger1 || glove1.finger2){
+							//map magnitude
+							if (disc0.mag_saved == false){
+								disc0.saved_mag = disc0.current_mag;
+								disc0.mag_saved = true;
+							
+							}
+							disc0.inner_magnitude_requested = constrain(disc0.saved_mag + glove1.y_angle,0,16);
+						}
+						else{
+							disc0.mag_saved = false;
+						}
+					}
+					else{
+						MENU_SWIPE_entering = true;
+					}
+
 				}
-				if (leading_glove == 1){
-					disc0.inner_magnitude_requested = glove1.calculated_mag;
+				else if (leading_glove == 1){
+					if (glove1.finger1 || glove1.finger2){
+
+	
+
+						if (MENU_SWIPE_entering == true){
+							disc0.disc_mode = DISC_MODE_SWIPE;
+							MENU_SWIPE_entering = false;
+							if (millis() - disc0.taptimer <300 && disc0.current_mag == 16) disc0.active_primary = !disc0.active_primary;
+							disc0.taptimer = millis();
+						}
+						disc0.inner_offset_requested = glove1.disc_offset;
+						disc0.outer_offset_requested = glove1.disc_offset;
+						if (glove0.finger1 || glove0.finger2){
+							//map magnitude
+							if (disc0.mag_saved == false){
+								disc0.saved_mag = disc0.current_mag;
+								disc0.mag_saved = true;
+							
+							}
+							disc0.inner_magnitude_requested = constrain(disc0.saved_mag + glove0.y_angle,0, 16);
+						}
+						else{
+							disc0.mag_saved = false;
+						}
+					}
+					else{
+						MENU_SWIPE_entering = true;
+					}
 				}
-				else{
-					disc0.inner_magnitude_requested = glove0.calculated_mag;
-				}
-			}
-			else{
-
-				MENU_MAG_entering = true;
-			}
-
-
-
-			if ((glove1.finger1 || glove1.finger2) && menu_mode == MENU_SPIN){
-				disc0.inner_offset_requested = glove1.disc_offset;
-				disc0.outer_offset_requested = glove1.disc_offset;
 			}
 
 			uint8_t temp = 29 - scale8(disc0.current_index, 30);
@@ -245,10 +285,10 @@ inline void onPacket2(const uint8_t* buffer, size_t size)
 					//color spincode ccw
 
 					if ((disc0.last_index + 1) % 30 == temp){
-						Serial.println("cw");
+						//Serial.println("cw");
 						if (!disc0.active_primary){
 							color1.h = color1.h + 1;
-							color1.v =qadd8(color1.v, 2);
+							color1.v = qadd8(color1.v, 2);
 							color1.s = qadd8(color1.s, 2);
 
 						}
@@ -269,12 +309,16 @@ inline void onPacket2(const uint8_t* buffer, size_t size)
 							color2.v = qadd8(color2.v, 2);
 							color2.s = qadd8(color2.s, 2);
 						}
-						Serial.println("ccw");
+						//Serial.println("ccw");
 					}
 					//swap active colors
 					else if (abs(disc0.last_index - temp) > 10 && abs(disc0.last_index - temp) < 20){
-						Serial.println("flip");
-						disc0.active_primary = !disc0.active_primary;
+						//Serial.println("flip");
+						//supress flip in hand mode
+						if (menu_mode != MENU_SPIN && !glove1.finger1  && !glove1.finger2 && !glove0.finger1 && !glove0.finger2){
+
+							disc0.active_primary = !disc0.active_primary;
+						}
 					}
 				}
 			}
@@ -282,8 +326,6 @@ inline void onPacket2(const uint8_t* buffer, size_t size)
 
 			}
 			disc0.last_index = temp;
-
-
 
 
 		}
@@ -313,8 +355,8 @@ inline void onPacket3(const uint8_t* buffer, size_t size)
 				Serial3.write(0xFF);
 				Serial3.write(0x00);
 
-				color1 = rgb2hsv_rainbow(CRGB(buffer[0], buffer[1], buffer[2]));
-				color2 = rgb2hsv_rainbow(CRGB(buffer[3], buffer[4], buffer[5]));
+				color1 = rgb2hsv_approximate(CRGB(buffer[0], buffer[1], buffer[2]));
+				color2 = rgb2hsv_approximate(CRGB(buffer[3], buffer[4], buffer[5]));
 
 			}
 			else if (size == 71){
@@ -413,12 +455,8 @@ inline void onPacket3(const uint8_t* buffer, size_t size)
 
 					Serial3.write(raw_buffer, 37);
 
-
 				}
-
-
 			}
-
 
 		}
 	}
@@ -472,41 +510,26 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 			current_glove->color_sensor_B = buffer[10] << 8 | buffer[11];
 			current_glove->color_sensor_Clear = buffer[12] << 8 | buffer[13];
 
-
+			current_glove->finger1 = false;
+			current_glove->finger2 = false;
+			current_glove->finger3 = false;
+			current_glove->finger4 = false;
 			//only allow one finger at a time
 			if ((buffer[14] & 0x0F) == 0x0E){
 				current_glove->finger1 = true;
-				current_glove->finger2 = false;
-				current_glove->finger3 = false;
-				current_glove->finger4 = false;
 				current_glove->gesture_finger = 1;
 			}
 			else if ((buffer[14] & 0x0F) == 0x0D){
-				current_glove->finger1 = false;
 				current_glove->finger2 = true;
-				current_glove->finger3 = false;
-				current_glove->finger4 = false;
 				current_glove->gesture_finger = 2;
 			}
 			else if ((buffer[14] & 0x0F) == 0x0B){
-				current_glove->finger1 = false;
-				current_glove->finger2 = false;
 				current_glove->finger3 = true;
-				current_glove->finger4 = false;
 				current_glove->gesture_finger = 3;
 			}
 			else if ((buffer[14] & 0x0F) == 0x07){
-				current_glove->finger1 = false;
-				current_glove->finger2 = false;
-				current_glove->finger3 = false;
 				current_glove->finger4 = true;
 				current_glove->gesture_finger = 4;
-			}
-			else{
-				current_glove->finger1 = false;
-				current_glove->finger2 = false;
-				current_glove->finger3 = false;
-				current_glove->finger4 = false;
 			}
 
 			//figure out who the leader is
@@ -521,7 +544,6 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 				}
 			}
 
-
 			current_glove->packets_in_per_second = buffer[15];
 			current_glove->packets_out_per_second = buffer[16];
 
@@ -531,7 +553,7 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 			current_glove->cpu_usage = buffer[19];
 			current_glove->cpu_temp = buffer[20];
 
-			//update the gesture grid (8x8 grid + overlap 
+			//update the gesture grid (8x8 grid + overlap)
 			int temp_gloveX_saved = 0;
 			int temp_gloveX = 0;
 
@@ -572,21 +594,16 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 
 			temp_gloveY = map((current_glove->pitch_compensated), 18000 - GLOVE_DEADZONE, 18000 + GLOVE_DEADZONE, -1024, 1024);
 
-			int angle = atan2(temp_gloveY, temp_gloveX) * 180 / PI;
+			int angle = atan2(-temp_gloveY, -temp_gloveX) * 180 / PI;
 			angle = (angle + 360 + 90) % 360;
 
-			current_glove->disc_offset = constrain(map(angle, 0, 361, 0, 30), 0, 29);
+			current_glove->disc_offset = constrain(map(angle, 0, 361, 0, 255), 0, 255);
 
+			//magnitude for spinning 
 			current_glove->magnitude = sqrt(temp_gloveX*temp_gloveX + temp_gloveY*temp_gloveY);
 
-			// calc mag stuff
-			temp_gloveY = map((current_glove->pitch_compensated), 18000 - GLOVE_DEADZONE, 18000 + GLOVE_DEADZONE, 0, 32);
-			current_glove->calculated_mag = constrain(temp_gloveY, -16, 16);
-
-
-
-
-
+			//y axis only
+			current_glove->y_angle = constrain(map((current_glove->pitch_compensated), 0, 36000, -64, 64), -32, 32);
 
 			if (!current_glove->finger1 &&  !current_glove->finger2 && !current_glove->finger3 && current_glove->gesture_in_progress == true){
 				if (current_glove->gloveY <= 0)      menu_map(HAND_DIRECTION_DOWN);
@@ -611,92 +628,65 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 			}
 			else current_glove->gesture_in_progress = false;
 
-		}
-	}
-}
 
-uint8_t combine3(uint8_t input1, uint8_t input2, uint8_t input3){
-	return (ctoi(input1) * 100) + (ctoi(input2) * 10) + ctoi(input3);
-}
-
-
-uint8_t ctoi(char input){
-	switch (input) {
-	case '1':		return 1;
-	case '2':		return 2;
-	case '3':		return 3;
-	case '4':		return 4;
-	case '5':		return 5;
-	case '6':		return 6;
-	case '7':		return 7;
-	case '8':		return 8;
-	case '9':		return 9;
-	default:		return 0;
-	}
-}
-
-CHSV rgb2hsv_rainbow(CRGB input_color){
-
-	CHSV output_color;
-
-	uint8_t maximum = max(input_color.r, max(input_color.g, input_color.b));
-	uint8_t minimum = min(input_color.r, min(input_color.g, input_color.b));
-
-	output_color.v = maximum;
-	uint8_t delta = maximum - minimum;
-
-	output_color.s = (maximum == 0) ? 0 : (255 * delta / maximum);
-
-	if (maximum == minimum) {
-		output_color.h = 0;
-	}
-	else {
-		if (maximum == input_color.r){
-			//Serial.println("red is max");
-			if (input_color.g >= input_color.b){
-				if ((input_color.r - input_color.g) <= (delta / 3)){
-					//Serial.println("32-64");
-					output_color.h = map((input_color.r - input_color.g), delta / 3, 0, 32, 64);
+			//toggle opposing glove's camera off and on
+			if (menu_mode == MENU_CAMON){
+				if (current_glove->finger1 || current_glove->finger2){
+					if (current_glove->camera_button_press_handled == false){
+						if (current_glove == &glove0)	glove1.camera_on = !(glove1.camera_on);
+						else							glove0.camera_on = !(glove0.camera_on);
+						current_glove->camera_button_press_handled = true;
+					}
 				}
 				else{
-					//Serial.println("0-32");
-					output_color.h = map((input_color.r - input_color.g), delta, delta / 3, 0, 32);
+					current_glove->camera_button_press_handled = false;
 				}
 			}
 			else{
-				//Serial.println("208-255");
-				output_color.h = map((input_color.r - input_color.b), 0, delta, 208, 255);
+				glove1.camera_on = false;
+				glove0.camera_on = false;
 			}
-		}
-		else if (maximum == input_color.g){
-			//Serial.println("green is max");
-			if (input_color.r >= input_color.b){
-				//Serial.println("64-96");
-				output_color.h = map((input_color.g - input_color.r), 0, delta, 64, 96);
-			}
-			else{
-				if (input_color.g - input_color.b <= delta / 3){
-					//Serial.println("96-128");
-					output_color.h = map((input_color.g - input_color.b), delta, delta / 3, 96, 128);
+
+
+			if (MENU_CAMON && current_glove->camera_on){
+
+				current_glove->output_white_led = 0x01;
+
+				uint32_t sum = current_glove->color_sensor_Clear;
+				//Serial.println(sum);
+				if (sum > 3000 && sum < 20000){
+
+					float r, g, b;
+					r = current_glove->color_sensor_R; r /= sum;
+					g = current_glove->color_sensor_G; g /= sum;
+					b = current_glove->color_sensor_B; b /= sum;
+					r *= 256; g *= 256; b *= 256;
+
+					CHSV temp = rgb2hsv_approximate(CRGB(r, g, b));
+					//temp.v = min(temp.v, 200);
+					//temp.s = max(temp.s, 192);
+					CRGB temp2;
+					hsv2rgb_rainbow(temp, temp2);
+					current_glove->output_rgb_led = temp2;
+
+
+					if (CameraFlow.check()){
+						if (current_glove->cameraflow_index++ > 37) current_glove->cameraflow_index = 0;
+						current_glove->cameraflow[current_glove->cameraflow_index] = temp;
+					}
+
 				}
 				else{
-					//Serial.println("128-132?");
-					output_color.h = map((input_color.g - input_color.b), delta / 3, delta, 128, 160);
+					//ove0.output_rgb_led = CRGB(0, 0, 0);
 				}
 			}
-		}
-		else if (maximum == input_color.b){
-			//Serial.println("blue is max");
-			if (input_color.g > input_color.r){
-				//Serial.println("132?-160");
-				output_color.h = map((input_color.b - input_color.g), -delta / 3, delta, 128, 160);
-			}
 			else{
-				//Serial.println("160-208");
-				output_color.h = map((input_color.b - input_color.r), delta, 0, 160, 208);
+				//current_glove->camera_entering = true;
+				current_glove->output_white_led = 0x00;
+				current_glove->output_rgb_led = CRGB(0, 0, 0);
 			}
+
+
 		}
 	}
-
-	return output_color;
 }

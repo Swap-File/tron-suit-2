@@ -40,8 +40,10 @@ uint8_t fftmode = FFT_MODE_HORZ_BARS_RIGHT;
 #define MENU_FFT 5
 #define MENU_SUIT 6
 #define MENU_DISC 7
-#define MENU_MAG 8
+#define MENU_CAMON 8
 #define MENU_SPIN 9
+#define MENU_CAMERA 10
+
 uint8_t menu_mode = MENU_DEFAULT;
 
 boolean flow_direction_positive = true;
@@ -113,12 +115,17 @@ typedef struct {
 	//calculated results
 	int8_t gloveX;
 	int8_t gloveY;
-	uint8_t calculated_mag;
+	int16_t y_angle;
 	uint8_t disc_offset; // 0 to 29
 	int16_t magnitude; //about 3000 is edges
 
 	uint32_t finger_timer; //differentiate between short and long presses
-
+	
+	CHSV cameraflow[38];
+	uint8_t cameraflow_index = 0;
+	boolean camera_on = false;
+	boolean camera_button_press_handled = false;
+	
 } GLOVE;
 
 
@@ -130,14 +137,10 @@ typedef struct {
 	uint8_t framing_errors;
 	uint8_t crc_errors;
 
-
-
 	uint8_t cpu_usage;
 	uint8_t cpu_temp;
 
-
 	//detect a swipe and adjust
-
 	int8_t current_mag;
 	int8_t last_index;
 	uint8_t current_index;
@@ -166,7 +169,11 @@ typedef struct {
 
 	uint8_t packet_sequence_number;
 	uint8_t packet_beam;
-	
+
+	boolean mag_saved = false;
+	int8_t saved_mag = 0;
+
+	uint32_t taptimer = 0;
 } DISC;
 
 typedef struct {
@@ -316,9 +323,10 @@ Metro glovedisplayfade = Metro(10);
 Metro ADC_Switch_Sample = Metro(100);
 Metro ScrollSpeed = Metro(40);
 Metro GloveSend = Metro(10);
-Metro Flow = Metro(50);
+Metro Flow = Metro(40);
 Metro DiscSend3 = Metro(20);
 Metro LEDdisplay = Metro(10);
+Metro CameraFlow = Metro(50);
 
 //to round robin poll sensors
 #define TEMP_SENSOR 0
@@ -326,8 +334,7 @@ Metro LEDdisplay = Metro(10);
 uint8_t adc1_mode = TEMP_SENSOR;
 
 
-boolean MENU_MAG_entering = false;
-uint8_t MENU_MAG_entering_starting_inner = 0;
-uint8_t MENU_MAG_entering_starting_outer = 0;
+boolean MENU_SWIPE_entering = true;
+uint8_t starting_magnitude = 0;
 
 uint8_t leading_glove = 1;

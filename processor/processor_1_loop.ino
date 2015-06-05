@@ -68,7 +68,7 @@ void loop() {
 
 	}
 	if (FPSdisplay.check()){
-	
+
 		Serial.print(disc0.disc_mode);
 		Serial.print(" ");
 		Serial.print(disc0.active_primary);
@@ -103,7 +103,7 @@ void loop() {
 		discstats.local_packets_out_per_second = 0;
 		discstats.local_packets_in_per_second = 0;
 		if (discstats.total_lost_packets > 255) discstats.total_lost_packets = 0;
-		
+
 		bluetoothstats.total_lost_packets += bluetoothstats.local_packets_out_per_second;
 		bluetoothstats.total_lost_packets -= bluetoothstats.local_packets_in_per_second;
 		bluetoothstats.local_packets_in_per_second = 0;
@@ -120,42 +120,6 @@ void loop() {
 	}
 
 
-	// temp camera stuff
-
-	if (glove1.finger3 == 1){
-
-		glove0.output_white_led = 0x01;
-
-
-		uint32_t sum = glove0.color_sensor_Clear;
-		//Serial.println(sum);
-		if (sum > 3000 && sum < 20000){
-
-			float r, g, b;
-			r = glove0.color_sensor_R; r /= sum;
-			g = glove0.color_sensor_G; g /= sum;
-			b = glove0.color_sensor_B; b /= sum;
-			r *= 256; g *= 256; b *= 256;
-
-			CHSV temp = rgb2hsv_rainbow(CRGB(r, g, b));
-			//temp.v = min(temp.v, 200);
-			//temp.s = max(temp.s, 192);
-			CRGB temp2;
-			hsv2rgb_rainbow(temp, temp2);
-			glove0.output_rgb_led = temp2;
-
-
-			color1 = temp;
-
-		}
-		else{
-			//ove0.output_rgb_led = CRGB(0, 0, 0);
-		}
-	}
-	else{
-		glove0.output_white_led = 0x00;
-		glove0.output_rgb_led = CRGB(0, 0, 0);
-	}
 
 
 	//decay the trails of the glove indicator
@@ -181,9 +145,11 @@ void loop() {
 
 	//check for gestures
 	if (glove1.finger4 == 1){
-		disc0.disc_mode = 0;
-			menu_mode = MENU_DEFAULT;
-		fftmode = FFT_MODE_OFF;
+
+		disc0.disc_mode = 2;
+
+		menu_mode = MENU_DEFAULT;
+		//fftmode = FFT_MODE_OFF;
 		scroll_mode = SCROLL_MODE_COMPLETE;
 	}
 
@@ -245,9 +211,15 @@ void loop() {
 	}
 
 	//set internal indicators
-	actual_output[128] = color1;
-	actual_output[129] = color2;
+	if (disc0.active_primary){
+		actual_output[128] = color1;
+		actual_output[129] = color2;
+	}
+	else{
 
+		actual_output[128] = color2;
+		actual_output[129] = color1;
+	}
 
 	//draw the suit strips
 	for (uint16_t i = 0; i < 38; i++) { 

@@ -231,7 +231,7 @@ case MENU_SUIT:
 		menu_mode = MENU_FFT;
 		break;
 	case HAND_DIRECTION_UP:
-		menu_mode = MENU_DISC; //new menu screen 
+		menu_mode = MENU_CAMERA; //new menu screen 
 		break;
 	case HAND_DIRECTION_DOWN:
 		menu_mode = MENU_DISC; //new menu screen 
@@ -246,33 +246,57 @@ case MENU_SUIT:
 		case HAND_DIRECTION_LEFT:
 			break;
 		case HAND_DIRECTION_RIGHT:
-			menu_mode = MENU_MAG;
+			menu_mode = MENU_SPIN;
 			break;
 		case HAND_DIRECTION_UP:
 			menu_mode = MENU_SUIT;
 			break;
 		case HAND_DIRECTION_DOWN:
-			menu_mode = MENU_SUIT;
+			menu_mode = MENU_CAMERA;
 			break;
 		}
 		break;
 
-
-	case MENU_MAG:
+	case MENU_CAMERA:
 		switch (direction){
-		case HAND_DIRECTION_SHORT_PRESS:
-			menu_mode = MENU_SPIN;
+		case HAND_DIRECTION_LEFT:
+
+			break;
+		case HAND_DIRECTION_RIGHT:
+			menu_mode = MENU_CAMON;
+			break;
+		case HAND_DIRECTION_UP:
+			menu_mode = MENU_DISC; //new menu screen 
+			break;
+		case HAND_DIRECTION_DOWN:
+			menu_mode = MENU_SUIT; //new menu screen 
+
 			break;
 		}
 		break;
-	
+
+
 	case MENU_SPIN:
+		//dead end menu
+	{
 		switch (direction){
-		case HAND_DIRECTION_SHORT_PRESS:
-			menu_mode = MENU_MAG; 
-			break;
+
 		}
 		break;
+	}
+
+	case MENU_CAMON:
+		//dead end menu
+	{
+		switch (direction){
+
+		}
+		break;
+	}
+
+
+	
+	
 
 case MENU_FFT:
 		switch (direction){
@@ -307,9 +331,6 @@ void print_menu_mode(void ){
 		break;
 	case MENU_SUIT:
 		display.print("SUIT");
-		break;
-	case MENU_MAG:
-		display.print("MAG");
 		break;
 	case MENU_SPIN:
 		display.print("SPIN");

@@ -22,12 +22,17 @@
 #define INNER_STRIP_OFFSET 5
 #define OUTER_STRIP_OFFSET 10
 
+//force values
+#define SWIPE_ENTER_FORCE 5000
+#define SWIPE_MAINTAIN_FORCE 3000
+#define SWIPE_EXIT_Z_FORCE 8000
+
 MPU6050 mpu;
 
 ADC *adc = new ADC(); // adc object
 
 #define NUM_LEDS_PER_STRIP 30
-#define NUM_STRIPS 8
+#define NUM_STRIPS 8  //required for OCTOWS2811 but I only use two...
 CRGB actual_output[NUM_STRIPS * NUM_LEDS_PER_STRIP];
 
 #define DISC_MODE_SWIPE 3
@@ -36,6 +41,7 @@ CRGB actual_output[NUM_STRIPS * NUM_LEDS_PER_STRIP];
 #define DISC_MODE_OFF 0
 
 uint8_t disc_mode = DISC_MODE_OFF;
+
 uint8_t last_disc_mode = DISC_MODE_OFF;
 uint8_t requested_disc_mode = DISC_MODE_OFF;
 uint8_t fresh_mode = 0;  //counter for datachange
@@ -47,8 +53,7 @@ uint8_t fade_level = 0;
 uint8_t packet_beam = 0;
 
 uint8_t flow_offset = 0;
-uint8_t saved_outer_index_acceleration_29 = 0;
-uint8_t saved_inner_index_acceleration_29 = 0;
+
 
 //main two colors with starter values
 CHSV color1 = CHSV(128, 255, 255);
@@ -88,11 +93,15 @@ uint8_t outer_magnitude_requested = 16;
 uint8_t last_inner_magnitude_requested = 16;
 uint8_t last_outer_magnitude_requested = 16;
 
+uint8_t saved_outer_index_acceleration_29 = 0;
+uint8_t saved_inner_index_acceleration_29 = 0;
+
 uint8_t inner_offset_requested = 0;
 uint8_t outer_offset_requested = 0;
 uint8_t last_inner_offset_requested = 0;
 uint8_t last_outer_offset_requested = 0;
 uint8_t reported_index_255 = 0;
+
 //serial com data
 #define INCOMING_BUFFER_SIZE 128
 uint8_t incoming_raw_buffer[INCOMING_BUFFER_SIZE];
@@ -118,7 +127,7 @@ uint8_t packets_out_counter = 0;  //counts up
 uint8_t packets_out_per_second = 0; //saves the value
 
 float xy_accel_magnitude_smoothed = 0;
-float saved_xy_accel_magnitude_smoothed = 0;
+int8_t magnitude_saved_temp = 0;
 
 //start voltage at full
 uint16_t disc_voltage = 1024;
@@ -335,13 +344,19 @@ void loop() {
 		boolean cooldowncomplete = false;
 		if (millis() - cooldown > 250) cooldowncomplete = true;
 
-		Serial.println(xy_accel_magnitude);
+		
 		//mode changing code here
+
+		if (last_disc_mode != disc_mode && disc_mode == DISC_MODE_IDLE){
+			outer_magnitude_displayed = 16; 
+			inner_magnitude_displayed = 16;  
+		}
+
 		if (disc_mode == DISC_MODE_OFF){
 			outer_magnitude_displayed = 0;
 			inner_magnitude_displayed = 0;  //blanked
 	
-			if (xy_accel_magnitude > 5000 && cooldowncomplete){
+			if (xy_accel_magnitude > SWIPE_ENTER_FORCE && cooldowncomplete){
 
 				inner_index_displayed = saved_inner_index_acceleration_29 = inner_acceleration_index_29;
 				outer_index_displayed = saved_outer_index_acceleration_29 = outer_acceleration_index_29;
@@ -353,12 +368,14 @@ void loop() {
 			}
 		}
 
+
+
 		if (disc_mode == DISC_MODE_SWIPE || disc_mode == DISC_MODE_IDLE){
-			if (abs(aaReal.z) > 8000 && cooldowncomplete){
+			if (abs(aaReal.z) > SWIPE_EXIT_Z_FORCE && cooldowncomplete){
 				requested_disc_mode = DISC_MODE_IDLE;
 				fresh_mode++;
 			}
-			if (xy_accel_magnitude > 5000 && cooldowncomplete){
+			if (xy_accel_magnitude > SWIPE_ENTER_FORCE && cooldowncomplete){
 				saved_inner_index_acceleration_29 = inner_acceleration_index_29;
 				saved_outer_index_acceleration_29 = outer_acceleration_index_29;
 				saved_outer_index_displayed_255 = live_acceleration_index_255 + INNER_STRIP_OFFSET;
@@ -395,20 +412,18 @@ void loop() {
 			else{
 				requested_disc_mode = DISC_MODE_SWIPE;
 				//stufff the saved mag with a high value
-				saved_xy_accel_magnitude_smoothed = 20000;
+				magnitude_saved_temp = 16;
 			}
 		}
 
 		if (disc_mode == DISC_MODE_IDLE){
 			//enable heavy blur
-			blur_rate = 2;
+			blur_rate = 3;
 
 			//set index
 			inner_index_displayed = inner_gravity_index_29;
 			outer_index_displayed = outer_gravity_index_29;
 			reported_index_255 = live_gravity_index_255;
-			inner_magnitude_displayed = 16;
-			outer_magnitude_displayed = 16;
 
 		}
 
@@ -423,8 +438,8 @@ void loop() {
 			}
 
 			//enter accel threshold once in swip mode here
-			if (xy_accel_magnitude > 3000){
-				uint8_t magnitude_temp = constrain(map(xy_accel_magnitude, 3000, 10000, 1, 10), 1, 16);
+			if (xy_accel_magnitude > SWIPE_MAINTAIN_FORCE){
+				uint8_t magnitude_temp = constrain(map(xy_accel_magnitude, SWIPE_MAINTAIN_FORCE, SWIPE_MAINTAIN_FORCE * 3, 1, 10), 1, 16);
 
 				inner_magnitude_displayed = magnitude_temp;
 				outer_magnitude_displayed = magnitude_temp;
@@ -433,15 +448,12 @@ void loop() {
 				saved_outer_index_acceleration_29 = outer_acceleration_index_29;
 
 				saved_outer_index_displayed_255 = live_acceleration_index_255 + INNER_STRIP_OFFSET;
-
-				saved_xy_accel_magnitude_smoothed = xy_accel_magnitude_smoothed;
+				magnitude_saved_temp = constrain(map(xy_accel_magnitude_smoothed, SWIPE_MAINTAIN_FORCE, SWIPE_MAINTAIN_FORCE * 3, 1, 10), 1, 16);
+		
 			}
 			else{
-				uint8_t magnitude_temp = constrain(map(saved_xy_accel_magnitude_smoothed, 3000, 10000, 1,10), 1, 16);
-
-				inner_magnitude_displayed = magnitude_temp;
-				outer_magnitude_displayed = magnitude_temp;
-				
+				inner_magnitude_displayed = magnitude_saved_temp;
+				outer_magnitude_displayed = magnitude_saved_temp;
 			}
 
 			inner_index_displayed = saved_inner_index_acceleration_29;
@@ -491,6 +503,8 @@ void loop() {
 		blur_modifier = blur_modifier * .9;
 
 		if (last_disc_mode != disc_mode) Serial.println(disc_mode);
+
+
 		last_disc_mode = disc_mode;
 	}
 }
@@ -592,23 +606,25 @@ void receivePacket(const uint8_t* buffer, size_t size)
 			color1 = CHSV(buffer[0], buffer[1], buffer[2]);
 			color2 = CHSV(buffer[3], buffer[4], buffer[5]);
 
-			inner_offset_requested = ((uint8_t)buffer[6]) % 30;
-			outer_offset_requested = ((uint8_t)buffer[7]) % 30;
+			inner_offset_requested = (uint8_t)buffer[6];
+			outer_offset_requested = (uint8_t)buffer[7];
 
 			//background stuff the swipe data if it changes remotely for glove control
 			if (last_inner_offset_requested != inner_offset_requested){
-				saved_inner_index_acceleration_29 = inner_offset_requested;
 				last_inner_offset_requested = inner_offset_requested;
+				saved_outer_index_displayed_255 = live_gravity_index_255- inner_offset_requested +127;
+				saved_outer_index_acceleration_29  = scale8(inner_offset_requested, 30);
+				saved_inner_index_acceleration_29 =( 29 - saved_outer_index_acceleration_29 +2) % 30;
 			}
 
 
-			inner_magnitude_requested = ((uint8_t)buffer[8]) % 17;
-			outer_magnitude_requested = ((uint8_t)buffer[9]) % 17;
+			inner_magnitude_requested = (uint8_t)buffer[8];
+			outer_magnitude_requested = (uint8_t)buffer[9];
 
 			//background stuff the swipe data if it changes remotely for glove control
 			if (last_inner_magnitude_requested != inner_magnitude_requested){
-				inner_magnitude_displayed = inner_magnitude_requested;
-				last_inner_magnitude_requested = inner_magnitude_requested;
+				magnitude_saved_temp = last_inner_magnitude_requested = inner_magnitude_requested;
+		
 			}
 
 
@@ -669,20 +685,21 @@ void mask_blur_and_output(uint8_t i, CHSV* color, uint8_t current_pixel, uint8_t
 	}
 
 	//determine beam pattern
-	bool blur = true;
+	bool pixel_beam = true;
 	if (packet_beam < 16){
 		if (current_pixel < 16){
-			if (current_pixel == packet_beam) blur = false;
+			if (current_pixel == packet_beam) pixel_beam = false;
 		}
 		else{
-			if (30 - current_pixel == packet_beam) blur = false;
+			if (30 - current_pixel == packet_beam) pixel_beam = false;
 		}
 	}
 
-	//dont blur or fade pixels that are turning on
 	//dont blur or fade beam pixels
-	//turn leds off immediately
-	if (blur && color->v != 0 && actual_output[i] != CRGB(0, 0, 0) && disc_mode < 3){
+	//dont blur or fade pixels that are turning on
+	//turn leds off immediately - Not doing
+	//dont blur in swipe mode
+	if (pixel_beam && color->v != 0 && actual_output[i] != CRGB(0, 0, 0) && disc_mode != DISC_MODE_SWIPE){
 
 		temp_rgb.fadeToBlackBy(fade_level); // fade_level
 
