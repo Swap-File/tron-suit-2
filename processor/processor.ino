@@ -10,6 +10,7 @@
 #include <OctoWS2811.h> //DMA strip output
 #include <FastLED.h> //LED handling  use 3.1 beta
 
+#define NOCATCHUP 1
 #include <Metro.h> //timers
 
 #include <Adafruit_GFX.h> //use modified version with pixelread
@@ -30,19 +31,36 @@
 #define FFT_MODE_VERT_BARS_UP 3
 #define FFT_MODE_VERT_BARS_DOWN 4
 #define FFT_MODE_VERT_BARS_STATIC 5
-#define FFT_MODE_OFF 6
-uint8_t fftmode = FFT_MODE_HORZ_BARS_RIGHT;
+uint8_t fft_mode = FFT_MODE_HORZ_BARS_RIGHT;
+
+#define HELMET_MODE_OFF 6
+#define HELMET_MODE_FFT 0
+#define HELMET_MODE_NOISE 7
+#define HELMET_MODE_FIRE 8
+#define HELMET_MODE_SNAKE 9
+#define HELMET_MODE_PONG 10
+#define HELMET_MODE_EMOTICON 11
+uint8_t helmet_mode = HELMET_MODE_FFT;
 
 #define MENU_DEFAULT 1
-#define MENU_FFT_H_or_V 2
-#define MENU_FFT_H 3
-#define MENU_FFT_V 4
-#define MENU_FFT 5
-#define MENU_SUIT 6
+
+#define MENU_HELMET_FFT_ON_H_or_V 2
+#define MENU_HELMET_FFT_ON_H 3
+#define MENU_HELMET_FFT_ON_V 4
+#define MENU_HELMET_FFT_ON 5
+#define MENU_HELMET 6
+#define MENU_HELMET_FFT 12
+#define MENU_HELMET_NOISE 14
+#define MENU_HELMET_PONG 17
+#define MENU_HELMET_PONG_IN 18
+#define MENU_HELMET_EMOTICON 15
 #define MENU_DISC 7
 #define MENU_CAMON 8
 #define MENU_SPIN 9
 #define MENU_CAMERA 10
+#define MENU_HELMET_OPTIONS 11
+
+
 
 uint8_t menu_mode = MENU_DEFAULT;
 
@@ -73,6 +91,7 @@ uint8_t discwave = 0;
 uint8_t last_discwave = 0;
 
 uint8_t blur_rate = 255;
+uint8_t blur_modifier = 255;
 typedef struct {
 	boolean gesture_in_progress = false;
 	uint8_t gesture_finger;
@@ -111,7 +130,7 @@ typedef struct {
 	//outputs
 	CRGB output_rgb_led = CRGB(0, 0, 0);
 	uint8_t output_white_led = 0;
-
+	CHSV output_hsv_led = CHSV(0, 0, 0);
 	//calculated results
 	int8_t gloveX;
 	int8_t gloveY;
@@ -120,14 +139,14 @@ typedef struct {
 	int16_t magnitude; //about 3000 is edges
 
 	uint32_t finger_timer; //differentiate between short and long presses
-	
+
 	CHSV cameraflow[38];
 	uint8_t cameraflow_index = 0;
 	boolean camera_on = false;
 	boolean camera_button_press_handled = false;
-	
-} GLOVE;
+	uint32_t camera_advance = 0;
 
+} GLOVE;
 
 typedef struct {
 	//recieved data
@@ -262,7 +281,6 @@ int16_t sms_text_ending_pos = 0; //160 * 5 max length
 int16_t sms_scroll_pos = 0;
 int16_t menu_text_ending_pos = 0;
 
-
 //scroll state has 3 modes
 //scrolling from start position to 0,0
 //pausing at 0,0 according to scroll_timer
@@ -312,21 +330,41 @@ DISC disc0;
 byte gloveindicator[16][8];
 
 
-CHSV EQdisplay[16][8];
+CRGB Pong_Array[16][8];  //keep this separate so suit effects can pull from it
+CHSV EQ_Array[16][8];  //keep this separate so suit effects can pull from it
 int EQdisplayValueMax16[16]; //max vals for normalization over time
 uint8_t EQdisplayValue16[16]; //max vals for normalization over time
 int EQdisplayValueMax8[8]; //max vals for normalization over time
 uint8_t EQdisplayValue8[8]; //max vals for normalization over time
 
-Metro FPSdisplay = Metro(1000);
-Metro glovedisplayfade = Metro(10);
-Metro ADC_Switch_Sample = Metro(100);
-Metro ScrollSpeed = Metro(40);
-Metro GloveSend = Metro(10);
-Metro Flow = Metro(40);
-Metro DiscSend3 = Metro(20);
-Metro LEDdisplay = Metro(10);
-Metro CameraFlow = Metro(50);
+
+//Stuff for helmet, pulled from fastled, fire, pong, snake, and 
+CRGB Noise_Array[16][8];
+CRGBPalette16 currentPalette(PartyColors_p);
+CRGBPalette16 targetPalette(PartyColors_p);
+
+//NOISE STUFF
+uint8_t noise[16][16];
+
+uint8_t       colorLoop_noise = 1;
+static uint16_t x_noise;
+static uint16_t y_noise;
+static uint16_t z_noise;
+uint16_t speed_noise = 3;
+uint16_t scale_noise = 30;
+
+//FIRE STUFF
+uint8_t heat[16][8];
+
+
+Metro FPSdisplay = Metro(1000, 0);
+Metro glovedisplayfade = Metro(10, 0);
+Metro ADC_Switch_Sample = Metro(100, 0);
+Metro ScrollSpeed = Metro(40, 0);
+Metro GloveSend = Metro(10,0);
+Metro Flow = Metro(40, 0);
+Metro DiscSend3 = Metro(20, 0);
+Metro LEDdisplay = Metro(10,0);
 
 //to round robin poll sensors
 #define TEMP_SENSOR 0
@@ -338,3 +376,27 @@ boolean MENU_SWIPE_entering = true;
 uint8_t starting_magnitude = 0;
 
 uint8_t leading_glove = 1;
+
+uint32_t left_timer = 0;
+uint32_t right_timer = 0;
+
+#define arm_mode_fft 0
+#define arm_mode_noise 1
+uint8_t arm_mode = arm_mode_fft;
+
+//pong
+int8_t pong_paddle_l = 4;  //-2 to 9 range
+int8_t pong_paddle_r = 4; //-2 to 9 range
+int8_t ball_pos[2] = {7, 4 }; //initial position
+#define PONG_LEFT 0
+#define PONG_RIGHT 1
+#define PONG_LEFT_UP 2
+#define PONG_RIGHT_UP 3
+#define PONG_LEFT_DOWN 4
+#define PONG_RIGHT_DOWN 5
+#define PONG_STOPPED 6
+uint8_t pong_ball_vector = PONG_RIGHT_DOWN;
+
+#define PONG_MAX_SPEED 50
+#define PONG_MIN_SPEED 200
+Metro pongtime = Metro(PONG_MIN_SPEED, 1);

@@ -423,7 +423,7 @@ void loop() {
 			//set index
 			inner_index_displayed = inner_gravity_index_29;
 			outer_index_displayed = outer_gravity_index_29;
-			reported_index_255 = live_gravity_index_255;
+			reported_index_255 = 0;
 
 		}
 
@@ -447,8 +447,9 @@ void loop() {
 				saved_inner_index_acceleration_29 = inner_acceleration_index_29;
 				saved_outer_index_acceleration_29 = outer_acceleration_index_29;
 
-				saved_outer_index_displayed_255 = live_acceleration_index_255 + INNER_STRIP_OFFSET;
+				saved_outer_index_displayed_255 =255- live_acceleration_index_255 ;
 				magnitude_saved_temp = constrain(map(xy_accel_magnitude_smoothed, SWIPE_MAINTAIN_FORCE, SWIPE_MAINTAIN_FORCE * 3, 1, 10), 1, 16);
+				
 		
 			}
 			else{
@@ -458,7 +459,8 @@ void loop() {
 
 			inner_index_displayed = saved_inner_index_acceleration_29;
 			outer_index_displayed = saved_outer_index_acceleration_29;
-			reported_index_255 = saved_outer_index_displayed_255;
+
+			reported_index_255 = saved_outer_index_displayed_255 +live_gravity_index_255;
 		}
 
 
@@ -542,7 +544,7 @@ void sendPacket(){
 
 	//send reply
 	byte raw_buffer[11];
-	raw_buffer[0] = reported_index_255 - live_gravity_index_255; //used to see swipe mode on HUD
+	raw_buffer[0] = reported_index_255 ; //used to see swipe mode on HUD
 	raw_buffer[1] = inner_magnitude_displayed; //used to see swipe mode on HUD
 	raw_buffer[2] = requested_disc_mode | (fresh_mode << 4);  //used to request Swipe mode from suit
 	raw_buffer[3] = packets_in_per_second;
@@ -612,11 +614,10 @@ void receivePacket(const uint8_t* buffer, size_t size)
 			//background stuff the swipe data if it changes remotely for glove control
 			if (last_inner_offset_requested != inner_offset_requested){
 				last_inner_offset_requested = inner_offset_requested;
-				saved_outer_index_displayed_255 = live_gravity_index_255- inner_offset_requested +127;
-				saved_outer_index_acceleration_29  = scale8(inner_offset_requested, 30);
-				saved_inner_index_acceleration_29 =( 29 - saved_outer_index_acceleration_29 +2) % 30;
+				saved_outer_index_displayed_255 = 255-live_gravity_index_255 +inner_offset_requested+127;
+				saved_outer_index_acceleration_29 = scale8(saved_outer_index_displayed_255 + INNER_STRIP_OFFSET, 30); //0-29
+				saved_inner_index_acceleration_29 = scale8((255 - saved_outer_index_displayed_255) + OUTER_STRIP_OFFSET, 30); //0-29
 			}
-
 
 			inner_magnitude_requested = (uint8_t)buffer[8];
 			outer_magnitude_requested = (uint8_t)buffer[9];

@@ -5,6 +5,11 @@ void setup() {
 	display.setRotation(2);
 	display.display();
 
+	//noise init
+	x_noise = random16();
+	y_noise = random16();
+	z_noise = random16();
+
 	//must go first so Serial.begin can override pins!!!
 	LEDS.addLeds<OCTOWS2811>(actual_output, NUM_LEDS_PER_STRIP);
 	for (int i = 0; i < NUM_STRIPS * NUM_LEDS_PER_STRIP; i++) {
@@ -38,10 +43,7 @@ uint32_t average_time;
 
 void loop() {
 
-
 	long start_time = micros();
-
-
 
 	if (ADC_Switch_Sample.check()){
 
@@ -78,8 +80,7 @@ void loop() {
 		Serial.print(glovestats.local_packets_out_per_second);
 		Serial.print(" ");
 		Serial.println(voltage);
-
-
+		
 		glovestats.total_lost_packets += (glovestats.local_packets_out_per_second << 1); //add in both gloves
 		glovestats.total_lost_packets -= glovestats.local_packets_in_per_second_glove0;
 		glovestats.total_lost_packets -= glovestats.local_packets_in_per_second_glove1;
@@ -119,9 +120,6 @@ void loop() {
 		// local_packets_in_counter_1 = 0;
 	}
 
-
-
-
 	//decay the trails of the glove indicator
 	if (glovedisplayfade.check()){
 		for (int x = 0; x < 16; x++) {
@@ -149,7 +147,7 @@ void loop() {
 		disc0.disc_mode = 2;
 
 		menu_mode = MENU_DEFAULT;
-		//fftmode = FFT_MODE_OFF;
+		//helmet_mode = HELMET_MODE_OFF;
 		scroll_mode = SCROLL_MODE_COMPLETE;
 	}
 
@@ -176,26 +174,39 @@ void loop() {
 			if (mask_mode == 1){
 				if (read_sms_pixel(x, y) != 0){
 					if (menu_mode > 0){
-						final_color = EQdisplay[x][y];
+						final_color = EQ_Array[x][y];
 					}
 				}
 			}
 			else{
-				if (menu_mode > 0){
-					final_color = EQdisplay[x][y];
-				}
+				
+					//override modes
+					if (menu_mode == MENU_HELMET_PONG_IN){
+						final_color = Pong_Array[x][y];  //everything else
+					}
+					else{
+						//backgrounds
+						if (arm_mode == arm_mode_fft){
+							final_color = EQ_Array[x][y];
+						}
+						else if (arm_mode == arm_mode_noise){
+							final_color = Noise_Array[x][y];
+						}
+
+					}
+			
 				final_color = background_array | menu_name | final_color;
 			}
 
 			//}
 			//else{
 			//	if (background_array || menu_name || read_sms_pixel(x,y-1) != 0){
-			//		final_color = EQdisplay[x][y] ;
+			//		final_color = EQ_Array[x][y] ;
 			//	}
 			//}
 
-
-			if ((final_color.r & 0xff == 0xff) | ((final_color.g >> 16) & 0xff == 0xff) | ((final_color.b >> 8) & 0xff == 0xff)){
+		
+				if (final_color.getAverageLight() > 32){
 				display.drawPixel(realtime_location_x + (15 - x), realtime_location_y + 7 - y, WHITE);
 			}
 
@@ -210,23 +221,42 @@ void loop() {
 		}
 	}
 
-	//set internal indicators
+	//set internal indicators, flip if flipped
 	if (disc0.active_primary){
 		actual_output[128] = color1;
 		actual_output[129] = color2;
 	}
 	else{
-
 		actual_output[128] = color2;
 		actual_output[129] = color1;
 	}
+	//swap to camera if in cam mode
+	if (glove1.camera_on){
+		actual_output[128] = glove1.output_rgb_led;
+	}
+	if (glove0.camera_on){
+		actual_output[129] = glove0.output_rgb_led;
+	}
+	//blank hud if in a countdown
+	if (millis() - left_timer < 100){
+		actual_output[128] = CRGB(0, 0, 0);
+	}
+	if (millis() - right_timer < 100){
+		actual_output[129] = CRGB(0, 0, 0);
+	}
+	//dim hud lights
+	actual_output[128] = actual_output[128].nscale8_video(8);
+	actual_output[129] = actual_output[129].nscale8_video(8);
+
+
 
 	//draw the suit strips
 	for (uint16_t i = 0; i < 38; i++) { 
 	
+		//chest strips
 		if (disc0.disc_mode == DISC_MODE_SWIPE){
-			mask_blur_and_output((5 * 130) + ((i + (37 - scale8(disc0.current_index, 38))) % 38), &color1, i, disc0.current_mag);
-			mask_blur_and_output((4 * 130) + ((i + (37 - scale8(disc0.current_index, 38))) % 38), &color2, i, disc0.current_mag);
+			mask_blur_and_output((5 * 130) + ((i + (37 - scale8(disc0.current_index, 38))) % 38), &color1, i, map(disc0.current_mag,0,16,0,19));
+			mask_blur_and_output((4 * 130) + ((i + (37 - scale8(disc0.current_index, 38))) % 38), &color2, i, map(disc0.current_mag, 0, 16, 0, 19));
 		}
 		else{
 			mask_blur_and_output((5 * 130) + i, &stream1[(stream_head + i) % 38], i, 19);
@@ -234,10 +264,52 @@ void loop() {
 
 		}
 
-		actual_output[(6 * 130) + i] = actual_output[i];
-		actual_output[(7 * 130) + i] = actual_output[i];
+		//arm strips
+		if (glove1.camera_on){
+			blur_cust((6 * 130) + (i), &glove1.cameraflow[(1+i + glove1.cameraflow_index) % 38],1);
+		}
+		else{
+			if (arm_mode == arm_mode_fft){
+				actual_output[(6 * 130) + i] = (&EQ_Array[0][0])[38 - i];
+			}
+			else if (arm_mode == arm_mode_noise){
+				actual_output[(6 * 130) + i] = (&Noise_Array[0][0])[i];
+			}
+		}
+
+		if (glove0.camera_on){
+			blur_cust((7 * 130) + ( i), &glove0.cameraflow[(1+i + glove0.cameraflow_index) % 38], 1);
+		}
+		else{
+			if (arm_mode == arm_mode_fft){
+				actual_output[(7 * 130) + i] = (&EQ_Array[0][0])[38 - i];
+			}
+			else if (arm_mode == arm_mode_noise){
+				actual_output[(7 * 130) + i] = (&Noise_Array[0][0])[i];
+			}
+		}
 	}
 
+	//write out HUD
+	for (uint16_t i = 0; i < 38; i++) {
+	
+		if (actual_output[(7 * 130) + i].getAverageLight() > 32){
+			display.drawPixel(54, i, WHITE);
+		}
+		if (actual_output[(5 * 130) + i].getAverageLight() > 32){
+			display.drawPixel(56, i, WHITE);
+		}
+		if (disc0.packet_beam == i){
+			display.drawPixel(58, i, WHITE);
+		}
+		if (actual_output[(4 * 130) + i].getAverageLight() > 32){
+			display.drawPixel(60, i, WHITE);
+		}
+		if (actual_output[(6 * 130) + i].getAverageLight() > 32){
+			display.drawPixel(62, i, WHITE);
+		}
+
+	}
 
 	//advance scrolling if timer reached or stop
 	if (ScrollSpeed.check()){
@@ -320,19 +392,16 @@ void loop() {
 		}
 	}
 
-
-
-
 	if (fft256_1.available()) {
 		fftmath();
+		helmet_backgrounds();
 	}
+
 
 	SerialUpdate();
 
 	average_time = average_time * .5 + .5 * (micros() - start_time);
 }
-
-
 
 
 CHSV map_hsv(uint8_t input, uint8_t in_min, uint8_t in_max, CHSV* out_starting, CHSV* out_ending){
@@ -355,7 +424,6 @@ CHSV map_hsv(uint8_t input, uint8_t in_min, uint8_t in_max, CHSV* out_starting, 
 
 // 	int i = (current_pixel + loc_offset) % 38;// wrap around to get actual location
 void mask_blur_and_output(uint16_t i, CHSV* color, uint8_t current_pixel, uint8_t magnitude){
-	int blur_modifier = 0;
 	//convert HSV to RGB
 	CRGB temp_rgb = *color;
 
@@ -370,8 +438,7 @@ void mask_blur_and_output(uint16_t i, CHSV* color, uint8_t current_pixel, uint8_
 	//determine beam pattern
 	bool blur = true;
 
-
-	if (disc0.packet_beam == current_pixel) blur = false;
+	if (disc0.packet_beam == i % 130) blur = false;
 
 	//dont blur or fade pixels that are turning on
 	//dont blur or fade beam pixels
@@ -392,3 +459,25 @@ void mask_blur_and_output(uint16_t i, CHSV* color, uint8_t current_pixel, uint8_
 
 	actual_output[i] = temp_rgb;
 }
+
+void blur_cust(uint16_t i,CHSV* color, int16_t blur_rate){
+	CRGB temp_rgb = *color;
+
+	if (color->v != 0 && actual_output[i] != CRGB(0, 0, 0)){
+
+		temp_rgb.fadeToBlackBy(disc0.fade_level); // fade_level
+
+		if (actual_output[i].r < temp_rgb.r) temp_rgb.r = min(actual_output[i].r + (blur_rate ), temp_rgb.r);
+		else if (actual_output[i].r > temp_rgb.r) temp_rgb.r = max(actual_output[i].r - (blur_rate ), temp_rgb.r);
+
+		if (actual_output[i].g < temp_rgb.g) temp_rgb.g = min(actual_output[i].g + (blur_rate ), temp_rgb.g);
+		else if (actual_output[i].g > temp_rgb.g) temp_rgb.g = max(actual_output[i].g - (blur_rate ), temp_rgb.g);
+
+		if (actual_output[i].b < temp_rgb.b) temp_rgb.b = min(actual_output[i].b + (blur_rate ), temp_rgb.b);
+		else if (actual_output[i].b > temp_rgb.b) temp_rgb.b = max(actual_output[i].b - (blur_rate), temp_rgb.b);
+	}
+
+	actual_output[i] = temp_rgb;
+}
+
+

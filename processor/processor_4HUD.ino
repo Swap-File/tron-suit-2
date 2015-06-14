@@ -2,14 +2,14 @@ inline void draw_HUD(void){
 
 	//HUD!
 	display.clearDisplay();
-	
+
 	//draw the boxes are 18x10, thats 16x8 + the boarder pixels
 
 	//draw the menu first for masking purposes
 	display.drawRect(menu_location_x - 1, menu_location_y - 1, 18, 10, WHITE);
 
 	display.setCursor(menu_location_x + scroll_pos_x, menu_location_y + scroll_pos_y);
-	
+
 	print_menu_mode();
 
 
@@ -26,15 +26,15 @@ inline void draw_HUD(void){
 
 	//hand display dots - its important to always know where your hands are.
 	display.drawRect(hand_location_x - 1, hand_location_y - 1, 18, 10, WHITE);
-	display.drawPixel(hand_location_x + 15-( 8 + glove0.gloveX), hand_location_y + 7 - glove0.gloveY, WHITE);
-	display.drawPixel(hand_location_x +15- glove1.gloveX, hand_location_y + 7 - glove1.gloveY, WHITE);
+	display.drawPixel(hand_location_x + 15 - (8 + glove0.gloveX), hand_location_y + 7 - glove0.gloveY, WHITE);
+	display.drawPixel(hand_location_x + 15 - glove1.gloveX, hand_location_y + 7 - glove1.gloveY, WHITE);
 
 	//background overlay with trails, also shows HUD changes
 	display.drawRect(trails_location_x - 1, trails_location_y - 1, 18, 10, WHITE);
 	for (int x = 0; x < 16; x++) {
 		for (int y = 0; y < 8; y++) {
 			if (gloveindicator[x][y] >= 50){  //This sets where decayed pixels disappear from HUD
-				display.drawPixel(trails_location_x + (15-x), trails_location_y + y, WHITE);
+				display.drawPixel(trails_location_x + (15 - x), trails_location_y + y, WHITE);
 			}
 		}
 	}
@@ -42,27 +42,26 @@ inline void draw_HUD(void){
 
 	//sms display
 	display.drawRect(sms_location_x - 1, sms_location_y - 1, 18, 10, WHITE);
+	display.drawRect(sms_location_x - 1, sms_location_y - 1, 52, 10, WHITE);
 	display.setCursor(sms_location_x + 16 + sms_scroll_pos, sms_location_y);
 	display.print(front_sms);
 	sms_text_ending_pos = display.getCursorX(); //save menu text length for elsewhere
 	//pad out message for contiual scrolling in the HUD, gives me more text at once
-	display.setCursor(sms_text_ending_pos + 19, sms_location_y );
+	display.setCursor(sms_text_ending_pos + 19, sms_location_y);
 	for (uint8_t i = 0; i < 7; i++){
 		display.print(front_sms[i]);
 	}
+
+	//blank text scrolling
+	display.fillRect(52, sms_location_y - 1, display.width() - (52), 8, BLACK);
 
 
 	//this gets updated during writing out the main LED display, its the last thing to do
 	display.drawRect(realtime_location_x - 1, realtime_location_y - 1, 18, 10, WHITE);
 
-	if (disc0.disc_mode == DISC_MODE_SWIPE){ //swiping
-		draw_disc(29-scale8(disc0.current_index,30), disc0.current_mag, inner_disc_location_x, inner_disc_location_y);
-		draw_disc(29-scale8(disc0.current_index, 30), disc0.current_mag, outer_disc_location_x, outer_disc_location_y);
-	}
-	else{ //normal idle mode
-		draw_disc(disc0.inner_offset_requested, disc0.inner_magnitude_requested, inner_disc_location_x, inner_disc_location_y);
-		draw_disc(disc0.outer_offset_requested, disc0.outer_magnitude_requested, outer_disc_location_x, outer_disc_location_y);
-	}
+	
+		draw_disc(scale8(disc0.current_index, 30), disc0.current_mag, inner_disc_location_x, inner_disc_location_y);
+	
 
 }
 
@@ -122,12 +121,12 @@ void draw_disc(uint8_t index_offset, uint8_t magnitude, uint8_t x_offset, uint8_
 
 
 void menu_map(uint8_t direction){
-	
-	
+
+
 	//set initial scroll on and scroll off variables
 	//can/will be overridden by menu below if desired
 	switch (direction){
-		
+
 	case HAND_DIRECTION_LEFT:
 		scroll_mode = SCROLL_MODE_INCOMING;  //start new scroll action
 		menu_scroll_start_left();
@@ -158,88 +157,87 @@ void menu_map(uint8_t direction){
 
 	switch (menu_mode){
 
-	case MENU_FFT_H:
-		scroll_mode = SCROLL_MODE_COMPLETE; 
-		switch (direction){
-		case HAND_DIRECTION_LEFT:
-			fftmode = FFT_MODE_HORZ_BARS_LEFT;
-			break;
-		case HAND_DIRECTION_RIGHT:
-			fftmode = FFT_MODE_HORZ_BARS_RIGHT;
-			break;
-		case HAND_DIRECTION_UP:
-			menu_mode = MENU_FFT_V;
-			fftmode = FFT_MODE_VERT_BARS_STATIC;
-			break;
-		case HAND_DIRECTION_DOWN:
-			menu_mode = MENU_FFT_V;
-			fftmode = FFT_MODE_VERT_BARS_STATIC;
-			break;
-		}
-		break;
-
-	case MENU_FFT_V:
+	case MENU_HELMET_FFT_ON_H:
 		scroll_mode = SCROLL_MODE_COMPLETE;
 		switch (direction){
 		case HAND_DIRECTION_LEFT:
-			menu_mode = MENU_FFT_H; 
-			fftmode = FFT_MODE_HORZ_BARS_STATIC;
+			fft_mode =  FFT_MODE_HORZ_BARS_LEFT;
 			break;
 		case HAND_DIRECTION_RIGHT:
-			menu_mode = MENU_FFT_H;
-			fftmode = FFT_MODE_HORZ_BARS_STATIC;
+			fft_mode =   FFT_MODE_HORZ_BARS_RIGHT;
 			break;
 		case HAND_DIRECTION_UP:
-			fftmode = FFT_MODE_VERT_BARS_UP;
+			menu_mode = MENU_HELMET_FFT_ON_V;
+			fft_mode =  FFT_MODE_VERT_BARS_STATIC;
 			break;
 		case HAND_DIRECTION_DOWN:
-			fftmode = FFT_MODE_VERT_BARS_DOWN;
+			menu_mode = MENU_HELMET_FFT_ON_V;
+			fft_mode =  FFT_MODE_VERT_BARS_STATIC;
 			break;
 		}
 		break;
 
-
-	case MENU_FFT_H_or_V:
+	case MENU_HELMET_FFT_ON_V:
+		scroll_mode = SCROLL_MODE_COMPLETE;
 		switch (direction){
 		case HAND_DIRECTION_LEFT:
-			fftmode = FFT_MODE_HORZ_BARS_STATIC;
-			menu_mode = MENU_FFT_H; //new menu screen 
+			menu_mode = MENU_HELMET_FFT_ON_H;
+			fft_mode =  FFT_MODE_HORZ_BARS_STATIC;
 			break;
 		case HAND_DIRECTION_RIGHT:
-			fftmode = FFT_MODE_HORZ_BARS_STATIC;
-			menu_mode = MENU_FFT_H;
+			menu_mode = MENU_HELMET_FFT_ON_H;
+			fft_mode =  FFT_MODE_HORZ_BARS_STATIC;
 			break;
 		case HAND_DIRECTION_UP:
-			fftmode = FFT_MODE_VERT_BARS_STATIC;
-			menu_mode = MENU_FFT_V;
+			fft_mode =  FFT_MODE_VERT_BARS_UP;
 			break;
 		case HAND_DIRECTION_DOWN:
-			fftmode = FFT_MODE_VERT_BARS_STATIC;
-			menu_mode = MENU_FFT_V;
+			fft_mode = FFT_MODE_VERT_BARS_DOWN;
 			break;
 		}
 		break;
 
 
-case MENU_DEFAULT:
-case MENU_SUIT:
-	switch (direction){
-	case HAND_DIRECTION_LEFT:
-	
+	case MENU_HELMET_FFT_ON_H_or_V:
+		switch (direction){
+		case HAND_DIRECTION_LEFT:
+			fft_mode = FFT_MODE_HORZ_BARS_STATIC;
+			menu_mode = MENU_HELMET_FFT_ON_H; //new menu screen 
+			break;
+		case HAND_DIRECTION_RIGHT:
+			fft_mode = FFT_MODE_HORZ_BARS_STATIC;
+			menu_mode = MENU_HELMET_FFT_ON_H;
+			break;
+		case HAND_DIRECTION_UP:
+			fft_mode = FFT_MODE_VERT_BARS_STATIC;
+			menu_mode = MENU_HELMET_FFT_ON_V;
+			break;
+		case HAND_DIRECTION_DOWN:
+			fft_mode = FFT_MODE_VERT_BARS_STATIC;
+			menu_mode = MENU_HELMET_FFT_ON_V;
+			break;
+		}
 		break;
-	case HAND_DIRECTION_RIGHT:
-		menu_mode = MENU_FFT;
+
+
+	case MENU_DEFAULT:
+	case MENU_HELMET:
+		switch (direction){
+		case HAND_DIRECTION_LEFT:
+			break;
+		case HAND_DIRECTION_RIGHT:
+			menu_mode = MENU_HELMET_FFT; // MENU_FFT;
+			
+			break;
+		case HAND_DIRECTION_UP:
+			menu_mode = MENU_CAMERA; //new menu screen 
+			break;
+		case HAND_DIRECTION_DOWN:
+			menu_mode = MENU_DISC; //new menu screen 
+			break;
+		}
 		break;
-	case HAND_DIRECTION_UP:
-		menu_mode = MENU_CAMERA; //new menu screen 
-		break;
-	case HAND_DIRECTION_DOWN:
-		menu_mode = MENU_DISC; //new menu screen 
-		
-		break;
-	}
-	break;
-	
+
 
 	case MENU_DISC:
 		switch (direction){
@@ -249,7 +247,7 @@ case MENU_SUIT:
 			menu_mode = MENU_SPIN;
 			break;
 		case HAND_DIRECTION_UP:
-			menu_mode = MENU_SUIT;
+			menu_mode = MENU_HELMET;
 			break;
 		case HAND_DIRECTION_DOWN:
 			menu_mode = MENU_CAMERA;
@@ -260,7 +258,6 @@ case MENU_SUIT:
 	case MENU_CAMERA:
 		switch (direction){
 		case HAND_DIRECTION_LEFT:
-
 			break;
 		case HAND_DIRECTION_RIGHT:
 			menu_mode = MENU_CAMON;
@@ -269,83 +266,131 @@ case MENU_SUIT:
 			menu_mode = MENU_DISC; //new menu screen 
 			break;
 		case HAND_DIRECTION_DOWN:
-			menu_mode = MENU_SUIT; //new menu screen 
-
+			menu_mode = MENU_HELMET; //new menu screen 
 			break;
 		}
 		break;
 
-
-	case MENU_SPIN:
-		//dead end menu
-	{
-		switch (direction){
-
-		}
-		break;
-	}
 
 	case MENU_CAMON:
-		//dead end menu
-	{
-		switch (direction){
-
-		}
+	case MENU_SPIN:
+		//dead end menus
+		//supress menu
+		scroll_mode = SCROLL_MODE_COMPLETE;
 		break;
-	}
 
 
-	
-	
-
-case MENU_FFT:
+	case MENU_HELMET_FFT:
 		switch (direction){
 		case HAND_DIRECTION_LEFT:
-			menu_mode = MENU_DEFAULT;
 			break;
 		case HAND_DIRECTION_RIGHT:
-			menu_mode = MENU_FFT_H_or_V;
+			menu_mode = MENU_HELMET_FFT_ON_H_or_V;
+			helmet_mode = HELMET_MODE_FFT;
+			arm_mode = arm_mode_fft;
 			break;
 		case HAND_DIRECTION_UP:
-			menu_mode = MENU_FFT;
+			menu_mode = MENU_HELMET_PONG;
 			break;
 		case HAND_DIRECTION_DOWN:
-			menu_mode = MENU_FFT;
+			menu_mode = MENU_HELMET_NOISE;
 			break;
 		}
 		break;
+
+
+	case MENU_HELMET_NOISE:
+		switch (direction){
+		case HAND_DIRECTION_LEFT:
+			break;
+		case HAND_DIRECTION_RIGHT:
+			helmet_mode = HELMET_MODE_NOISE;
+			arm_mode = arm_mode_noise;
+			break;
+		case HAND_DIRECTION_UP:
+			menu_mode = MENU_HELMET_FFT;
+			break;
+		case HAND_DIRECTION_DOWN:
+			menu_mode = MENU_HELMET_EMOTICON;
+			break;
+		}
+		break;
+
+	case MENU_HELMET_EMOTICON:
+		switch (direction){
+		case HAND_DIRECTION_LEFT:
+			break;
+		case HAND_DIRECTION_RIGHT:
+			helmet_mode = HELMET_MODE_EMOTICON;
+			break;
+		case HAND_DIRECTION_UP:
+			menu_mode = MENU_HELMET_NOISE;
+			break;
+		case HAND_DIRECTION_DOWN:
+			menu_mode = MENU_HELMET_PONG;
+			break;
+		}
+		break;
+
+	case MENU_HELMET_PONG:
+		switch (direction){
+		case HAND_DIRECTION_LEFT:
+			break;
+		case HAND_DIRECTION_RIGHT:
+			//helmet_mode = HELMET_MODE_PONG;
+			menu_mode = MENU_HELMET_PONG_IN;
+			break;
+		case HAND_DIRECTION_UP:
+			menu_mode = MENU_HELMET_EMOTICON;
+			break;
+		case HAND_DIRECTION_DOWN:
+			menu_mode = MENU_HELMET_FFT;
+			
+			break;
+		}
+		break;
+
+
 	}
-
-
-
-
 }
 
-void print_menu_mode(void ){
+void print_menu_mode(void){
 	switch (menu_mode){
 	case MENU_DEFAULT:
-		display.print("DEFAULT");
+		display.print("-");
 		break;
 	case MENU_DISC:
 		display.print("DISC");
 		break;
-	case MENU_SUIT:
-		display.print("SUIT");
+	case MENU_HELMET:
+		display.print("HEAD");
 		break;
 	case MENU_SPIN:
 		display.print("SPIN");
 		break;
-	case MENU_FFT_H_or_V:
+	case MENU_HELMET_FFT_ON_H_or_V:
 		display.print("FFT");
 		break;
-	case MENU_FFT_H:
+	case MENU_HELMET_FFT_ON_H:
 		display.print("FFTH");
 		break;
-	case MENU_FFT_V:
+	case MENU_HELMET_FFT_ON_V:
 		display.print("FFTV");
 		break;
-	case MENU_FFT:
+	case MENU_CAMERA:
+		display.print("CAM");
+		break;
+	case MENU_HELMET_FFT:
 		display.print("FFT");
+		break;
+	case MENU_HELMET_NOISE:
+		display.print("NOISE");
+		break;
+	case MENU_HELMET_PONG:
+		display.print("PONG");
+		break;
+	case MENU_HELMET_EMOTICON:
+		display.print("EMOTE");
 		break;
 	default:
 		display.print(menu_mode);

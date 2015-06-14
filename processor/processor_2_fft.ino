@@ -24,61 +24,56 @@ inline void fftmath(void){
 
 	}
 
-	if (fftmode == FFT_MODE_HORZ_BARS_RIGHT ){
+
+	if (fft_mode == FFT_MODE_HORZ_BARS_RIGHT){
 		//move eq data left 1
 		for (uint8_t x = 1; x < 16; x++) {
 			for (uint8_t y = 0; y < 8; y++) {
-				EQdisplay[x - 1][y] = EQdisplay[x][y];
+				EQ_Array[x - 1][y] = EQ_Array[x][y];
 			}
 		}
 	}
-	else if (fftmode == FFT_MODE_HORZ_BARS_LEFT){
+	else if (fft_mode == FFT_MODE_HORZ_BARS_LEFT){
 		//move eq data right 1
 		for (uint8_t x = 15; x > 0; x--) {
 			for (uint8_t y = 0; y < 8; y++) {
-				EQdisplay[x][y] = EQdisplay[x - 1][y];
+				EQ_Array[x][y] = EQ_Array[x - 1][y];
 			}
 		}
 	}
-	else if (fftmode == FFT_MODE_VERT_BARS_UP){
+	else if (fft_mode == FFT_MODE_VERT_BARS_UP){
 		//move eq data up  1
-		for (uint8_t y = 7; y >0; y--) {
+		for (uint8_t y = 7; y > 0; y--) {
 			for (uint8_t x = 0; x < 16; x++) {
-				EQdisplay[x][y] = EQdisplay[x][y - 1];
+				EQ_Array[x][y] = EQ_Array[x][y - 1];
 			}
 		}
 	}
-	else if (fftmode == FFT_MODE_VERT_BARS_DOWN){
+	else if (fft_mode == FFT_MODE_VERT_BARS_DOWN){
 		//move eq data up  1
 		for (uint8_t y = 1; y < 8; y++) {
 			for (uint8_t x = 0; x < 16; x++) {
-				EQdisplay[x][y-1] = EQdisplay[x][y];
-			}
-		}
-	} 
-	else if (fftmode == FFT_MODE_OFF){
-		for (uint8_t y = 0; y < 8; y++) {
-			for (uint8_t x = 0; x < 16; x++) {
-				EQdisplay[x][y] = CHSV(0, 0, 0);
+				EQ_Array[x][y - 1] = EQ_Array[x][y];
 			}
 		}
 	}
 
 
-	if (fftmode == FFT_MODE_HORZ_BARS_RIGHT || fftmode == FFT_MODE_HORZ_BARS_LEFT){
+
+	if (fft_mode == FFT_MODE_HORZ_BARS_RIGHT || fft_mode == FFT_MODE_HORZ_BARS_LEFT){
 		for (uint8_t i = 0; i < 8; i++) {
 
 			//make the tip of the color be color 2
 			CHSV temp_color;
 			calcfftcolor(&temp_color, EQdisplayValue8[i]);
 
-			if (fftmode == FFT_MODE_HORZ_BARS_RIGHT )  EQdisplay[15][i] = temp_color;
-			else if (fftmode == FFT_MODE_HORZ_BARS_LEFT) EQdisplay[0][i] = temp_color;
+			if (fft_mode == FFT_MODE_HORZ_BARS_RIGHT)  EQ_Array[15][i] = temp_color;
+			else if (fft_mode == FFT_MODE_HORZ_BARS_LEFT) EQ_Array[0][i] = temp_color;
 		}
 
 	}
 
-	if (fftmode == FFT_MODE_HORZ_BARS_STATIC){
+	if (fft_mode == FFT_MODE_HORZ_BARS_STATIC){
 		for (uint8_t i = 0; i < 8; i++) {
 
 			//make the tip of the color be color 2
@@ -86,26 +81,26 @@ inline void fftmath(void){
 			calcfftcolor(&temp_color, EQdisplayValue8[i]);
 
 			for (uint8_t index = 0; index < 16; index++){
-				EQdisplay[index][i] = temp_color;
+				EQ_Array[index][i] = temp_color;
 			}
 		}
 	}
 
 
-	if (fftmode == FFT_MODE_VERT_BARS_UP || fftmode == FFT_MODE_VERT_BARS_DOWN){
+	if (fft_mode == FFT_MODE_VERT_BARS_UP || fft_mode == FFT_MODE_VERT_BARS_DOWN){
 		for (uint8_t i = 0; i < 16; i++) {
 
 			//make the tip of the color be color 2
 			CHSV temp_color;
 			calcfftcolor(&temp_color, EQdisplayValue16[i]);
 
-			if (fftmode == FFT_MODE_VERT_BARS_UP)	     EQdisplay[i][0] = temp_color;
-			else if (fftmode == FFT_MODE_VERT_BARS_DOWN) EQdisplay[i][7] = temp_color;
-		
+			if (fft_mode == FFT_MODE_VERT_BARS_UP)	     EQ_Array[i][0] = temp_color;
+			else if (fft_mode == FFT_MODE_VERT_BARS_DOWN) EQ_Array[i][7] = temp_color;
+
 		}
 	}
 
-	if (fftmode == FFT_MODE_VERT_BARS_STATIC){
+	if (fft_mode == FFT_MODE_VERT_BARS_STATIC){
 		for (uint8_t i = 0; i < 16; i++) {
 
 			//make the tip of the color be color 2
@@ -113,10 +108,11 @@ inline void fftmath(void){
 			calcfftcolor(&temp_color, EQdisplayValue16[i]);
 
 			for (uint8_t index = 0; index < 8; index++){
-				EQdisplay[i][index] = temp_color;
+				EQ_Array[i][index] = temp_color;
 			}
 		}
 	}
+
 }
 
 void calcfftcolor(CHSV * temp_color, uint8_t input){
@@ -129,4 +125,171 @@ void calcfftcolor(CHSV * temp_color, uint8_t input){
 	//temp_color.v = EQdisplayValue8[i];
 
 	return;
+}
+
+
+inline void helmet_backgrounds(){
+	//fix later
+	scale_noise = glove0.y_angle * 2;
+
+	CRGB black = CRGB::Black;
+
+	currentPalette = CRGBPalette16(
+		map_hsv(0, 0, 15, &color1, &color2), map_hsv(1, 0, 15, &color1, &color2), black, black,
+		map_hsv(4, 0, 15, &color1, &color2), map_hsv(5, 0, 15, &color1, &color2), black, black,
+		map_hsv(8, 0, 15, &color1, &color2), map_hsv(9, 0, 15, &color1, &color2), black, black,
+		map_hsv(12, 0, 15, &color1, &color2), map_hsv(13, 0, 15, &color1, &color2), black, black);
+
+	if (arm_mode == arm_mode_noise){
+		fillnoise8();
+		mapNoiseToLEDsUsingPalette();
+	}
+
+	if (menu_mode == MENU_HELMET_PONG_IN){
+
+		//render the field
+		for (int x = 0; x < 16; x++) {
+			for (int y = 0; y < 8; y++) {
+				//draw the ball:
+				if (x == ball_pos[0] && y == ball_pos[1]){
+					Pong_Array[x][y] = CRGB(129, 129, 129);
+				}//draw the left paddle:
+				else if (x == 0 && (y == pong_paddle_l || y == pong_paddle_l + 1 || y == pong_paddle_l - 1)){
+					Pong_Array[x][y] = color1;
+				}//draw the right paddle:
+				else if (x == 15 && (y == pong_paddle_r || y == pong_paddle_r + 1 || y == pong_paddle_r - 1)){
+					Pong_Array[x][y] = color2;
+				}//blank the rest
+				else{
+					Pong_Array[x][y] = CRGB(0, 0, 0);
+				}
+			}
+		}
+		
+		//wait to increment
+		if (pongtime.check()){
+			
+		
+			//check for left paddle  collisions
+			if (ball_pos[0] == 1 && (pong_ball_vector == PONG_LEFT || pong_ball_vector == PONG_LEFT_UP || pong_ball_vector == PONG_LEFT_DOWN)){
+				if (ball_pos[1] == pong_paddle_l)			pong_ball_vector = PONG_RIGHT;
+				else if (ball_pos[1] == pong_paddle_l - 1)  pong_ball_vector = PONG_RIGHT_DOWN;
+				else if (ball_pos[1] == pong_paddle_l + 1)  pong_ball_vector = PONG_RIGHT_UP;
+				pongtime.interval(max((int)pongtime.interval_millis - 10, PONG_MAX_SPEED));
+			}
+			//check for right paddle  collisions
+			else if (ball_pos[0] == 14 && (pong_ball_vector == PONG_RIGHT || pong_ball_vector == PONG_RIGHT_UP || pong_ball_vector == PONG_RIGHT_DOWN)){
+				if (ball_pos[1] == pong_paddle_r)			pong_ball_vector = PONG_LEFT;
+				else if (ball_pos[1] == pong_paddle_r - 1)	pong_ball_vector = PONG_LEFT_DOWN;
+				else if (ball_pos[1] == pong_paddle_r + 1)  pong_ball_vector = PONG_LEFT_UP;
+				pongtime.interval(max((int)pongtime.interval_millis - 10, PONG_MAX_SPEED));
+			}
+
+			//check for vertical wall collisions
+			if (ball_pos[1] == 0){
+				if (pong_ball_vector == PONG_LEFT_DOWN)			pong_ball_vector = PONG_LEFT_UP;
+				else if (pong_ball_vector == PONG_RIGHT_DOWN)	pong_ball_vector = PONG_RIGHT_UP;
+			}
+			else if (ball_pos[1] == 7){
+				if (pong_ball_vector == PONG_LEFT_UP)		pong_ball_vector = PONG_LEFT_DOWN;
+				else if (pong_ball_vector == PONG_RIGHT_UP)	pong_ball_vector = PONG_RIGHT_DOWN;
+			}
+
+			//find new position
+			switch (pong_ball_vector){
+			case PONG_LEFT:			ball_pos[0]--;	break;
+			case PONG_RIGHT:		ball_pos[0]++;	break;
+			case PONG_LEFT_UP:		ball_pos[0]--;	ball_pos[1]++;	break;
+			case PONG_RIGHT_UP:		ball_pos[0]++;	ball_pos[1]++;	break;
+			case PONG_LEFT_DOWN:	ball_pos[0]--;	ball_pos[1]--;	break;
+			case PONG_RIGHT_DOWN:	ball_pos[0]++;	ball_pos[1]--;	break;
+			}
+		
+			//check for collisions with horizontal wall, someone scored, dont care who, Im not keeping track
+			if (ball_pos[0] < 0 || ball_pos[0] > 15){
+				//random ball start x & y (in the middle 2x2)
+				ball_pos[0] = random(7, 9);
+				ball_pos[1] = random(3, 5);
+				pong_ball_vector = random(0, 6);//radom ball vector
+				pongtime.interval(PONG_MIN_SPEED);//slow down to starting speed
+			}
+
+		}
+	}
+}
+
+
+// Fill the x/y array of 8-bit noise values using the inoise8 function.
+void fillnoise8() {
+	// If we're runing at a low "speed", some 8-bit artifacts become visible
+	// from frame-to-frame.  In order to reduce this, we can do some fast data-smoothing.
+	// The amount of data smoothing we're doing depends on "speed".
+	uint8_t dataSmoothing = 0;
+	if (speed_noise < 50) {
+		dataSmoothing = 200 - (speed_noise * 4);
+	}
+
+	for (int i = 0; i < 16; i++) {
+		int ioffset = scale_noise * i;
+		for (int j = 0; j < 16; j++) {
+			int joffset = scale_noise * j;
+
+			uint8_t data = inoise8(x_noise + ioffset, y_noise + joffset, z_noise);
+
+			// The range of the inoise8 function is roughly 16-238.
+			// These two operations expand those values out to roughly 0..255
+			// You can comment them out if you want the raw noise data.
+			data = qsub8(data, 16);
+			data = qadd8(data, scale8(data, 39));
+
+			if (dataSmoothing) {
+				uint8_t olddata = noise[i][j];
+				uint8_t newdata = scale8(olddata, dataSmoothing) + scale8(data, 256 - dataSmoothing);
+				data = newdata;
+			}
+
+			noise[i][j] = data;
+		}
+	}
+
+	z_noise += speed_noise;
+
+	// apply slow drift to X and Y, just for visual variation.
+	x_noise += speed_noise / 8;
+	y_noise -= speed_noise / 16;
+}
+
+void mapNoiseToLEDsUsingPalette()
+{
+	static uint8_t ihue = 0;
+
+	for (int i = 0; i < 16; i++) {
+		for (int j = 0; j < 8; j++) {
+			// We use the value at the (i,j) coordinate in the noise
+			// array for our brightness, and the flipped value from (j,i)
+			// for our pixel's index into the color palette.
+
+			uint8_t index = noise[j][i];
+			uint8_t bri = noise[i][j];
+
+			// if this palette is a 'loop', add a slowly-changing base value
+			if (colorLoop_noise) {
+				index += ihue;
+			}
+
+			// brighten up, as the color palette itself often contains the 
+			// light/dark dynamic range desired
+			if (bri > 127) {
+				bri = 255;
+			}
+			else {
+				bri = dim8_raw(bri * 2);
+			}
+
+			CRGB color = ColorFromPalette(currentPalette, index, bri);
+			Noise_Array[i][j] = color;
+		}
+	}
+
+	ihue += 1;
 }

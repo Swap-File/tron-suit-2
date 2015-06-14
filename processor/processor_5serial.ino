@@ -215,66 +215,8 @@ inline void onPacket2(const uint8_t* buffer, size_t size)
 
 			//spin code
 			if (menu_mode == MENU_SPIN){
-				if (leading_glove == 0){
-					if (glove0.finger1 || glove0.finger2){
-		
-						if (MENU_SWIPE_entering == true){
-							disc0.disc_mode = DISC_MODE_SWIPE;
-							MENU_SWIPE_entering = false;
-							if (millis() - disc0.taptimer <300 && disc0.current_mag == 16) disc0.active_primary = !disc0.active_primary;
-							disc0.taptimer = millis();
-						}
-						disc0.inner_offset_requested = glove0.disc_offset;
-						disc0.outer_offset_requested = glove0.disc_offset;
-
-						if (glove1.finger1 || glove1.finger2){
-							//map magnitude
-							if (disc0.mag_saved == false){
-								disc0.saved_mag = disc0.current_mag;
-								disc0.mag_saved = true;
-							
-							}
-							disc0.inner_magnitude_requested = constrain(disc0.saved_mag + glove1.y_angle,0,16);
-						}
-						else{
-							disc0.mag_saved = false;
-						}
-					}
-					else{
-						MENU_SWIPE_entering = true;
-					}
-
-				}
-				else if (leading_glove == 1){
-					if (glove1.finger1 || glove1.finger2){
-
-	
-
-						if (MENU_SWIPE_entering == true){
-							disc0.disc_mode = DISC_MODE_SWIPE;
-							MENU_SWIPE_entering = false;
-							if (millis() - disc0.taptimer <300 && disc0.current_mag == 16) disc0.active_primary = !disc0.active_primary;
-							disc0.taptimer = millis();
-						}
-						disc0.inner_offset_requested = glove1.disc_offset;
-						disc0.outer_offset_requested = glove1.disc_offset;
-						if (glove0.finger1 || glove0.finger2){
-							//map magnitude
-							if (disc0.mag_saved == false){
-								disc0.saved_mag = disc0.current_mag;
-								disc0.mag_saved = true;
-							
-							}
-							disc0.inner_magnitude_requested = constrain(disc0.saved_mag + glove0.y_angle,0, 16);
-						}
-						else{
-							disc0.mag_saved = false;
-						}
-					}
-					else{
-						MENU_SWIPE_entering = true;
-					}
-				}
+				if (leading_glove == 0)  glove_spin((void*)&glove0, (void*)&glove1);
+				else 	glove_spin((void*)&glove1, (void*)&glove0);
 			}
 
 			uint8_t temp = 29 - scale8(disc0.current_index, 30);
@@ -605,6 +547,15 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 			//y axis only
 			current_glove->y_angle = constrain(map((current_glove->pitch_compensated), 0, 36000, -64, 64), -32, 32);
 
+			//pong
+			if (current_glove == &glove1){
+				pong_paddle_l = constrain(map((current_glove->pitch_compensated), 0, 36000, -32, 32), -2, 9);
+			}
+			else{
+				pong_paddle_r = constrain(map((current_glove->pitch_compensated), 0, 36000, -32, 32), -2, 9);
+
+			}
+
 			if (!current_glove->finger1 &&  !current_glove->finger2 && !current_glove->finger3 && current_glove->gesture_in_progress == true){
 				if (current_glove->gloveY <= 0)      menu_map(HAND_DIRECTION_DOWN);
 				else if (current_glove->gloveY >= 7) menu_map(HAND_DIRECTION_UP);
@@ -633,8 +584,36 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 			if (menu_mode == MENU_CAMON){
 				if (current_glove->finger1 || current_glove->finger2){
 					if (current_glove->camera_button_press_handled == false){
-						if (current_glove == &glove0)	glove1.camera_on = !(glove1.camera_on);
-						else							glove0.camera_on = !(glove0.camera_on);
+						if (current_glove == &glove0){
+							//wipe array on turn on
+							if (!glove1.camera_on){
+								for (uint8_t i = 0; i < 38; i++){
+									glove1.cameraflow[i] = CHSV(0, 0, 0);
+								}
+							}
+							else{
+								//on exit save color
+								if (glove1.cameraflow[glove1.cameraflow_index] != CHSV(0, 0, 0)){
+									color2 = glove1.cameraflow[glove1.cameraflow_index];
+								}
+							}
+							glove1.camera_on = !(glove1.camera_on);
+						}
+						if (current_glove == &glove1){
+							//wipe array on turn on
+							if (!glove0.camera_on){
+								for (uint8_t i = 0; i < 38; i++){
+									glove0.cameraflow[i] = CHSV(0, 0, 0);
+								}
+							}
+							else{
+								//on exit save color
+								if (glove0.cameraflow[glove0.cameraflow_index] != CHSV(0, 0, 0)){
+									color1 = glove0.cameraflow[glove0.cameraflow_index];
+								}
+							}
+							glove0.camera_on = !(glove0.camera_on);
+						}
 						current_glove->camera_button_press_handled = true;
 					}
 				}
@@ -643,12 +622,13 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 				}
 			}
 			else{
+				current_glove->camera_button_press_handled = false;
 				glove1.camera_on = false;
 				glove0.camera_on = false;
 			}
 
 
-			if (MENU_CAMON && current_glove->camera_on){
+			if (current_glove->camera_on){
 
 				current_glove->output_white_led = 0x01;
 
@@ -662,23 +642,24 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 					b = current_glove->color_sensor_B; b /= sum;
 					r *= 256; g *= 256; b *= 256;
 
-					CHSV temp = rgb2hsv_approximate(CRGB(r, g, b));
+					current_glove->output_hsv_led = rgb2hsv_approximate(CRGB(r, g, b));
 					//temp.v = min(temp.v, 200);
 					//temp.s = max(temp.s, 192);
-					CRGB temp2;
-					hsv2rgb_rainbow(temp, temp2);
-					current_glove->output_rgb_led = temp2;
-
-
-					if (CameraFlow.check()){
-						if (current_glove->cameraflow_index++ > 37) current_glove->cameraflow_index = 0;
-						current_glove->cameraflow[current_glove->cameraflow_index] = temp;
-					}
-
+				
+					hsv2rgb_rainbow(current_glove->output_hsv_led, current_glove->output_rgb_led);
+					
 				}
 				else{
-					//ove0.output_rgb_led = CRGB(0, 0, 0);
+					current_glove->output_rgb_led = CRGB(0, 0, 0);
+					current_glove->output_hsv_led = CHSV(0, 0, 0);
 				}
+
+				if (millis() - current_glove->camera_advance > 50){
+					current_glove->camera_advance = millis();
+					current_glove->cameraflow_index = (current_glove->cameraflow_index + 1) % 38;
+					current_glove->cameraflow[current_glove->cameraflow_index] = current_glove->output_hsv_led;
+				}
+
 			}
 			else{
 				//current_glove->camera_entering = true;
@@ -688,5 +669,35 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 
 
 		}
+	}
+}
+
+//use void pointer to bypass arduino compiler weirdness
+void glove_spin(void *  first_glove, void *  second_glove){
+
+	if (((GLOVE *)first_glove)->finger1 || ((GLOVE *)first_glove)->finger2){
+		if (MENU_SWIPE_entering == true){
+			disc0.disc_mode = DISC_MODE_SWIPE;
+			MENU_SWIPE_entering = false;
+			if (millis() - disc0.taptimer < 300 && disc0.current_mag == 16) disc0.active_primary = !disc0.active_primary;
+			disc0.taptimer = millis();
+		}
+		disc0.inner_offset_requested = ((GLOVE *)first_glove)->disc_offset;
+		disc0.outer_offset_requested = ((GLOVE *)first_glove)->disc_offset;
+		if (((GLOVE *)second_glove)->finger1 || ((GLOVE *)second_glove)->finger2){
+			//map magnitude
+			if (disc0.mag_saved == false){
+				disc0.saved_mag = disc0.current_mag;
+				disc0.mag_saved = true;
+
+			}
+			disc0.inner_magnitude_requested = constrain(disc0.saved_mag + ((GLOVE *)second_glove)->y_angle, 0, 16);
+		}
+		else{
+			disc0.mag_saved = false;
+		}
+	}
+	else{
+		MENU_SWIPE_entering = true;
 	}
 }
