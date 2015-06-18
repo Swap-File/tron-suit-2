@@ -13,13 +13,13 @@ inline void fftmath(void){
 		}
 
 		//falloff controll
-		EQdisplayValueMax16[i] = max(max(EQdisplayValueMax16[i] * .98, n), 4);
-		EQdisplayValue16[i] = constrain(map(n, 0, EQdisplayValueMax16[i], 0, 255), 0, 255);
+		FFTdisplayValueMax16[i] = max(max(FFTdisplayValueMax16[i] * .98, n), 4);
+		FFTdisplayValue16[i] = constrain(map(n, 0, FFTdisplayValueMax16[i], 0, 255), 0, 255);
 
 		// downsample 16 samples to 8
 		if (i & 0x01){
-			EQdisplayValueMax8[i >> 1] = (EQdisplayValueMax16[i] + EQdisplayValueMax16[i - 1]) >> 1;
-			EQdisplayValue8[i >> 1] = (EQdisplayValue16[i] + EQdisplayValue16[i - 1]) >> 1;
+			FFTdisplayValueMax8[i >> 1] = (FFTdisplayValueMax16[i] + FFTdisplayValueMax16[i - 1]) >> 1;
+			FFTdisplayValue8[i >> 1] = (FFTdisplayValue16[i] + FFTdisplayValue16[i - 1]) >> 1;
 		}
 
 	}
@@ -29,7 +29,7 @@ inline void fftmath(void){
 		//move eq data left 1
 		for (uint8_t x = 1; x < 16; x++) {
 			for (uint8_t y = 0; y < 8; y++) {
-				EQ_Array[x - 1][y] = EQ_Array[x][y];
+				FFT_Array[x - 1][y] = FFT_Array[x][y];
 			}
 		}
 	}
@@ -37,7 +37,7 @@ inline void fftmath(void){
 		//move eq data right 1
 		for (uint8_t x = 15; x > 0; x--) {
 			for (uint8_t y = 0; y < 8; y++) {
-				EQ_Array[x][y] = EQ_Array[x - 1][y];
+				FFT_Array[x][y] = FFT_Array[x - 1][y];
 			}
 		}
 	}
@@ -45,7 +45,7 @@ inline void fftmath(void){
 		//move eq data up  1
 		for (uint8_t y = 7; y > 0; y--) {
 			for (uint8_t x = 0; x < 16; x++) {
-				EQ_Array[x][y] = EQ_Array[x][y - 1];
+				FFT_Array[x][y] = FFT_Array[x][y - 1];
 			}
 		}
 	}
@@ -53,7 +53,7 @@ inline void fftmath(void){
 		//move eq data up  1
 		for (uint8_t y = 1; y < 8; y++) {
 			for (uint8_t x = 0; x < 16; x++) {
-				EQ_Array[x][y - 1] = EQ_Array[x][y];
+				FFT_Array[x][y - 1] = FFT_Array[x][y];
 			}
 		}
 	}
@@ -65,10 +65,10 @@ inline void fftmath(void){
 
 			//make the tip of the color be color 2
 			CHSV temp_color;
-			calcfftcolor(&temp_color, EQdisplayValue8[i]);
+			calcfftcolor(&temp_color, FFTdisplayValue8[i]);
 
-			if (fft_mode == FFT_MODE_HORZ_BARS_RIGHT)  EQ_Array[15][i] = temp_color;
-			else if (fft_mode == FFT_MODE_HORZ_BARS_LEFT) EQ_Array[0][i] = temp_color;
+			if (fft_mode == FFT_MODE_HORZ_BARS_RIGHT)  FFT_Array[15][i] = temp_color;
+			else if (fft_mode == FFT_MODE_HORZ_BARS_LEFT) FFT_Array[0][i] = temp_color;
 		}
 
 	}
@@ -78,10 +78,10 @@ inline void fftmath(void){
 
 			//make the tip of the color be color 2
 			CHSV temp_color;
-			calcfftcolor(&temp_color, EQdisplayValue8[i]);
+			calcfftcolor(&temp_color, FFTdisplayValue8[i]);
 
 			for (uint8_t index = 0; index < 16; index++){
-				EQ_Array[index][i] = temp_color;
+				FFT_Array[index][i] = temp_color;
 			}
 		}
 	}
@@ -92,10 +92,10 @@ inline void fftmath(void){
 
 			//make the tip of the color be color 2
 			CHSV temp_color;
-			calcfftcolor(&temp_color, EQdisplayValue16[i]);
+			calcfftcolor(&temp_color, FFTdisplayValue16[i]);
 
-			if (fft_mode == FFT_MODE_VERT_BARS_UP)	     EQ_Array[i][0] = temp_color;
-			else if (fft_mode == FFT_MODE_VERT_BARS_DOWN) EQ_Array[i][7] = temp_color;
+			if (fft_mode == FFT_MODE_VERT_BARS_UP)	     FFT_Array[i][0] = temp_color;
+			else if (fft_mode == FFT_MODE_VERT_BARS_DOWN) FFT_Array[i][7] = temp_color;
 
 		}
 	}
@@ -105,10 +105,10 @@ inline void fftmath(void){
 
 			//make the tip of the color be color 2
 			CHSV temp_color;
-			calcfftcolor(&temp_color, EQdisplayValue16[i]);
+			calcfftcolor(&temp_color, FFTdisplayValue16[i]);
 
 			for (uint8_t index = 0; index < 8; index++){
-				EQ_Array[i][index] = temp_color;
+				FFT_Array[i][index] = temp_color;
 			}
 		}
 	}
@@ -122,28 +122,38 @@ void calcfftcolor(CHSV * temp_color, uint8_t input){
 
 	//scale the brightness //what if color2 is dimmer? look into this.
 	temp_color->v = scale8(temp_color->v, input);
-	//temp_color.v = EQdisplayValue8[i];
+	//temp_color.v = FFTdisplayValue8[i];
 
 	return;
 }
 
 
 inline void helmet_backgrounds(){
-	//fix later
-	scale_noise = glove0.y_angle * 2;
 
 	CRGB black = CRGB::Black;
+	
 
-	currentPalette = CRGBPalette16(
+	BrightPalette = CRGBPalette16(
+		map_hsv(0, 0, 15, &color1, &color2), map_hsv(1, 0, 15, &color1, &color2),
+		map_hsv(2, 0, 15, &color1, &color2), map_hsv(3, 0, 15, &color1, &color2),
+		map_hsv(4, 0, 15, &color1, &color2), map_hsv(5, 0, 15, &color1, &color2),
+		map_hsv(6, 0, 15, &color1, &color2), map_hsv(7, 0, 15, &color1, &color2),
+		map_hsv(8, 0, 15, &color1, &color2), map_hsv(9, 0, 15, &color1, &color2),
+		map_hsv(10, 0, 15, &color1, &color2), map_hsv(11, 0, 15, &color1, &color2),
+		map_hsv(12, 0, 15, &color1, &color2), map_hsv(13, 0, 15, &color1, &color2),
+		map_hsv(14, 0, 15, &color1, &color2), map_hsv(15, 0, 15, &color1, &color2));
+
+
+	 NormalPalette  = CRGBPalette16(
 		map_hsv(0, 0, 15, &color1, &color2), map_hsv(1, 0, 15, &color1, &color2), black, black,
 		map_hsv(4, 0, 15, &color1, &color2), map_hsv(5, 0, 15, &color1, &color2), black, black,
 		map_hsv(8, 0, 15, &color1, &color2), map_hsv(9, 0, 15, &color1, &color2), black, black,
 		map_hsv(12, 0, 15, &color1, &color2), map_hsv(13, 0, 15, &color1, &color2), black, black);
 
-	if (arm_mode == arm_mode_noise){
-		fillnoise8();
-		mapNoiseToLEDsUsingPalette();
-	}
+
+	fillnoise8();
+	mapNoiseToLEDsUsingPalette();
+	
 
 	if (menu_mode == MENU_HELMET_PONG_IN){
 
@@ -165,11 +175,11 @@ inline void helmet_backgrounds(){
 				}
 			}
 		}
-		
+
 		//wait to increment
 		if (pongtime.check()){
-			
-		
+
+
 			//check for left paddle  collisions
 			if (ball_pos[0] == 1 && (pong_ball_vector == PONG_LEFT || pong_ball_vector == PONG_LEFT_UP || pong_ball_vector == PONG_LEFT_DOWN)){
 				if (ball_pos[1] == pong_paddle_l)			pong_ball_vector = PONG_RIGHT;
@@ -204,7 +214,7 @@ inline void helmet_backgrounds(){
 			case PONG_LEFT_DOWN:	ball_pos[0]--;	ball_pos[1]--;	break;
 			case PONG_RIGHT_DOWN:	ball_pos[0]++;	ball_pos[1]--;	break;
 			}
-		
+
 			//check for collisions with horizontal wall, someone scored, dont care who, Im not keeping track
 			if (ball_pos[0] < 0 || ball_pos[0] > 15){
 				//random ball start x & y (in the middle 2x2)
@@ -230,11 +240,11 @@ void fillnoise8() {
 	}
 
 	for (int i = 0; i < 16; i++) {
-		int ioffset = scale_noise * i;
+		int ioffset = z_noise_modifier * i;
 		for (int j = 0; j < 16; j++) {
-			int joffset = scale_noise * j;
+			int joffset = z_noise_modifier * j;
 
-			uint8_t data = inoise8(x_noise + ioffset, y_noise + joffset, z_noise);
+			uint8_t data = inoise8(x_noise + ioffset + x_noise_modifier, y_noise + joffset + y_noise_modifier, z_noise);
 
 			// The range of the inoise8 function is roughly 16-238.
 			// These two operations expand those values out to roughly 0..255
@@ -286,8 +296,8 @@ void mapNoiseToLEDsUsingPalette()
 				bri = dim8_raw(bri * 2);
 			}
 
-			CRGB color = ColorFromPalette(currentPalette, index, bri);
-			Noise_Array[i][j] = color;
+			Noise_Array[i][j] = ColorFromPalette(NormalPalette, index, bri);
+			Noise_Array_Bright[i][j] = ColorFromPalette(BrightPalette, index, bri);
 		}
 	}
 

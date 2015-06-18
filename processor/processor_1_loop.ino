@@ -69,18 +69,21 @@ void loop() {
 		display.reinit();
 
 	}
+
+
+	if (ring_timer + RINGTIMEOUT > millis() || (ring_timer + RINGTIMEOUT * 2 < millis() & ring_timer + RINGTIMEOUT * 3 > millis())){
+		if ((millis() >> 6) & 0x01){
+			sms_blackout = true;
+		}
+		else{
+			sms_blackout = false;
+		}
+	}
+
 	if (FPSdisplay.check()){
 
-		Serial.print(disc0.disc_mode);
-		Serial.print(" ");
-		Serial.print(disc0.active_primary);
-		Serial.print(" ");
-		Serial.print(leading_glove);
-		Serial.print(" ");
-		Serial.print(glovestats.local_packets_out_per_second);
-		Serial.print(" ");
 		Serial.println(voltage);
-		
+
 		glovestats.total_lost_packets += (glovestats.local_packets_out_per_second << 1); //add in both gloves
 		glovestats.total_lost_packets -= glovestats.local_packets_in_per_second_glove0;
 		glovestats.total_lost_packets -= glovestats.local_packets_in_per_second_glove1;
@@ -131,25 +134,46 @@ void loop() {
 		}
 	}
 
+	if (menu_mode == MENU_HELMET_EMOTICON_ON){
+
+		for (uint8_t y = 0; y < 8; y++) {
+			for (uint8_t x = 0; x < 16; x++) {
+				emot_Array[x][y] = false;
+			}
+		}
+
+		uint8_t leftx = 3; // 1-5
+		uint8_t rightx = 12; //10-12
+
+
+		drawLine_local(1, 5, leftx, 7);
+		drawLine_local(leftx, 7, 5, 5);
+		drawLine_local(10, 5, rightx, 7);
+		drawLine_local(rightx, 7, 14, 5);
+		drawLine_local(5, 0, 10, 0);
+
+
+	}
+
 	//make new trails
-	if (glove0.finger1 == 1){
+	if (glove0.finger2 == 1){
 		gloveindicator[8 + glove0.gloveX][7 - glove0.gloveY] = 100;
 
 	}
-	if (glove1.finger1 == 1){
+	if (glove1.finger2 == 1){
 		gloveindicator[glove1.gloveX][7 - glove1.gloveY] = 100;
 	}
 
 
 	//check for gestures
-	if (glove1.finger4 == 1){
+	if (glove1.finger4 == 1 || glove0.finger4 == 1){
 
 		disc0.disc_mode = 2;
 
 		menu_mode = MENU_DEFAULT;
-		//helmet_mode = HELMET_MODE_OFF;
 		scroll_mode = SCROLL_MODE_COMPLETE;
 	}
+
 
 	//draw most of hud, last bit will be drawn in external helmet bit
 	draw_HUD();
@@ -166,47 +190,57 @@ void loop() {
 				if (read_menu_pixel(x, y))	menu_name = CRGB(180, 180, 180);
 			}
 
+
 			if (gloveindicator[x][7 - y] > 0){ // flip Y for helmet external display by subtracting from 7
 				background_array = CRGB(gloveindicator[x][7 - y], gloveindicator[x][7 - y], gloveindicator[x][7 - y]);
 			}
 
 
-			if (mask_mode == 1){
-				if (read_sms_pixel(x, y) != 0){
-					if (menu_mode > 0){
-						final_color = EQ_Array[x][y];
-					}
-				}
+			//override modes
+			if (menu_mode == MENU_HELMET_PONG_IN){
+				final_color = Pong_Array[x][y];  //everything else
 			}
 			else{
-				
-					//override modes
-					if (menu_mode == MENU_HELMET_PONG_IN){
-						final_color = Pong_Array[x][y];  //everything else
+				//backgrounds
+				if (background_mode == BACKGROUND_MODE_FFT){
+					if (menu_mode == MENU_SMS_ON){
+						if (read_sms_pixel(x, y)){
+							CHSV temp = FFT_Array[x][y];
+							temp.v = max(temp.v, SMS_MIN_BRIGHTNESS);
+							final_color = temp;
+						}
+					}
+					else if (menu_mode == MENU_HELMET_EMOTICON_ON){
+						if (emot_Array[x][y]){
+							CHSV temp = FFT_Array[x][y];
+							temp.v = max(temp.v, SMS_MIN_BRIGHTNESS);
+							final_color = temp;
+						}
 					}
 					else{
-						//backgrounds
-						if (arm_mode == arm_mode_fft){
-							final_color = EQ_Array[x][y];
-						}
-						else if (arm_mode == arm_mode_noise){
-							final_color = Noise_Array[x][y];
-						}
-
+						final_color = FFT_Array[x][y];
 					}
-			
+				}
+				else if (background_mode == BACKGROUND_MODE_NOISE){
+					if (menu_mode == MENU_SMS_ON){
+						if (read_sms_pixel(x, y)){
+							final_color = Noise_Array_Bright[x][y];;
+						}
+					}
+					else if (menu_mode == MENU_HELMET_EMOTICON_ON){
+						if (emot_Array[x][y]){
+							final_color = Noise_Array_Bright[x][y];;
+						}
+					}
+					else{
+						final_color = Noise_Array[x][y];
+					}
+				}
 				final_color = background_array | menu_name | final_color;
 			}
 
-			//}
-			//else{
-			//	if (background_array || menu_name || read_sms_pixel(x,y-1) != 0){
-			//		final_color = EQ_Array[x][y] ;
-			//	}
-			//}
-
-		
-				if (final_color.getAverageLight() > 32){
+			//Internal HUD Display
+			if (final_color.getAverageLight() > 32){
 				display.drawPixel(realtime_location_x + (15 - x), realtime_location_y + 7 - y, WHITE);
 			}
 
@@ -216,8 +250,12 @@ void loop() {
 			if ((y & 0x01) == 1)  tempindex = (y << 4) + 15 - x;  //<< 4 is multiply by 16 pixels per row
 			else                  tempindex = (y << 4) + x; //<< 4 is multiply by 16 pixels per row
 
-			actual_output[tempindex] = final_color;
-
+			if (!sms_blackout){ //flash display for incoming call
+				actual_output[tempindex] = final_color;
+			}
+			else{
+				actual_output[tempindex] = CRGB(0, 0, 0);
+			}
 		}
 	}
 
@@ -238,10 +276,10 @@ void loop() {
 		actual_output[129] = glove0.output_rgb_led;
 	}
 	//blank hud if in a countdown
-	if (millis() - left_timer < 100){
+	if (millis() - left_timer < 100 || sms_blackout){
 		actual_output[128] = CRGB(0, 0, 0);
 	}
-	if (millis() - right_timer < 100){
+	if (millis() - right_timer < 100 || sms_blackout){
 		actual_output[129] = CRGB(0, 0, 0);
 	}
 	//dim hud lights
@@ -251,40 +289,39 @@ void loop() {
 
 
 	//draw the suit strips
-	for (uint16_t i = 0; i < 38; i++) { 
-	
+	for (uint16_t i = 0; i < 38; i++) {
+
 		//chest strips
 		if (disc0.disc_mode == DISC_MODE_SWIPE){
-			mask_blur_and_output((5 * 130) + ((i + (37 - scale8(disc0.current_index, 38))) % 38), &color1, i, map(disc0.current_mag,0,16,0,19));
+			mask_blur_and_output((5 * 130) + ((i + (37 - scale8(disc0.current_index, 38))) % 38), &color1, i, map(disc0.current_mag, 0, 16, 0, 19));
 			mask_blur_and_output((4 * 130) + ((i + (37 - scale8(disc0.current_index, 38))) % 38), &color2, i, map(disc0.current_mag, 0, 16, 0, 19));
 		}
 		else{
 			mask_blur_and_output((5 * 130) + i, &stream1[(stream_head + i) % 38], i, 19);
 			mask_blur_and_output((4 * 130) + i, &stream2[(stream_head + i) % 38], i, 19);
-
 		}
 
 		//arm strips
 		if (glove1.camera_on){
-			blur_cust((6 * 130) + (i), &glove1.cameraflow[(1+i + glove1.cameraflow_index) % 38],1);
+			blur_cust((6 * 130) + (i), &glove1.cameraflow[(1 + i + glove1.cameraflow_index) % 38], 1);
 		}
 		else{
-			if (arm_mode == arm_mode_fft){
-				actual_output[(6 * 130) + i] = (&EQ_Array[0][0])[38 - i];
+			if (background_mode == BACKGROUND_MODE_FFT){
+				actual_output[(6 * 130) + i] = (&FFT_Array[0][0])[38 - i];
 			}
-			else if (arm_mode == arm_mode_noise){
+			else if (background_mode == BACKGROUND_MODE_NOISE){
 				actual_output[(6 * 130) + i] = (&Noise_Array[0][0])[i];
 			}
 		}
 
 		if (glove0.camera_on){
-			blur_cust((7 * 130) + ( i), &glove0.cameraflow[(1+i + glove0.cameraflow_index) % 38], 1);
+			blur_cust((7 * 130) + (i), &glove0.cameraflow[(1 + i + glove0.cameraflow_index) % 38], 1);
 		}
 		else{
-			if (arm_mode == arm_mode_fft){
-				actual_output[(7 * 130) + i] = (&EQ_Array[0][0])[38 - i];
+			if (background_mode == BACKGROUND_MODE_FFT){
+				actual_output[(7 * 130) + i] = (&FFT_Array[0][0])[38 - i];
 			}
-			else if (arm_mode == arm_mode_noise){
+			else if (background_mode == BACKGROUND_MODE_NOISE){
 				actual_output[(7 * 130) + i] = (&Noise_Array[0][0])[i];
 			}
 		}
@@ -292,7 +329,7 @@ void loop() {
 
 	//write out HUD
 	for (uint16_t i = 0; i < 38; i++) {
-	
+
 		if (actual_output[(7 * 130) + i].getAverageLight() > 32){
 			display.drawPixel(54, i, WHITE);
 		}
@@ -381,8 +418,8 @@ void loop() {
 			//to suit
 			stream1[stream_head] = map_hsv(suitwave, 0, 37, &color1, &color2);
 			stream2[stream_head] = map_hsv(suitwave, 0, 37, &color1, &color2);
-			
-	
+
+
 			if (stream_head == 37){
 				stream_head = 0;
 			}
@@ -460,20 +497,20 @@ void mask_blur_and_output(uint16_t i, CHSV* color, uint8_t current_pixel, uint8_
 	actual_output[i] = temp_rgb;
 }
 
-void blur_cust(uint16_t i,CHSV* color, int16_t blur_rate){
+void blur_cust(uint16_t i, CHSV* color, int16_t blur_rate){
 	CRGB temp_rgb = *color;
 
 	if (color->v != 0 && actual_output[i] != CRGB(0, 0, 0)){
 
 		temp_rgb.fadeToBlackBy(disc0.fade_level); // fade_level
 
-		if (actual_output[i].r < temp_rgb.r) temp_rgb.r = min(actual_output[i].r + (blur_rate ), temp_rgb.r);
-		else if (actual_output[i].r > temp_rgb.r) temp_rgb.r = max(actual_output[i].r - (blur_rate ), temp_rgb.r);
+		if (actual_output[i].r < temp_rgb.r) temp_rgb.r = min(actual_output[i].r + (blur_rate), temp_rgb.r);
+		else if (actual_output[i].r > temp_rgb.r) temp_rgb.r = max(actual_output[i].r - (blur_rate), temp_rgb.r);
 
-		if (actual_output[i].g < temp_rgb.g) temp_rgb.g = min(actual_output[i].g + (blur_rate ), temp_rgb.g);
-		else if (actual_output[i].g > temp_rgb.g) temp_rgb.g = max(actual_output[i].g - (blur_rate ), temp_rgb.g);
+		if (actual_output[i].g < temp_rgb.g) temp_rgb.g = min(actual_output[i].g + (blur_rate), temp_rgb.g);
+		else if (actual_output[i].g > temp_rgb.g) temp_rgb.g = max(actual_output[i].g - (blur_rate), temp_rgb.g);
 
-		if (actual_output[i].b < temp_rgb.b) temp_rgb.b = min(actual_output[i].b + (blur_rate ), temp_rgb.b);
+		if (actual_output[i].b < temp_rgb.b) temp_rgb.b = min(actual_output[i].b + (blur_rate), temp_rgb.b);
 		else if (actual_output[i].b > temp_rgb.b) temp_rgb.b = max(actual_output[i].b - (blur_rate), temp_rgb.b);
 	}
 

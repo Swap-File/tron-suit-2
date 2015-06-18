@@ -18,6 +18,7 @@
 
 #include <ADC.h>
 
+
 //menu scroll-aways to match effect
 #define HAND_DIRECTION_LEFT 1
 #define HAND_DIRECTION_RIGHT 2
@@ -33,14 +34,6 @@
 #define FFT_MODE_VERT_BARS_STATIC 5
 uint8_t fft_mode = FFT_MODE_HORZ_BARS_RIGHT;
 
-#define HELMET_MODE_OFF 6
-#define HELMET_MODE_FFT 0
-#define HELMET_MODE_NOISE 7
-#define HELMET_MODE_FIRE 8
-#define HELMET_MODE_SNAKE 9
-#define HELMET_MODE_PONG 10
-#define HELMET_MODE_EMOTICON 11
-uint8_t helmet_mode = HELMET_MODE_FFT;
 
 #define MENU_DEFAULT 1
 
@@ -51,16 +44,17 @@ uint8_t helmet_mode = HELMET_MODE_FFT;
 #define MENU_HELMET 6
 #define MENU_HELMET_FFT 12
 #define MENU_HELMET_NOISE 14
-#define MENU_HELMET_PONG 17
-#define MENU_HELMET_PONG_IN 18
+#define MENU_HELMET_PONG 19
+#define MENU_HELMET_PONG_IN 21
 #define MENU_HELMET_EMOTICON 15
+#define MENU_HELMET_EMOTICON_ON 17
+#define MENU_HELMET_NOISE_ON 18
 #define MENU_DISC 7
 #define MENU_CAMON 8
 #define MENU_SPIN 9
 #define MENU_CAMERA 10
-#define MENU_HELMET_OPTIONS 11
-
-
+#define MENU_SMS 11
+#define MENU_SMS_ON 16
 
 uint8_t menu_mode = MENU_DEFAULT;
 
@@ -268,19 +262,25 @@ int8_t flow_offset = 0;
 #define OLED_RESET  19
 Adafruit_SSD1306 display(OLED_DC, OLED_RESET, OLED_CS);
 
-uint8_t mask_mode = 0;
-
 float temperature = 0.0;
 float voltage = 14.4;
-char sms_message1[160] = "TESTING TEXT MESSAGE";
+
+//texting stuff
+unsigned long ring_timer = 0; //flash screen to ring for incoming message
+#define RINGTIMEOUT 1000  //time to flash for
+boolean sms_blackout = false;
+
+#define SMS_MIN_BRIGHTNESS 64
+
+char sms_message1[160] = "WWW.TRONSUIT.COM";
 char sms_message2[160];
 char *front_sms = sms_message1;
 char *back_sms = sms_message2;
-
 int16_t sms_text_ending_pos = 0; //160 * 5 max length
 int16_t sms_scroll_pos = 0;
 int16_t menu_text_ending_pos = 0;
 
+//HUD overlay
 //scroll state has 3 modes
 //scrolling from start position to 0,0
 //pausing at 0,0 according to scroll_timer
@@ -318,8 +318,6 @@ AudioConnection          patchCord1(adc1, fft256_1);
 #define NUM_STRIPS 8 //must be 8, even though only 6 are used
 CRGB actual_output[NUM_STRIPS * NUM_LEDS_PER_STRIP];
 
-int color_on = 1;
-
 GLOVE glove0;
 GLOVE glove1;
 SERIALSTATSGLOVE glovestats;
@@ -327,46 +325,46 @@ SERIALSTATS discstats;
 SERIALSTATS bluetoothstats;
 DISC disc0;
 
-byte gloveindicator[16][8];
 
+byte gloveindicator[16][8]; // glove array
 
-CRGB Pong_Array[16][8];  //keep this separate so suit effects can pull from it
-CHSV EQ_Array[16][8];  //keep this separate so suit effects can pull from it
-int EQdisplayValueMax16[16]; //max vals for normalization over time
-uint8_t EQdisplayValue16[16]; //max vals for normalization over time
-int EQdisplayValueMax8[8]; //max vals for normalization over time
-uint8_t EQdisplayValue8[8]; //max vals for normalization over time
+//FFT data
+CHSV FFT_Array[16][8];  //keep this separate so suit effects can pull from it
+int FFTdisplayValueMax16[16]; //max vals for normalization over time
+uint8_t FFTdisplayValue16[16]; //max vals for normalization over time
+int FFTdisplayValueMax8[8]; //max vals for normalization over time
+uint8_t FFTdisplayValue8[8]; //max vals for normalization over time
 
-
-//Stuff for helmet, pulled from fastled, fire, pong, snake, and 
-CRGB Noise_Array[16][8];
-CRGBPalette16 currentPalette(PartyColors_p);
-CRGBPalette16 targetPalette(PartyColors_p);
-
-//NOISE STUFF
+//Noise Effects from FastLED
+CRGB Noise_Array[16][8];  //normal for shoulders
+CRGB Noise_Array_Bright[16][8];  //bright for overlay effects
+CRGBPalette16 NormalPalette(PartyColors_p);
+CRGBPalette16 BrightPalette(PartyColors_p);
 uint8_t noise[16][16];
-
-uint8_t       colorLoop_noise = 1;
+uint8_t colorLoop_noise = 1; //not changed
 static uint16_t x_noise;
 static uint16_t y_noise;
 static uint16_t z_noise;
-uint16_t speed_noise = 3;
-uint16_t scale_noise = 30;
+uint16_t speed_noise = 3;  //speed set in advance not changed
+boolean noise_xy_entered = false;
+boolean noise_z_entered = false;
+uint16_t x_noise_modifier = 0;
+uint16_t y_noise_modifier = 0;
+uint16_t z_noise_modifier = 0;
+uint16_t x_noise_modifier_initial = 0;
+uint16_t y_noise_modifier_initial = 0;
+uint16_t z_noise_modifier_initial = 0;
 
-//FIRE STUFF
-uint8_t heat[16][8];
-
-
-Metro FPSdisplay = Metro(1000, 0);
-Metro glovedisplayfade = Metro(10, 0);
-Metro ADC_Switch_Sample = Metro(100, 0);
-Metro ScrollSpeed = Metro(40, 0);
-Metro GloveSend = Metro(10,0);
-Metro Flow = Metro(40, 0);
+Metro FPSdisplay = Metro(1000, 0);  //display and reset stats
+Metro glovedisplayfade = Metro(10, 0);  //when to decay the glove trails
+Metro ScrollSpeed = Metro(40, 0);  //how fast words scroll
+Metro GloveSend = Metro(10,0);  //how fast to send data to gloves
+Metro Flow = Metro(40, 0); //how often to update effect flow
 Metro DiscSend3 = Metro(20, 0);
 Metro LEDdisplay = Metro(10,0);
 
 //to round robin poll sensors
+Metro ADC_Switch_Sample = Metro(100, 0); //switch between what we sample
 #define TEMP_SENSOR 0
 #define BATTERY_METER 1
 uint8_t adc1_mode = TEMP_SENSOR;
@@ -380,11 +378,13 @@ uint8_t leading_glove = 1;
 uint32_t left_timer = 0;
 uint32_t right_timer = 0;
 
-#define arm_mode_fft 0
-#define arm_mode_noise 1
-uint8_t arm_mode = arm_mode_fft;
+//background data
+#define BACKGROUND_MODE_FFT 0
+#define BACKGROUND_MODE_NOISE 1
+uint8_t background_mode = BACKGROUND_MODE_FFT;
 
 //pong
+CRGB Pong_Array[16][8];  //keep this separate so suit effects can pull from it
 int8_t pong_paddle_l = 4;  //-2 to 9 range
 int8_t pong_paddle_r = 4; //-2 to 9 range
 int8_t ball_pos[2] = {7, 4 }; //initial position
@@ -396,7 +396,9 @@ int8_t ball_pos[2] = {7, 4 }; //initial position
 #define PONG_RIGHT_DOWN 5
 #define PONG_STOPPED 6
 uint8_t pong_ball_vector = PONG_RIGHT_DOWN;
-
 #define PONG_MAX_SPEED 50
 #define PONG_MIN_SPEED 200
 Metro pongtime = Metro(PONG_MIN_SPEED, 1);
+
+//emoti
+boolean emot_Array[16][8];  //keep this separate so suit effects can pull from it

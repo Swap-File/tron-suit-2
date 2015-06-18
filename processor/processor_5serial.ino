@@ -330,7 +330,9 @@ inline void onPacket3(const uint8_t* buffer, size_t size)
 				front_sms = back_sms;
 				back_sms = temp;
 
-
+				//ring for a new message
+				ring_timer = millis();
+				menu_mode = MENU_SMS_ON; //force into sms display
 			}
 			else if (size == 2){
 				if (buffer[0] == 0x00){
@@ -556,6 +558,13 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 
 			}
 
+			//noise
+			if (menu_mode == MENU_HELMET_NOISE_ON){
+				if (leading_glove == 0)  glove_noise((void*)&glove0, (void*)&glove1);
+				else 	glove_noise((void*)&glove1, (void*)&glove0);
+			}
+
+
 			if (!current_glove->finger1 &&  !current_glove->finger2 && !current_glove->finger3 && current_glove->gesture_in_progress == true){
 				if (current_glove->gloveY <= 0)      menu_map(HAND_DIRECTION_DOWN);
 				else if (current_glove->gloveY >= 7) menu_map(HAND_DIRECTION_UP);
@@ -645,9 +654,9 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 					current_glove->output_hsv_led = rgb2hsv_approximate(CRGB(r, g, b));
 					//temp.v = min(temp.v, 200);
 					//temp.s = max(temp.s, 192);
-				
+
 					hsv2rgb_rainbow(current_glove->output_hsv_led, current_glove->output_rgb_led);
-					
+
 				}
 				else{
 					current_glove->output_rgb_led = CRGB(0, 0, 0);
@@ -699,5 +708,78 @@ void glove_spin(void *  first_glove, void *  second_glove){
 	}
 	else{
 		MENU_SWIPE_entering = true;
+	}
+}
+
+//use void pointer to bypass arduino compiler weirdness
+void glove_noise(void *  first_glove, void *  second_glove){
+
+	if (((GLOVE *)first_glove)->finger1 || ((GLOVE *)first_glove)->finger2){
+		if (noise_xy_entered == false){
+			x_noise_modifier_initial = x_noise_modifier;
+			y_noise_modifier_initial = y_noise_modifier;
+			noise_xy_entered = true;
+		}
+
+		x_noise_modifier = x_noise_modifier_initial + (((GLOVE *)first_glove)->pitch_compensated) / 10;
+		y_noise_modifier = y_noise_modifier_initial + (((GLOVE *)first_glove)->yaw_compensated) / 10;
+		if (((GLOVE *)second_glove)->finger1 || ((GLOVE *)second_glove)->finger2){
+			//map magnitude
+			if (noise_z_entered == false){
+				z_noise_modifier_initial = z_noise_modifier;
+				noise_z_entered = true;
+
+			}
+			z_noise_modifier = z_noise_modifier_initial + (((GLOVE *)second_glove)->y_angle )* 2;
+		}
+		else{
+			noise_z_entered = false;
+		}
+	}
+	else{
+		noise_xy_entered = false;
+	}
+}
+
+void drawLine_local(int16_t x0, int16_t y0,
+	int16_t x1, int16_t y1) {
+	int16_t steep = abs(y1 - y0) > abs(x1 - x0);
+	if (steep) {
+		swap(x0, y0);
+		swap(x1, y1);
+	}
+
+	if (x0 > x1) {
+		swap(x0, x1);
+		swap(y0, y1);
+	}
+
+	int16_t dx, dy;
+	dx = x1 - x0;
+	dy = abs(y1 - y0);
+
+	int16_t err = dx / 2;
+	int16_t ystep;
+
+	if (y0 < y1) {
+		ystep = 1;
+	}
+	else {
+		ystep = -1;
+	}
+
+	for (; x0 <= x1; x0++) {
+		if (steep) {
+
+			emot_Array[y0][x0] = true;
+		}
+		else {
+			emot_Array[x0][y0] = true;
+		}
+		err -= dy;
+		if (err < 0) {
+			y0 += ystep;
+			err += dx;
+		}
 	}
 }
