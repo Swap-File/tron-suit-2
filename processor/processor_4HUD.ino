@@ -41,19 +41,19 @@ inline void draw_HUD(void){
 
 
 	//sms display
-	display.drawRect(sms_location_x - 1, sms_location_y - 1, 18, 10, WHITE);
-	display.drawRect(sms_location_x - 1, sms_location_y - 1, 52, 10, WHITE);
-	display.setCursor(sms_location_x + 16 + sms_scroll_pos, sms_location_y);
-	display.print(front_sms);
-	sms_text_ending_pos = display.getCursorX(); //save menu text length for elsewhere
+	display.drawRect(txt_location_x - 1, txt_location_y - 1, 18, 10, WHITE);
+	display.drawRect(txt_location_x - 1, txt_location_y - 1, 52, 10, WHITE);
+	display.setCursor(txt_location_x + 16 + txt_scroll_pos, txt_location_y);
+	display.print(live_txt);
+	txt_ending_pos = display.getCursorX(); //save menu text length for elsewhere
 	//pad out message for contiual scrolling in the HUD, gives me more text at once
-	display.setCursor(sms_text_ending_pos + 19, sms_location_y);
+	display.setCursor(txt_ending_pos + 19, txt_location_y);
 	for (uint8_t i = 0; i < 7; i++){
-		display.print(front_sms[i]);
+		display.print(live_txt[i]);
 	}
 
 	//blank text scrolling
-	display.fillRect(52, sms_location_y - 1, display.width() - (52), 8, BLACK);
+	display.fillRect(52, txt_location_y - 1, display.width() - (52), 8, BLACK);
 
 
 	//this gets updated during writing out the main LED display, its the last thing to do
@@ -75,10 +75,10 @@ boolean read_menu_pixel(uint8_t x, uint8_t y){
 	return false;
 }
 
-boolean read_sms_pixel(uint8_t x, uint8_t y){
+boolean read_txt_pixel(uint8_t x, uint8_t y){
 
 	//add 7 sub y to flip on y axis
-	if (display.readPixel(sms_location_x + x, sms_location_y + (7 - y))){
+	if (display.readPixel(txt_location_x + x, txt_location_y + (7 - y))){
 		return true;
 	}
 	return false;
@@ -110,13 +110,6 @@ void draw_disc(uint8_t index_offset, uint8_t magnitude, uint8_t x_offset, uint8_
 			}
 		}
 	}
-
-	//blank the beam pixel?
-	//if (disc0.packet_beam < 17 && disc0.packet_beam > 0 && disc0.fade_level < 255){
-	//	display.drawPixel(circle_xcoord(disc0.packet_beam), circle_ycoord(disc0.packet_beam), BLACK);
-	//	display.drawPixel(circle_xcoord(30 - disc0.packet_beam), circle_ycoord(30 - disc0.packet_beam), BLACK);
-	//}
-
 }
 
 
@@ -154,19 +147,47 @@ void menu_map(uint8_t direction){
 		scroll_mode = SCROLL_MODE_COMPLETE;
 	}
 
-
+	//shortcut menu
 	if (glove0.gesture_finger == 3 || glove1.gesture_finger == 3){
-		Serial.println("SHORTCUT MENU!");
 		scroll_mode = SCROLL_MODE_COMPLETE;
 		switch (direction){
 		case HAND_DIRECTION_LEFT:
-
+			//if already in a backgroud menu, jump to the other background
+			if (menu_mode == MENU_HELMET_FFT_ON_H_or_V || menu_mode == MENU_HELMET_FFT_ON_H || menu_mode == MENU_HELMET_FFT_ON_V || menu_mode == MENU_HELMET_FFT_ON){
+				menu_mode = MENU_HELMET_NOISE_ON;
+				background_mode = BACKGROUND_MODE_NOISE;
+				}
+			else if (menu_mode == MENU_HELMET_NOISE_ON){
+				background_mode = BACKGROUND_MODE_FFT;
+				if (fft_mode == FFT_MODE_HORZ_BARS_LEFT || fft_mode == FFT_MODE_HORZ_BARS_RIGHT || fft_mode == FFT_MODE_HORZ_BARS_STATIC){
+					menu_mode = MENU_HELMET_FFT_ON_H;
+				}
+				else if (fft_mode == FFT_MODE_VERT_BARS_UP || fft_mode == FFT_MODE_VERT_BARS_DOWN || fft_mode == FFT_MODE_VERT_BARS_STATIC){
+					menu_mode = MENU_HELMET_FFT_ON_V;
+				}
+			}
+			else
+			{//if not in a background menu, jump into the current background menu
+				if (background_mode == BACKGROUND_MODE_FFT){
+					if (fft_mode == FFT_MODE_HORZ_BARS_LEFT || fft_mode == FFT_MODE_HORZ_BARS_RIGHT || fft_mode == FFT_MODE_HORZ_BARS_STATIC){
+						menu_mode = MENU_HELMET_FFT_ON_H;
+					}
+					else if (fft_mode == FFT_MODE_VERT_BARS_UP || fft_mode == FFT_MODE_VERT_BARS_DOWN || fft_mode == FFT_MODE_VERT_BARS_STATIC){
+						menu_mode = MENU_HELMET_FFT_ON_V;
+					}
+				}
+				else if (background_mode == BACKGROUND_MODE_NOISE){
+					menu_mode = MENU_HELMET_NOISE_ON;
+				}
+			}
 			break;
 		case HAND_DIRECTION_RIGHT:
-
+			//disc control
+			menu_mode = MENU_SPIN;
 			break;
 		case HAND_DIRECTION_UP:
-
+			//disc control
+			menu_mode = MENU_CAMON;
 			break;
 		case HAND_DIRECTION_DOWN:
 
@@ -262,7 +283,7 @@ void menu_map(uint8_t direction){
 				menu_mode = MENU_HELMET_FFT; // MENU_FFT;
 				break;
 			case HAND_DIRECTION_UP:
-				menu_mode = MENU_SMS; //new menu screen 
+				menu_mode = MENU_PWR; //new menu screen 
 				break;
 			case HAND_DIRECTION_DOWN:
 				menu_mode = MENU_DISC; //new menu screen 
@@ -298,20 +319,36 @@ void menu_map(uint8_t direction){
 				menu_mode = MENU_DISC; //new menu screen 
 				break;
 			case HAND_DIRECTION_DOWN:
-				menu_mode = MENU_SMS; //new menu screen 
+				menu_mode = MENU_TXT; //new menu screen 
 				break;
 			}
 			break;
 
-		case MENU_SMS:
+		case MENU_TXT:
 			switch (direction){
 			case HAND_DIRECTION_LEFT:
 				break;
 			case HAND_DIRECTION_RIGHT:
-				menu_mode = MENU_SMS_ON;
+				menu_mode = MENU_TXT_DISPLAY;
 				break;
 			case HAND_DIRECTION_UP:
 				menu_mode = MENU_CAMERA; //new menu screen 
+				break;
+			case HAND_DIRECTION_DOWN:
+				menu_mode = MENU_PWR; //new menu screen 
+				break;
+			}
+			break;
+
+		case MENU_PWR:
+			switch (direction){
+			case HAND_DIRECTION_LEFT:
+				break;
+			case HAND_DIRECTION_RIGHT:
+				menu_mode = MENU_PWR_IN;
+				break;
+			case HAND_DIRECTION_UP:
+				menu_mode = MENU_TXT; //new menu screen 
 				break;
 			case HAND_DIRECTION_DOWN:
 				menu_mode = MENU_HELMET; //new menu screen 
@@ -319,7 +356,8 @@ void menu_map(uint8_t direction){
 			}
 			break;
 
-		case MENU_SMS_ON:
+		case MENU_PWR_IN:
+		case MENU_TXT_ON:
 		case MENU_CAMON:
 		case MENU_SPIN:
 		case MENU_HELMET_NOISE_ON:
@@ -328,6 +366,71 @@ void menu_map(uint8_t direction){
 			scroll_mode = SCROLL_MODE_COMPLETE;
 			break;
 
+		case MENU_TXT_DISPLAY:
+			switch (direction){
+			case HAND_DIRECTION_LEFT:
+				break;
+			case HAND_DIRECTION_RIGHT:
+				menu_mode = MENU_TXT_ON;
+				break;
+			case HAND_DIRECTION_UP:
+				menu_mode = MENU_STATS_LOAD; //new menu screen 
+				break;
+			case HAND_DIRECTION_DOWN:
+				menu_mode = MENU_SMS_LOAD; //new menu screen 
+				break;
+			}
+			break;
+
+			case MENU_SMS_LOAD:
+			switch (direction){
+			case HAND_DIRECTION_LEFT:
+				break;
+			case HAND_DIRECTION_RIGHT:
+				live_txt = front_sms; //load it
+				menu_mode = MENU_TXT_DISPLAY;
+				break;
+			case HAND_DIRECTION_UP:
+				menu_mode = MENU_TXT_DISPLAY; //new menu screen 
+				break;
+			case HAND_DIRECTION_DOWN:
+				menu_mode = MENU_WWW_LOAD; //new menu screen 
+				break;
+			}
+			break;
+			case MENU_WWW_LOAD:
+				switch (direction){
+				case HAND_DIRECTION_LEFT:
+					break;
+				case HAND_DIRECTION_RIGHT:
+					live_txt = www_message; //load it
+					menu_mode = MENU_TXT_DISPLAY;
+					break;
+				case HAND_DIRECTION_UP:
+					menu_mode = MENU_SMS_LOAD; //new menu screen 
+					break;
+				case HAND_DIRECTION_DOWN:
+					menu_mode = MENU_STATS_LOAD; //new menu screen 
+					break;
+				}
+				break;
+
+			case MENU_STATS_LOAD:
+				switch (direction){
+				case HAND_DIRECTION_LEFT:
+					break;
+				case HAND_DIRECTION_RIGHT:
+					live_txt = stats_message; ///load it
+					menu_mode = MENU_TXT_DISPLAY;
+					break;
+				case HAND_DIRECTION_UP:
+					menu_mode = MENU_WWW_LOAD; //new menu screen 
+					break;
+				case HAND_DIRECTION_DOWN:
+					menu_mode = MENU_TXT_DISPLAY; //new menu screen 
+					break;
+				}
+				break;
 
 		case MENU_HELMET_FFT:
 			switch (direction){
@@ -410,14 +513,14 @@ void print_menu_mode(void){
 	case MENU_DISC:
 		display.print("DISC");
 		break;
-	case MENU_SMS:
-		display.print("SMS");
+	case MENU_TXT:
+		display.print("TXT");
 		break;
 	case MENU_HELMET:
 		display.print("HEAD");
 		break;
 	case MENU_SPIN:
-		display.print("SPIN");
+		display.print("D ON");
 		break;
 	case MENU_HELMET_FFT_ON_H_or_V:
 		display.print("FFT");
@@ -442,6 +545,36 @@ void print_menu_mode(void){
 		break;
 	case MENU_HELMET_EMOTICON:
 		display.print("EMOT");
+		break;
+	case MENU_TXT_DISPLAY:
+		display.print("DISP");
+		break;
+	case MENU_STATS_LOAD:
+		display.print("STAT");
+		break;
+	case MENU_WWW_LOAD:
+		display.print("WWW");
+		break;
+	case MENU_SMS_LOAD:
+		display.print("SMS");
+		break;
+	case MENU_TXT_ON:
+		display.print("T ON");
+		break;
+	case MENU_CAMON:
+		display.print("C ON");
+		break;
+	case MENU_HELMET_NOISE_ON:
+		display.print("N ON");
+		break;
+	case MENU_HELMET_EMOTICON_ON:
+		display.print("E ON");
+		break;
+	case MENU_PWR:
+		display.print("PWR");
+		break;
+	case MENU_PWR_IN:
+		display.print("P ADJ");
 		break;
 	default:
 		display.print(menu_mode);

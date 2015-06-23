@@ -4,7 +4,7 @@ inline void SerialUpdate(void){
 		disc0.packet_beam--;
 
 		//calculate current pixels and add to array
-		if (disc0.disc_mode == DISC_MODE_SWIPE){
+		if (disc0.disc_mode != DISC_MODE_IDLE){
 			//to disc
 			disc0.color1 = color1;
 			disc0.color2 = color2;
@@ -31,8 +31,8 @@ inline void SerialUpdate(void){
 		raw_buffer[7] = disc0.outer_offset_requested;
 		raw_buffer[8] = disc0.inner_magnitude_requested;
 		raw_buffer[9] = disc0.outer_magnitude_requested;
-		raw_buffer[10] = disc0.fade_level; //disc0.fade_level;  //fade
-
+		//raw_buffer[10] = disc0.fade_level; //disc0.fade_level;  //fade
+		raw_buffer[10] = current_brightness;
 		raw_buffer[11] = disc0.disc_mode & 0x0F; // lower 4 are disc mode itself
 
 		if (!disc0.active_primary){ //flip the colors
@@ -205,11 +205,29 @@ inline void onPacket2(const uint8_t* buffer, size_t size)
 
 			//upper 4 bits are a counter, lower 4 are data
 			if (disc0.last_requested_mode != disc0.requested_mode){
+
+				if (disc0.disc_mode == 0 && disc0.requested_mode != 0) {
+					current_brightness = 255;
+					discopenstart = millis();
+					for (uint8_t current_pixel = 0; current_pixel < 38; current_pixel++) {
+						stream1[current_pixel] = CHSV(0, 0, 0);
+						stream2[current_pixel] = CHSV(0, 0, 0);
+					}
+
+					disc0.packet_beam = 0;
+
+					supress_helmet2 = true;
+					background_mode = BACKGROUND_MODE_NOISE;
+					z_noise = 127;
+					color1 = CHSV(128,255,255);
+					color2 = CHSV(128, 255,255);
+				}
+
 				disc0.disc_mode = disc0.requested_mode & 0x0F;
 				disc0.last_requested_mode = disc0.requested_mode;
-				Serial.println(disc0.disc_mode);
+				
 			}
-
+			Serial.println(disc0.disc_mode);
 			//read glove
 
 
@@ -330,9 +348,12 @@ inline void onPacket3(const uint8_t* buffer, size_t size)
 				front_sms = back_sms;
 				back_sms = temp;
 
+				//make message live
+				live_txt = front_sms;
+
 				//ring for a new message
 				ring_timer = millis();
-				menu_mode = MENU_SMS_ON; //force into sms display
+				menu_mode = MENU_TXT_ON; //force into sms display
 			}
 			else if (size == 2){
 				if (buffer[0] == 0x00){
@@ -536,18 +557,45 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 			//calc disc circle location
 			temp_gloveX = map(temp_gloveX_saved, 18000 - GLOVE_DEADZONE, 18000 + GLOVE_DEADZONE, -1024, 1024);
 
-			temp_gloveY = map((current_glove->pitch_compensated), 18000 - GLOVE_DEADZONE, 18000 + GLOVE_DEADZONE, -1024, 1024);
+		temp_gloveY = map((current_glove->pitch_compensated), 18000 - GLOVE_DEADZONE, 18000 + GLOVE_DEADZONE, -1024, 1024);
 
-			int angle = atan2(-temp_gloveY, -temp_gloveX) * 180 / PI;
+			//CHECK THIS FOR X Y STUFF
+			int angle = atan2(-(current_glove->pitch_compensated - 18000), -(temp_gloveX_saved-18000))* 180 / PI;
 			angle = (angle + 360 + 90) % 360;
-
-			current_glove->disc_offset = constrain(map(angle, 0, 361, 0, 255), 0, 255);
 
 			//magnitude for spinning 
 			current_glove->magnitude = sqrt(temp_gloveX*temp_gloveX + temp_gloveY*temp_gloveY);
-
+			//Serial.println(current_glove->magnitude);
+			//only update disc_offset if mag is high enough (ADJUST THIS)
+			if (current_glove->magnitude > 300){
+				current_glove->disc_offset = constrain(map(angle, 0, 361, 0, 255), 0, 255);
+			}
+			
+			
 			//y axis only
+
+
 			current_glove->y_angle = constrain(map((current_glove->pitch_compensated), 0, 36000, -64, 64), -32, 32);
+
+
+
+#define deadzone 1000  //10 degrees + and - deadzone (total 20 degrees)
+
+			int16_t sample = 0;
+			if (current_glove->pitch_compensated > 18000){
+				sample = max((current_glove->pitch_compensated) - deadzone, 0);
+			}
+			else{
+				sample = min((current_glove->pitch_compensated) +deadzone, 0);
+			}
+
+#define currentrange 128
+			sample = constrain(map(sample, deadzone, 36000 - deadzone, -currentrange, currentrange), -currentrange, currentrange);
+
+
+
+
+			current_glove->y_angle_noise = constrain(map((current_glove->pitch_compensated), 0, 36000, -192, 192), -128, 128);
 
 			//pong
 			if (current_glove == &glove1){
@@ -564,6 +612,13 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 				else 	glove_noise((void*)&glove1, (void*)&glove0);
 			}
 
+			//brightness
+			if (menu_mode == MENU_PWR_IN){
+				if (leading_glove == 0)  glove_pwr((void*)&glove0, (void*)&glove1);
+				else 	glove_pwr((void*)&glove1, (void*)&glove0);
+
+				LEDS.setBrightness(current_brightness);
+			}
 
 			if (!current_glove->finger1 &&  !current_glove->finger2 && !current_glove->finger3 && current_glove->gesture_in_progress == true){
 				if (current_glove->gloveY <= 0)      menu_map(HAND_DIRECTION_DOWN);
@@ -721,8 +776,8 @@ void glove_noise(void *  first_glove, void *  second_glove){
 			noise_xy_entered = true;
 		}
 
-		x_noise_modifier = x_noise_modifier_initial + (((GLOVE *)first_glove)->pitch_compensated) / 10;
-		y_noise_modifier = y_noise_modifier_initial + (((GLOVE *)first_glove)->yaw_compensated) / 10;
+		x_noise_modifier = x_noise_modifier_initial - (((GLOVE *)first_glove)->pitch_compensated) / 10;
+		y_noise_modifier = y_noise_modifier_initial - (((GLOVE *)first_glove)->yaw_compensated) / 10;
 		if (((GLOVE *)second_glove)->finger1 || ((GLOVE *)second_glove)->finger2){
 			//map magnitude
 			if (noise_z_entered == false){
@@ -730,7 +785,7 @@ void glove_noise(void *  first_glove, void *  second_glove){
 				noise_z_entered = true;
 
 			}
-			z_noise_modifier = z_noise_modifier_initial + (((GLOVE *)second_glove)->y_angle )* 2;
+			z_noise_modifier = constrain(z_noise_modifier_initial + (((GLOVE *)second_glove)->y_angle_noise), 0, 128);
 		}
 		else{
 			noise_z_entered = false;
@@ -740,6 +795,41 @@ void glove_noise(void *  first_glove, void *  second_glove){
 		noise_xy_entered = false;
 	}
 }
+
+
+
+//use void pointer to bypass arduino compiler weirdness
+void glove_pwr(void *  first_glove, void *  second_glove){
+
+	if (((GLOVE *)first_glove)->finger1 || ((GLOVE *)first_glove)->finger2){
+		if (brightness_entered == false){
+			disc_turned_off = false;
+			disc0.disc_mode = DISC_MODE_IDLE;
+			brightness_initial = current_brightness;
+			brightness_entered = true;
+			//starting from off, force modes!
+			if (brightness_initial == 0){
+				supress_helmet = true;
+				background_mode = BACKGROUND_MODE_NOISE;
+				z_noise = 127;
+			}
+		}
+
+		current_brightness = constrain(brightness_initial + (((GLOVE *)first_glove)->y_angle_noise) * 3, 0, 255);
+
+	}
+	else{
+		supress_helmet = false;
+		brightness_entered = false;
+		if (!disc_turned_off && current_brightness == 0){
+			disc0.disc_mode = DISC_MODE_OFF;
+			disc_turned_off = true;
+		}
+	}
+}
+
+
+//ripped out of adafruit graphics library
 
 void drawLine_local(int16_t x0, int16_t y0,
 	int16_t x1, int16_t y1) {

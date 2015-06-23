@@ -154,7 +154,6 @@ inline void helmet_backgrounds(){
 	fillnoise8();
 	mapNoiseToLEDsUsingPalette();
 	
-
 	if (menu_mode == MENU_HELMET_PONG_IN){
 
 		//render the field

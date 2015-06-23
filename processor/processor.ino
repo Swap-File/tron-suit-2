@@ -53,24 +53,21 @@ uint8_t fft_mode = FFT_MODE_HORZ_BARS_RIGHT;
 #define MENU_CAMON 8
 #define MENU_SPIN 9
 #define MENU_CAMERA 10
-#define MENU_SMS 11
-#define MENU_SMS_ON 16
+#define MENU_TXT 11
+#define MENU_TXT_ON 16
+#define MENU_TXT_DISPLAY 20
+#define MENU_STATS_LOAD 22
+#define MENU_WWW_LOAD 23
+#define MENU_SMS_LOAD 24
+#define MENU_PWR 25
+#define MENU_PWR_IN 26
 
 uint8_t menu_mode = MENU_DEFAULT;
-
-boolean flow_direction_positive = true;
 
 #define DISC_MODE_SWIPE 3
 #define DISC_MODE_IDLE 2
 #define DISC_MODE_OPENING 1
 #define DISC_MODE_OFF 0
-
-#define SUIT_MODE_AUDIO 5
-#define SUIT_MODE_CAMFLOW 4
-#define SUIT_MODE_SWIPE 3
-#define SUIT_MODE_IDLE 2
-
-#define SUIT_MODE_OFF 0
 
 //buffers to hold data as it streams in
 int8_t stream_head = 0;
@@ -129,6 +126,8 @@ typedef struct {
 	int8_t gloveX;
 	int8_t gloveY;
 	int16_t y_angle;
+	int16_t y_angle_bri;
+	int16_t y_angle_noise;
 	uint8_t disc_offset; // 0 to 29
 	int16_t magnitude; //about 3000 is edges
 
@@ -228,8 +227,8 @@ const uint8_t circle_y[30] = { 0, 0, 0, 1, 1, 2, 3, 4, 5, 6, 7, 8, 8, 9, 9, 9, 9
 #define trails_location_x 1
 #define trails_location_y 1
 
-#define sms_location_x 1
-#define sms_location_y 19
+#define txt_location_x 1
+#define txt_location_y 19
 
 #define menu_location_x 1
 #define menu_location_y 10
@@ -246,8 +245,6 @@ const uint8_t circle_y[30] = { 0, 0, 0, 1, 1, 2, 3, 4, 5, 6, 7, 8, 8, 9, 9, 9, 9
 #define inner_disc_location_x 1
 #define inner_disc_location_y 30
 
-#define outer_disc_location_x 15
-#define outer_disc_location_y 30
 
 CHSV color1 = CHSV(0, 255, 255);
 CHSV color2 = CHSV(64, 255, 255);
@@ -263,22 +260,27 @@ int8_t flow_offset = 0;
 Adafruit_SSD1306 display(OLED_DC, OLED_RESET, OLED_CS);
 
 float temperature = 0.0;
-float voltage = 14.4;
+float voltage = 24.0;
 
 //texting stuff
 unsigned long ring_timer = 0; //flash screen to ring for incoming message
 #define RINGTIMEOUT 1000  //time to flash for
 boolean sms_blackout = false;
-
 #define SMS_MIN_BRIGHTNESS 64
 
-char sms_message1[160] = "WWW.TRONSUIT.COM";
+char sms_message1[160] = "SMS MESSAGE";
 char sms_message2[160];
 char *front_sms = sms_message1;
 char *back_sms = sms_message2;
-int16_t sms_text_ending_pos = 0; //160 * 5 max length
-int16_t sms_scroll_pos = 0;
+
+int16_t txt_ending_pos = 0; //160 * 5 max length
+int16_t txt_scroll_pos = 0;
 int16_t menu_text_ending_pos = 0;
+
+char txt_message[160] = "LOADED";
+char *live_txt = txt_message;
+char www_message[17] = "WWW.TRONSUIT.COM";
+char stats_message[160] = "JACKET 00.00V DISC 00.00V";
 
 //HUD overlay
 //scroll state has 3 modes
@@ -350,10 +352,10 @@ boolean noise_xy_entered = false;
 boolean noise_z_entered = false;
 uint16_t x_noise_modifier = 0;
 uint16_t y_noise_modifier = 0;
-uint16_t z_noise_modifier = 0;
+uint16_t z_noise_modifier = 128;
 uint16_t x_noise_modifier_initial = 0;
 uint16_t y_noise_modifier_initial = 0;
-uint16_t z_noise_modifier_initial = 0;
+uint16_t z_noise_modifier_initial = 128;
 
 Metro FPSdisplay = Metro(1000, 0);  //display and reset stats
 Metro glovedisplayfade = Metro(10, 0);  //when to decay the glove trails
@@ -402,3 +404,15 @@ Metro pongtime = Metro(PONG_MIN_SPEED, 1);
 
 //emoti
 boolean emot_Array[16][8];  //keep this separate so suit effects can pull from it
+
+//brightness
+boolean brightness_entered = false;
+uint8_t brightness_initial = 255;
+uint8_t current_brightness = 255;
+
+
+boolean supress_helmet = false;
+boolean supress_helmet2 = false;
+boolean disc_turned_off = false;
+
+uint32_t discopenstart = 0;

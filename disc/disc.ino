@@ -60,8 +60,8 @@ CHSV color1 = CHSV(128, 255, 255);
 CHSV color2 = CHSV(0, 255, 255);
 
 //blue constant and decaying modifier
-uint8_t blur_rate = 2;
-uint8_t blur_modifier = 0;
+int16_t blur_rate = 1;
+int16_t blur_modifier = 0;
 
 //buffers to hold data as it streams in
 int8_t stream_head = 0;
@@ -121,6 +121,7 @@ uint8_t crc_error = 0;
 uint8_t framing_error = 0;
 float temperature = 0.0;
 float voltage = 24.0;
+
 uint8_t packets_in_counter = 0;  //counts up
 uint8_t packets_in_per_second = 0; //saves the value
 uint8_t packets_out_counter = 0;  //counts up
@@ -267,17 +268,15 @@ void loop() {
 	while (!mpuInterrupt && fifoCount < packetSize) {
 
 		if (FPSdisplay.check()){
+		
 			cpu_usage = 100 - (idle_microseconds / 10000);
 			idle_microseconds = 0;
 			packets_in_per_second = packets_in_counter;
 			packets_in_counter = 0;
 			packets_out_per_second = packets_out_counter;
 			packets_out_counter = 0;
-			Serial.print(disc_mode);
-			Serial.print(" ");
-			Serial.print(outer_magnitude_displayed);
-			Serial.print(" ");
-			Serial.println(inner_magnitude_displayed);
+
+			Serial.println(voltage);
 		}
 
 		SerialUpdate();
@@ -364,6 +363,7 @@ void loop() {
 				saved_outer_index_displayed_255 = live_acceleration_index_255 + INNER_STRIP_OFFSET;
 
 				requested_disc_mode = DISC_MODE_OPENING;
+				disc_mode = 6;
 				fresh_mode++;
 			}
 		}
@@ -406,7 +406,7 @@ void loop() {
 			//animate here
 			if (effect_progression < 17){
 				
-				outer_magnitude_displayed =  effect_progression;  //closing pacman mouth
+				outer_magnitude_displayed = effect_progression;  //closing pacman mouth
 				inner_magnitude_displayed = effect_progression;  //blanked
 			}
 			else{
@@ -418,7 +418,7 @@ void loop() {
 
 		if (disc_mode == DISC_MODE_IDLE){
 			//enable heavy blur
-			blur_rate = 3;
+			blur_rate = 1;
 
 			//set index
 			inner_index_displayed = inner_gravity_index_29;
@@ -496,8 +496,8 @@ void loop() {
 		LEDS.show();
 
 		//906 * 64 is low when plugged into batteries, about 3.55 v per cell
-		voltage = voltage * .95 + .05 * (((uint16_t)adc->analogReadContinuous(ADC_0)) / 4083.375); //voltage
-
+		voltage = voltage * .95 + .05 * (((uint16_t)adc->analogReadContinuous(ADC_0)) / 4055.46); //voltage
+	
 		//temp sensor from https://github.com/manitou48/teensy3/blob/master/chiptemp.pde
 		temperature = temperature * .95 + .05 * (25 - (((uint16_t)adc->analogReadContinuous(ADC_1)) - 38700) / -35.7); //temp in C
 
@@ -550,11 +550,10 @@ void sendPacket(){
 	raw_buffer[3] = packets_in_per_second;
 	raw_buffer[4] = packets_out_per_second;
 	raw_buffer[5] = cpu_usage;
-	raw_buffer[6] = (uint8_t)(voltage * 100);
+	raw_buffer[6] = (uint8_t)(voltage * 10 * 1.5); //get max range from 0 to 255 with 0 to 17 volts
 	raw_buffer[7] = (uint8_t)(temperature * 100);
 	raw_buffer[8] = crc_error;
 	raw_buffer[9] = framing_error;
-
 	raw_buffer[10] = OneWire::crc8(raw_buffer, 10);
 
 	uint8_t encoded_buffer[12];  //one extra to hold cobs data
@@ -628,8 +627,10 @@ void receivePacket(const uint8_t* buffer, size_t size)
 		
 			}
 
-
+			
 			fade_level = buffer[10];
+			LEDS.setBrightness(fade_level);
+
 			effect_mode = (buffer[11] >> 4) & 0x0F;
 			disc_mode = buffer[11] & 0x0F;
 
@@ -676,7 +677,7 @@ void mask_blur_and_output(uint8_t i, CHSV* color, uint8_t current_pixel, uint8_t
 
 	//convert HSV to RGB
 	CRGB temp_rgb = *color;
-
+	
 	//masking code
 	if (magnitude < 16){  //basic open
 		if (current_pixel >= magnitude  && current_pixel <= (30 - magnitude)) temp_rgb = CRGB(0, 0, 0);
@@ -689,10 +690,10 @@ void mask_blur_and_output(uint8_t i, CHSV* color, uint8_t current_pixel, uint8_t
 	bool pixel_beam = true;
 	if (packet_beam < 16){
 		if (current_pixel < 16){
-			if (current_pixel == packet_beam) pixel_beam = false;
+			if (current_pixel == packet_beam && disc_mode == DISC_MODE_IDLE ) pixel_beam = false;
 		}
 		else{
-			if (30 - current_pixel == packet_beam) pixel_beam = false;
+			if (30 - current_pixel == packet_beam  && disc_mode == DISC_MODE_IDLE) pixel_beam = false;
 		}
 	}
 
@@ -700,19 +701,23 @@ void mask_blur_and_output(uint8_t i, CHSV* color, uint8_t current_pixel, uint8_t
 	//dont blur or fade pixels that are turning on
 	//turn leds off immediately - Not doing
 	//dont blur in swipe mode
-	if (pixel_beam && color->v != 0 && actual_output[i] != CRGB(0, 0, 0) && disc_mode != DISC_MODE_SWIPE){
 
-		temp_rgb.fadeToBlackBy(fade_level); // fade_level
+	if (pixel_beam && color->v != 0 && actual_output[i] != CRGB(0, 0, 0)){
+		
+		temp_rgb.fadeToBlackBy(128); // fade_level
+	
+		if (actual_output[i].r < temp_rgb.r) temp_rgb.r = min(actual_output[i].r + blur_rate, temp_rgb.r);
+		else if (actual_output[i].r > temp_rgb.r) temp_rgb.r = max(actual_output[i].r - blur_rate, temp_rgb.r);
 
-		if (actual_output[i].r < temp_rgb.r) temp_rgb.r = min(actual_output[i].r + (blur_rate + blur_modifier), temp_rgb.r);
-		else if (actual_output[i].r > temp_rgb.r) temp_rgb.r = max(actual_output[i].r - (blur_rate + blur_modifier), temp_rgb.r);
+		if (actual_output[i].g < temp_rgb.g) temp_rgb.g = min(actual_output[i].g + blur_rate, temp_rgb.g);
+		else if (actual_output[i].g > temp_rgb.g) temp_rgb.g = max(actual_output[i].g - blur_rate, temp_rgb.g);
 
-		if (actual_output[i].g < temp_rgb.g) temp_rgb.g = min(actual_output[i].g + (blur_rate + blur_modifier), temp_rgb.g);
-		else if (actual_output[i].g > temp_rgb.g) temp_rgb.g = max(actual_output[i].g - (blur_rate + blur_modifier), temp_rgb.g);
-
-		if (actual_output[i].b < temp_rgb.b) temp_rgb.b = min(actual_output[i].b + (blur_rate + blur_modifier), temp_rgb.b);
-		else if (actual_output[i].b > temp_rgb.b) temp_rgb.b = max(actual_output[i].b - (blur_rate + blur_modifier), temp_rgb.b);
+		if (actual_output[i].b < temp_rgb.b) temp_rgb.b = min(actual_output[i].b + blur_rate, temp_rgb.b);
+		else if (actual_output[i].b > temp_rgb.b) temp_rgb.b = max(actual_output[i].b - blur_rate, temp_rgb.b);
+	
+	
 	}
 
 	actual_output[i] = temp_rgb;
+
 }

@@ -29,8 +29,10 @@ void setup() {
 
 	//ADC1 setup
 	pinMode(A3, INPUT);
+	adc->setReference(ADC_REF_DEFAULT, ADC_1);
 	adc->setAveraging(32, ADC_1);
 	adc->setResolution(16, ADC_1);
+	adc->startContinuous(A3, ADC_1);
 
 	//global settings
 	display.setTextSize(1);
@@ -43,46 +45,27 @@ uint32_t average_time;
 
 void loop() {
 
-	long start_time = micros();
+	uint32_t start_time = micros();
 
-	if (ADC_Switch_Sample.check()){
+	//ringing for incoming calls
+	sms_blackout = false;
+	if (ring_timer + RINGTIMEOUT > millis() || (ring_timer + RINGTIMEOUT * 2 < millis() & ring_timer + RINGTIMEOUT * 3 > millis())){
+		if ((millis() >> 6) & 0x01)	sms_blackout = true;
+	}
+		
 
-		switch (adc1_mode){
-		case BATTERY_METER:
-			voltage = voltage * .95 + .05 * (((uint16_t)adc->analogReadContinuous(ADC_1)) / 4083.375 * (12.05 / 10.55)); //voltage
-			adc->stopContinuous(ADC_1);
-			adc->setReference(ADC_REF_1V2, ADC_1);  //modified this to remove calibration, drops time from 2ms to ~2ns
-			adc->startContinuous(ADC_TEMP_SENSOR, ADC_1);
-			adc1_mode = TEMP_SENSOR;
-			break;
-		case TEMP_SENSOR:
-			// temp sensor from https ://github.com/manitou48/teensy3/blob/master/chiptemp.pde
-			temperature = temperature * .95 + .05 * (25 - (((uint16_t)adc->analogReadContinuous(ADC_1)) - 38700) / -35.7); //temp in C
-			adc->stopContinuous(ADC_1);
-			adc->setReference(ADC_REF_DEFAULT, ADC_1);  //modified this to remove calibration
-			adc->startContinuous(A3, ADC_1);
-			adc1_mode = BATTERY_METER;
-			break;
-		}
+	
 
+	if (FPSdisplay.check()){
 		//keep re-initing the screen for hot plug support.
 		display.reinit();
 
-	}
-
-
-	if (ring_timer + RINGTIMEOUT > millis() || (ring_timer + RINGTIMEOUT * 2 < millis() & ring_timer + RINGTIMEOUT * 3 > millis())){
-		if ((millis() >> 6) & 0x01){
-			sms_blackout = true;
-		}
-		else{
-			sms_blackout = false;
-		}
-	}
-
-	if (FPSdisplay.check()){
-
-		Serial.println(voltage);
+		//stats_message
+		sprintf(stats_message, "JACKET %.2fV DISC %.2fV", voltage, (disc0.battery_voltage / (10.0 * 1.5)));
+	
+		Serial.print(voltage);
+		Serial.print('\t');
+		Serial.println(disc0.battery_voltage);
 
 		glovestats.total_lost_packets += (glovestats.local_packets_out_per_second << 1); //add in both gloves
 		glovestats.total_lost_packets -= glovestats.local_packets_in_per_second_glove0;
@@ -145,13 +128,11 @@ void loop() {
 		uint8_t leftx = 3; // 1-5
 		uint8_t rightx = 12; //10-12
 
-
 		drawLine_local(1, 5, leftx, 7);
 		drawLine_local(leftx, 7, 5, 5);
 		drawLine_local(10, 5, rightx, 7);
 		drawLine_local(rightx, 7, 14, 5);
 		drawLine_local(5, 0, 10, 0);
-
 
 	}
 
@@ -164,7 +145,6 @@ void loop() {
 		gloveindicator[glove1.gloveX][7 - glove1.gloveY] = 100;
 	}
 
-
 	//check for gestures
 	if (glove1.finger4 == 1 || glove0.finger4 == 1){
 
@@ -173,8 +153,7 @@ void loop() {
 		menu_mode = MENU_DEFAULT;
 		scroll_mode = SCROLL_MODE_COMPLETE;
 	}
-
-
+	
 	//draw most of hud, last bit will be drawn in external helmet bit
 	draw_HUD();
 
@@ -190,11 +169,9 @@ void loop() {
 				if (read_menu_pixel(x, y))	menu_name = CRGB(180, 180, 180);
 			}
 
-
 			if (gloveindicator[x][7 - y] > 0){ // flip Y for helmet external display by subtracting from 7
 				background_array = CRGB(gloveindicator[x][7 - y], gloveindicator[x][7 - y], gloveindicator[x][7 - y]);
 			}
-
 
 			//override modes
 			if (menu_mode == MENU_HELMET_PONG_IN){
@@ -203,8 +180,8 @@ void loop() {
 			else{
 				//backgrounds
 				if (background_mode == BACKGROUND_MODE_FFT){
-					if (menu_mode == MENU_SMS_ON){
-						if (read_sms_pixel(x, y)){
+					if (menu_mode == MENU_TXT_ON){
+						if (read_txt_pixel(x, y)){
 							CHSV temp = FFT_Array[x][y];
 							temp.v = max(temp.v, SMS_MIN_BRIGHTNESS);
 							final_color = temp;
@@ -222,8 +199,8 @@ void loop() {
 					}
 				}
 				else if (background_mode == BACKGROUND_MODE_NOISE){
-					if (menu_mode == MENU_SMS_ON){
-						if (read_sms_pixel(x, y)){
+					if (menu_mode == MENU_TXT_ON){
+						if (read_txt_pixel(x, y)){
 							final_color = Noise_Array_Bright[x][y];;
 						}
 					}
@@ -250,7 +227,7 @@ void loop() {
 			if ((y & 0x01) == 1)  tempindex = (y << 4) + 15 - x;  //<< 4 is multiply by 16 pixels per row
 			else                  tempindex = (y << 4) + x; //<< 4 is multiply by 16 pixels per row
 
-			if (!sms_blackout){ //flash display for incoming call
+			if (!sms_blackout && !supress_helmet && !supress_helmet2){ //flash display for incoming call
 				actual_output[tempindex] = final_color;
 			}
 			else{
@@ -302,7 +279,10 @@ void loop() {
 		}
 
 		//arm strips
-		if (glove1.camera_on){
+		if (supress_helmet2){
+
+			mask_blur_and_output((6 * 130) +(37- i), &stream1[(stream_head + i) % 38], i, 19);
+		}else if (glove1.camera_on){
 			blur_cust((6 * 130) + (i), &glove1.cameraflow[(1 + i + glove1.cameraflow_index) % 38], 1);
 		}
 		else{
@@ -314,7 +294,10 @@ void loop() {
 			}
 		}
 
-		if (glove0.camera_on){
+		if (supress_helmet2){
+			mask_blur_and_output((7 * 130) + (37 - i), &stream1[(stream_head + i) % 38], i, 19);
+		}
+		else if(glove0.camera_on){
 			blur_cust((7 * 130) + (i), &glove0.cameraflow[(1 + i + glove0.cameraflow_index) % 38], 1);
 		}
 		else{
@@ -329,30 +312,18 @@ void loop() {
 
 	//write out HUD
 	for (uint16_t i = 0; i < 38; i++) {
-
-		if (actual_output[(7 * 130) + i].getAverageLight() > 32){
-			display.drawPixel(54, i, WHITE);
-		}
-		if (actual_output[(5 * 130) + i].getAverageLight() > 32){
-			display.drawPixel(56, i, WHITE);
-		}
-		if (disc0.packet_beam == i){
-			display.drawPixel(58, i, WHITE);
-		}
-		if (actual_output[(4 * 130) + i].getAverageLight() > 32){
-			display.drawPixel(60, i, WHITE);
-		}
-		if (actual_output[(6 * 130) + i].getAverageLight() > 32){
-			display.drawPixel(62, i, WHITE);
-		}
-
+		if (actual_output[(7 * 130) + i].getAverageLight() > 32)	display.drawPixel(54, i, WHITE);
+		if (actual_output[(5 * 130) + i].getAverageLight() > 32)	display.drawPixel(56, i, WHITE);
+		if (disc0.packet_beam == i)									display.drawPixel(58, i, WHITE);
+		if (actual_output[(4 * 130) + i].getAverageLight() > 32)	display.drawPixel(60, i, WHITE);
+		if (actual_output[(6 * 130) + i].getAverageLight() > 32)	display.drawPixel(62, i, WHITE);
 	}
 
 	//advance scrolling if timer reached or stop
 	if (ScrollSpeed.check()){
-		sms_scroll_pos--;
-		if (sms_text_ending_pos < 0){
-			sms_scroll_pos = 0;
+		txt_scroll_pos--;
+		if (txt_ending_pos < 0){
+			txt_scroll_pos = 0;
 		}
 
 		switch (scroll_mode){
@@ -392,11 +363,30 @@ void loop() {
 		display.display();
 		LEDS.show();
 
+		voltage = voltage * .95 + .05 * ((uint16_t)adc->analogReadContinuous(ADC_1)) / 3516.083016; //voltage
 		//dont let octows2811 steal serial3
+		//not sure why this works, but reminding the CPU we are using these pins for Serial3 seems to work
 		CORE_PIN7_CONFIG = PORT_PCR_PE | PORT_PCR_PS | PORT_PCR_PFE | PORT_PCR_MUX(3);
 		CORE_PIN8_CONFIG = PORT_PCR_DSE | PORT_PCR_SRE | PORT_PCR_MUX(3);
 	}
 
+	if (disc0.disc_mode == DISC_MODE_OPENING){
+		stream_head = 0;
+		int result = map(millis() - discopenstart, 0, 500, 0, 38);
+
+		if (result < 38){
+				stream1[37-result] = color1;
+				stream2[37-result] = color2;
+		}
+		else{
+			supress_helmet2 = false;
+		}
+
+	}
+	else{
+
+		
+	}
 
 	if (Flow.check()){
 
@@ -404,17 +394,16 @@ void loop() {
 		discwave = scale8(curoff, 16);
 		uint8_t suitwave = scale8(curoff, 38);
 
-
 		//calculate current pixels and add to array
 		if (disc0.disc_mode == DISC_MODE_SWIPE){
-
 			//to suit
 			for (uint8_t current_pixel = 0; current_pixel < 38; current_pixel++) {
 				stream1[current_pixel] = color1;
 				stream2[current_pixel] = color2;
 			}
 		}
-		else{
+		else if (disc0.disc_mode == DISC_MODE_IDLE){
+			
 			//to suit
 			stream1[stream_head] = map_hsv(suitwave, 0, 37, &color1, &color2);
 			stream2[stream_head] = map_hsv(suitwave, 0, 37, &color1, &color2);
