@@ -114,7 +114,7 @@ void draw_disc(uint8_t index_offset, uint8_t magnitude, uint8_t x_offset, uint8_
 
 
 void menu_map(uint8_t direction){
-
+	Serial.print(scroll_mode);
 
 	//set initial scroll on and scroll off variables
 	//can/will be overridden by menu below if desired

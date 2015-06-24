@@ -81,8 +81,8 @@ CHSV *stream1 = color1_streaming;
 uint8_t discwave = 0;
 uint8_t last_discwave = 0;
 
-uint8_t blur_rate = 255;
-uint8_t blur_modifier = 255;
+uint8_t blur_rate = 2;
+
 typedef struct {
 	boolean gesture_in_progress = false;
 	uint8_t gesture_finger;
@@ -334,7 +334,6 @@ byte gloveindicator[16][8]; // glove array
 CHSV FFT_Array[16][8];  //keep this separate so suit effects can pull from it
 int FFTdisplayValueMax16[16]; //max vals for normalization over time
 uint8_t FFTdisplayValue16[16]; //max vals for normalization over time
-int FFTdisplayValueMax8[8]; //max vals for normalization over time
 uint8_t FFTdisplayValue8[8]; //max vals for normalization over time
 
 //Noise Effects from FastLED
@@ -416,3 +415,8 @@ boolean supress_helmet2 = false;
 boolean disc_turned_off = false;
 
 uint32_t discopenstart = 0;
+
+uint8_t FFTdisplayValue1 = 0;
+
+
+uint8_t smilevalue = 0;

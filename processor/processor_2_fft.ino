@@ -18,10 +18,14 @@ inline void fftmath(void){
 
 		// downsample 16 samples to 8
 		if (i & 0x01){
-			FFTdisplayValueMax8[i >> 1] = (FFTdisplayValueMax16[i] + FFTdisplayValueMax16[i - 1]) >> 1;
 			FFTdisplayValue8[i >> 1] = (FFTdisplayValue16[i] + FFTdisplayValue16[i - 1]) >> 1;
 		}
 
+	}
+
+	FFTdisplayValue1 = 0;
+	for (uint8_t i = 0; i < 8; i++) {
+		FFTdisplayValue1 += FFTdisplayValue8[i] / 8;
 	}
 
 
@@ -118,12 +122,11 @@ inline void fftmath(void){
 void calcfftcolor(CHSV * temp_color, uint8_t input){
 
 	//make the tip of the color be color 2
-	*temp_color = (input > 240) ? map_hsv(input, 240, 255, &color1, &color2) : color1;
+	*temp_color = (input > 240) ? map_hsv(constrain(input,240,255), 240, 255, &color1, &color2) : color1;
 
 	//scale the brightness //what if color2 is dimmer? look into this.
 	temp_color->v = scale8(temp_color->v, input);
-	//temp_color.v = FFTdisplayValue8[i];
-
+	
 	return;
 }
 
@@ -132,7 +135,6 @@ inline void helmet_backgrounds(){
 
 	CRGB black = CRGB::Black;
 	
-
 	BrightPalette = CRGBPalette16(
 		map_hsv(0, 0, 15, &color1, &color2), map_hsv(1, 0, 15, &color1, &color2),
 		map_hsv(2, 0, 15, &color1, &color2), map_hsv(3, 0, 15, &color1, &color2),
@@ -177,7 +179,6 @@ inline void helmet_backgrounds(){
 
 		//wait to increment
 		if (pongtime.check()){
-
 
 			//check for left paddle  collisions
 			if (ball_pos[0] == 1 && (pong_ball_vector == PONG_LEFT || pong_ball_vector == PONG_LEFT_UP || pong_ball_vector == PONG_LEFT_DOWN)){

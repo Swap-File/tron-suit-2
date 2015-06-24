@@ -39,6 +39,8 @@ void setup() {
 	display.setTextColor(WHITE);
 	display.setTextWrap(false);
 
+
+
 }
 
 uint32_t average_time;
@@ -52,9 +54,9 @@ void loop() {
 	if (ring_timer + RINGTIMEOUT > millis() || (ring_timer + RINGTIMEOUT * 2 < millis() & ring_timer + RINGTIMEOUT * 3 > millis())){
 		if ((millis() >> 6) & 0x01)	sms_blackout = true;
 	}
-		
 
-	
+
+
 
 	if (FPSdisplay.check()){
 		//keep re-initing the screen for hot plug support.
@@ -62,7 +64,7 @@ void loop() {
 
 		//stats_message
 		sprintf(stats_message, "JACKET %.2fV DISC %.2fV", voltage, (disc0.battery_voltage / (10.0 * 1.5)));
-	
+
 		Serial.print(voltage);
 		Serial.print('\t');
 		Serial.println(disc0.battery_voltage);
@@ -117,24 +119,7 @@ void loop() {
 		}
 	}
 
-	if (menu_mode == MENU_HELMET_EMOTICON_ON){
 
-		for (uint8_t y = 0; y < 8; y++) {
-			for (uint8_t x = 0; x < 16; x++) {
-				emot_Array[x][y] = false;
-			}
-		}
-
-		uint8_t leftx = 3; // 1-5
-		uint8_t rightx = 12; //10-12
-
-		drawLine_local(1, 5, leftx, 7);
-		drawLine_local(leftx, 7, 5, 5);
-		drawLine_local(10, 5, rightx, 7);
-		drawLine_local(rightx, 7, 14, 5);
-		drawLine_local(5, 0, 10, 0);
-
-	}
 
 	//make new trails
 	if (glove0.finger2 == 1){
@@ -153,7 +138,7 @@ void loop() {
 		menu_mode = MENU_DEFAULT;
 		scroll_mode = SCROLL_MODE_COMPLETE;
 	}
-	
+
 	//draw most of hud, last bit will be drawn in external helmet bit
 	draw_HUD();
 
@@ -188,7 +173,7 @@ void loop() {
 						}
 					}
 					else if (menu_mode == MENU_HELMET_EMOTICON_ON){
-						if (emot_Array[x][y]){
+						if (read_emot_Array(x,y)){
 							CHSV temp = FFT_Array[x][y];
 							temp.v = max(temp.v, SMS_MIN_BRIGHTNESS);
 							final_color = temp;
@@ -270,19 +255,20 @@ void loop() {
 
 		//chest strips
 		if (disc0.disc_mode == DISC_MODE_SWIPE){
-			mask_blur_and_output((5 * 130) + ((i + (37 - scale8(disc0.current_index, 38))) % 38), &color1, i, map(disc0.current_mag, 0, 16, 0, 19));
-			mask_blur_and_output((4 * 130) + ((i + (37 - scale8(disc0.current_index, 38))) % 38), &color2, i, map(disc0.current_mag, 0, 16, 0, 19));
+			mask_blur_and_output((5 * 130) + ((i + (37 - scale8(disc0.current_index, 38))) % 38), &color1, i, map(disc0.current_mag, 0, 16, 0, 19), 255);
+			mask_blur_and_output((4 * 130) + ((i + (37 - scale8(disc0.current_index, 38))) % 38), &color2, i, map(disc0.current_mag, 0, 16, 0, 19), 255);
 		}
 		else{
-			mask_blur_and_output((5 * 130) + i, &stream1[(stream_head + i) % 38], i, 19);
-			mask_blur_and_output((4 * 130) + i, &stream2[(stream_head + i) % 38], i, 19);
+			mask_blur_and_output((5 * 130) + i, &stream1[(stream_head + i) % 38], i, 19, 1);
+			mask_blur_and_output((4 * 130) + i, &stream2[(stream_head + i) % 38], i, 19, 1);
 		}
 
 		//arm strips
 		if (supress_helmet2){
 
-			mask_blur_and_output((6 * 130) +(37- i), &stream1[(stream_head + i) % 38], i, 19);
-		}else if (glove1.camera_on){
+			mask_blur_and_output((6 * 130) + (37 - i), &stream1[(stream_head + i) % 38], i, 19,255);
+		}
+		else if (glove1.camera_on){
 			blur_cust((6 * 130) + (i), &glove1.cameraflow[(1 + i + glove1.cameraflow_index) % 38], 1);
 		}
 		else{
@@ -295,9 +281,9 @@ void loop() {
 		}
 
 		if (supress_helmet2){
-			mask_blur_and_output((7 * 130) + (37 - i), &stream1[(stream_head + i) % 38], i, 19);
+			mask_blur_and_output((7 * 130) + (37 - i), &stream1[(stream_head + i) % 38], i, 19, 255);
 		}
-		else if(glove0.camera_on){
+		else if (glove0.camera_on){
 			blur_cust((7 * 130) + (i), &glove0.cameraflow[(1 + i + glove0.cameraflow_index) % 38], 1);
 		}
 		else{
@@ -370,24 +356,22 @@ void loop() {
 		CORE_PIN8_CONFIG = PORT_PCR_DSE | PORT_PCR_SRE | PORT_PCR_MUX(3);
 	}
 
+
+	//animation on the suit while the disc opens
 	if (disc0.disc_mode == DISC_MODE_OPENING){
 		stream_head = 0;
 		int result = map(millis() - discopenstart, 0, 500, 0, 38);
 
 		if (result < 38){
-				stream1[37-result] = color1;
-				stream2[37-result] = color2;
+			stream1[37 - result] = color1;
+			stream2[37 - result] = color2;
 		}
 		else{
 			supress_helmet2 = false;
 		}
-
-	}
-	else{
-
-		
 	}
 
+	//controls the streaming of the colors
 	if (Flow.check()){
 
 		uint8_t curoff = quadwave8(flow_offset++);
@@ -403,7 +387,7 @@ void loop() {
 			}
 		}
 		else if (disc0.disc_mode == DISC_MODE_IDLE){
-			
+
 			//to suit
 			stream1[stream_head] = map_hsv(suitwave, 0, 37, &color1, &color2);
 			stream2[stream_head] = map_hsv(suitwave, 0, 37, &color1, &color2);
@@ -449,7 +433,7 @@ CHSV map_hsv(uint8_t input, uint8_t in_min, uint8_t in_max, CHSV* out_starting, 
 }
 
 // 	int i = (current_pixel + loc_offset) % 38;// wrap around to get actual location
-void mask_blur_and_output(uint16_t i, CHSV* color, uint8_t current_pixel, uint8_t magnitude){
+void mask_blur_and_output(uint16_t i, CHSV* color, uint8_t current_pixel, uint8_t magnitude, uint8_t blur_rate){
 	//convert HSV to RGB
 	CRGB temp_rgb = *color;
 
@@ -473,37 +457,74 @@ void mask_blur_and_output(uint16_t i, CHSV* color, uint8_t current_pixel, uint8_
 
 		temp_rgb.fadeToBlackBy(disc0.fade_level); // fade_level
 
-		if (actual_output[i].r < temp_rgb.r) temp_rgb.r = min(actual_output[i].r + (blur_rate + blur_modifier), temp_rgb.r);
-		else if (actual_output[i].r > temp_rgb.r) temp_rgb.r = max(actual_output[i].r - (blur_rate + blur_modifier), temp_rgb.r);
+		if (actual_output[i].r < temp_rgb.r) temp_rgb.r = min(qadd8(actual_output[i].r, blur_rate), temp_rgb.r);
+		else if (actual_output[i].r > temp_rgb.r) temp_rgb.r = max(qsub8(actual_output[i].r, blur_rate), temp_rgb.r);
 
-		if (actual_output[i].g < temp_rgb.g) temp_rgb.g = min(actual_output[i].g + (blur_rate + blur_modifier), temp_rgb.g);
-		else if (actual_output[i].g > temp_rgb.g) temp_rgb.g = max(actual_output[i].g - (blur_rate + blur_modifier), temp_rgb.g);
+		if (actual_output[i].g < temp_rgb.g) temp_rgb.g = min(qadd8(actual_output[i].g, blur_rate), temp_rgb.g);
+		else if (actual_output[i].g > temp_rgb.g) temp_rgb.g = max(qsub8(actual_output[i].g, blur_rate), temp_rgb.g);
 
-		if (actual_output[i].b < temp_rgb.b) temp_rgb.b = min(actual_output[i].b + (blur_rate + blur_modifier), temp_rgb.b);
-		else if (actual_output[i].b > temp_rgb.b) temp_rgb.b = max(actual_output[i].b - (blur_rate + blur_modifier), temp_rgb.b);
+		if (actual_output[i].b < temp_rgb.b) temp_rgb.b = min(qadd8(actual_output[i].b, blur_rate), temp_rgb.b);
+		else if (actual_output[i].b > temp_rgb.b) temp_rgb.b = max(qsub8(actual_output[i].b, blur_rate), temp_rgb.b);
 	}
 
 	actual_output[i] = temp_rgb;
 }
 
-void blur_cust(uint16_t i, CHSV* color, int16_t blur_rate){
+void blur_cust(uint16_t i, CHSV* color, uint8_t blur_rate){
 	CRGB temp_rgb = *color;
 
 	if (color->v != 0 && actual_output[i] != CRGB(0, 0, 0)){
 
 		temp_rgb.fadeToBlackBy(disc0.fade_level); // fade_level
 
-		if (actual_output[i].r < temp_rgb.r) temp_rgb.r = min(actual_output[i].r + (blur_rate), temp_rgb.r);
-		else if (actual_output[i].r > temp_rgb.r) temp_rgb.r = max(actual_output[i].r - (blur_rate), temp_rgb.r);
+		if (actual_output[i].r < temp_rgb.r) temp_rgb.r = min(qadd8(actual_output[i].r, blur_rate), temp_rgb.r);
+		else if (actual_output[i].r > temp_rgb.r) temp_rgb.r = max(qsub8(actual_output[i].r, blur_rate), temp_rgb.r);
 
-		if (actual_output[i].g < temp_rgb.g) temp_rgb.g = min(actual_output[i].g + (blur_rate), temp_rgb.g);
-		else if (actual_output[i].g > temp_rgb.g) temp_rgb.g = max(actual_output[i].g - (blur_rate), temp_rgb.g);
+		if (actual_output[i].g < temp_rgb.g) temp_rgb.g = min(qadd8(actual_output[i].g, blur_rate), temp_rgb.g);
+		else if (actual_output[i].g > temp_rgb.g) temp_rgb.g = max(qsub8(actual_output[i].g, blur_rate), temp_rgb.g);
 
-		if (actual_output[i].b < temp_rgb.b) temp_rgb.b = min(actual_output[i].b + (blur_rate), temp_rgb.b);
-		else if (actual_output[i].b > temp_rgb.b) temp_rgb.b = max(actual_output[i].b - (blur_rate), temp_rgb.b);
+		if (actual_output[i].b < temp_rgb.b) temp_rgb.b = min(qadd8(actual_output[i].b, blur_rate), temp_rgb.b);
+		else if (actual_output[i].b > temp_rgb.b) temp_rgb.b = max(qsub8(actual_output[i].b, blur_rate), temp_rgb.b);
 	}
 
 	actual_output[i] = temp_rgb;
 }
 
 
+boolean read_emot_Array(uint8_t x, uint8_t y){
+
+	//draw the ^ ^
+	if (x == 1 && y == 5) return true;
+	if (x == 2 && y == 6) return true;
+	if (x == 3 && y == 7) return true;
+	if (x == 4 && y == 6) return true;
+	if (x == 5 && y == 5) return true;
+	if (x == 10 && y == 5) return true;
+	if (x == 11 && y == 6) return true;
+	if (x == 12 && y == 7) return true;
+	if (x == 13 && y == 6) return true;
+	if (x == 14 && y == 5) return true;
+
+	uint8_t newsmile = qadd8(FFTdisplayValue1, scale8(FFTdisplayValue1, FFTdisplayValue1));
+
+	uint8_t smile_open = scale8(newsmile, 4);
+
+	//bottom row
+	if (smile_open > 0){
+		if (x < 11 && x >4 && y == 0) return true;
+	}
+	//second row if exactly 2
+	if (smile_open == 2){
+		if (x < 12 && x >3 && y == 1) return true;
+	}
+	//second row if greater than  2
+	if (smile_open > 2){
+		if ((x == 11 || x == 4) && y == 1) return true;
+	}
+	//top row
+	if (smile_open >= 3){
+		if (x < 12 && x >3 && y == 2) return true;
+	}
+
+	return false;
+}

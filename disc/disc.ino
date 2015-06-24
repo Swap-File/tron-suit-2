@@ -705,16 +705,15 @@ void mask_blur_and_output(uint8_t i, CHSV* color, uint8_t current_pixel, uint8_t
 	if (pixel_beam && color->v != 0 && actual_output[i] != CRGB(0, 0, 0)){
 		
 		temp_rgb.fadeToBlackBy(128); // fade_level
-	
-		if (actual_output[i].r < temp_rgb.r) temp_rgb.r = min(actual_output[i].r + blur_rate, temp_rgb.r);
-		else if (actual_output[i].r > temp_rgb.r) temp_rgb.r = max(actual_output[i].r - blur_rate, temp_rgb.r);
 
-		if (actual_output[i].g < temp_rgb.g) temp_rgb.g = min(actual_output[i].g + blur_rate, temp_rgb.g);
-		else if (actual_output[i].g > temp_rgb.g) temp_rgb.g = max(actual_output[i].g - blur_rate, temp_rgb.g);
+		if (actual_output[i].r < temp_rgb.r) temp_rgb.r = min(qadd8(actual_output[i].r, blur_rate), temp_rgb.r);
+		else if (actual_output[i].r > temp_rgb.r) temp_rgb.r = max(qsub8(actual_output[i].r, blur_rate), temp_rgb.r);
 
-		if (actual_output[i].b < temp_rgb.b) temp_rgb.b = min(actual_output[i].b + blur_rate, temp_rgb.b);
-		else if (actual_output[i].b > temp_rgb.b) temp_rgb.b = max(actual_output[i].b - blur_rate, temp_rgb.b);
-	
+		if (actual_output[i].g < temp_rgb.g) temp_rgb.g = min(qadd8(actual_output[i].g, blur_rate), temp_rgb.g);
+		else if (actual_output[i].g > temp_rgb.g) temp_rgb.g = max(qsub8(actual_output[i].g, blur_rate), temp_rgb.g);
+
+		if (actual_output[i].b < temp_rgb.b) temp_rgb.b = min(qadd8(actual_output[i].b, blur_rate), temp_rgb.b);
+		else if (actual_output[i].b > temp_rgb.b) temp_rgb.b = max(qsub8(actual_output[i].b, blur_rate), temp_rgb.b);
 	
 	}
 

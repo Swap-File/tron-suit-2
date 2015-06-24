@@ -206,7 +206,7 @@ inline void onPacket2(const uint8_t* buffer, size_t size)
 			//upper 4 bits are a counter, lower 4 are data
 			if (disc0.last_requested_mode != disc0.requested_mode){
 
-				if (disc0.disc_mode == 0 && disc0.requested_mode != 0) {
+				if (disc0.disc_mode == DISC_MODE_OFF && disc0.requested_mode != DISC_MODE_OPENING) {
 					current_brightness = 255;
 					discopenstart = millis();
 					for (uint8_t current_pixel = 0; current_pixel < 38; current_pixel++) {
@@ -227,9 +227,8 @@ inline void onPacket2(const uint8_t* buffer, size_t size)
 				disc0.last_requested_mode = disc0.requested_mode;
 				
 			}
-			Serial.println(disc0.disc_mode);
+			//Serial.println(disc0.disc_mode);
 			//read glove
-
 
 			//spin code
 			if (menu_mode == MENU_SPIN){
@@ -573,27 +572,7 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 			
 			
 			//y axis only
-
-
 			current_glove->y_angle = constrain(map((current_glove->pitch_compensated), 0, 36000, -64, 64), -32, 32);
-
-
-
-#define deadzone 1000  //10 degrees + and - deadzone (total 20 degrees)
-
-			int16_t sample = 0;
-			if (current_glove->pitch_compensated > 18000){
-				sample = max((current_glove->pitch_compensated) - deadzone, 0);
-			}
-			else{
-				sample = min((current_glove->pitch_compensated) +deadzone, 0);
-			}
-
-#define currentrange 128
-			sample = constrain(map(sample, deadzone, 36000 - deadzone, -currentrange, currentrange), -currentrange, currentrange);
-
-
-
 
 			current_glove->y_angle_noise = constrain(map((current_glove->pitch_compensated), 0, 36000, -192, 192), -128, 128);
 
@@ -776,8 +755,8 @@ void glove_noise(void *  first_glove, void *  second_glove){
 			noise_xy_entered = true;
 		}
 
-		x_noise_modifier = x_noise_modifier_initial - (((GLOVE *)first_glove)->pitch_compensated) / 10;
-		y_noise_modifier = y_noise_modifier_initial - (((GLOVE *)first_glove)->yaw_compensated) / 10;
+		x_noise_modifier = x_noise_modifier_initial - ((((GLOVE *)first_glove)->pitch_compensated - 18000)) / 10;
+		y_noise_modifier = y_noise_modifier_initial - ((((GLOVE *)first_glove)->yaw_compensated-18000)) / 10;
 		if (((GLOVE *)second_glove)->finger1 || ((GLOVE *)second_glove)->finger2){
 			//map magnitude
 			if (noise_z_entered == false){
@@ -824,52 +803,6 @@ void glove_pwr(void *  first_glove, void *  second_glove){
 		if (!disc_turned_off && current_brightness == 0){
 			disc0.disc_mode = DISC_MODE_OFF;
 			disc_turned_off = true;
-		}
-	}
-}
-
-
-//ripped out of adafruit graphics library
-
-void drawLine_local(int16_t x0, int16_t y0,
-	int16_t x1, int16_t y1) {
-	int16_t steep = abs(y1 - y0) > abs(x1 - x0);
-	if (steep) {
-		swap(x0, y0);
-		swap(x1, y1);
-	}
-
-	if (x0 > x1) {
-		swap(x0, x1);
-		swap(y0, y1);
-	}
-
-	int16_t dx, dy;
-	dx = x1 - x0;
-	dy = abs(y1 - y0);
-
-	int16_t err = dx / 2;
-	int16_t ystep;
-
-	if (y0 < y1) {
-		ystep = 1;
-	}
-	else {
-		ystep = -1;
-	}
-
-	for (; x0 <= x1; x0++) {
-		if (steep) {
-
-			emot_Array[y0][x0] = true;
-		}
-		else {
-			emot_Array[x0][y0] = true;
-		}
-		err -= dy;
-		if (err < 0) {
-			y0 += ystep;
-			err += dx;
 		}
 	}
 }
