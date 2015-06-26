@@ -206,21 +206,20 @@ inline void onPacket2(const uint8_t* buffer, size_t size)
 			//upper 4 bits are a counter, lower 4 are data
 			if (disc0.last_requested_mode != disc0.requested_mode){
 
-				if (disc0.disc_mode == DISC_MODE_OFF && disc0.requested_mode != DISC_MODE_OPENING) {
+				if (disc0.disc_mode == DISC_MODE_OFF && (disc0.requested_mode & 0x0F  )== DISC_MODE_OPENING) {
 					current_brightness = 255;
-					discopenstart = millis();
+					startup_time = millis();
 					for (uint8_t current_pixel = 0; current_pixel < 38; current_pixel++) {
 						stream1[current_pixel] = CHSV(0, 0, 0);
 						stream2[current_pixel] = CHSV(0, 0, 0);
 					}
-
 					disc0.packet_beam = 0;
-
-					supress_helmet2 = true;
+					startup_mode = STARTUP_MODE_DELAY;
 					background_mode = BACKGROUND_MODE_NOISE;
-					z_noise = 127;
-					color1 = CHSV(128,255,255);
-					color2 = CHSV(128, 255,255);
+					z_noise = 127; //very random background noise
+					color1 = CHSV(HUE_AQUA, 255, 255); // cyan
+					color2 = CHSV(HUE_AQUA, 255, 255);
+
 				}
 
 				disc0.disc_mode = disc0.requested_mode & 0x0F;

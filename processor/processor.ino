@@ -47,7 +47,7 @@ uint8_t fft_mode = FFT_MODE_HORZ_BARS_RIGHT;
 #define MENU_HELMET_PONG 19
 #define MENU_HELMET_PONG_IN 21
 #define MENU_HELMET_EMOTICON 15
-#define MENU_HELMET_EMOTICON_ON 17
+#define MENU_HELMET_EMOTICON_ON_SOUND 17
 #define MENU_HELMET_NOISE_ON 18
 #define MENU_DISC 7
 #define MENU_CAMON 8
@@ -61,6 +61,18 @@ uint8_t fft_mode = FFT_MODE_HORZ_BARS_RIGHT;
 #define MENU_SMS_LOAD 24
 #define MENU_PWR 25
 #define MENU_PWR_IN 26
+#define MENU_COLOR 35
+#define MENU_RED 27
+#define MENU_ORANGE 28
+#define MENU_YELLOW 29
+#define MENU_GREEN 30
+#define MENU_CYAN 31
+#define MENU_BLUE 32
+#define MENU_PURPLE 33
+#define MENU_PINK 34
+#define MENU_HELMET_EMOTICON_ON_MOTION 37
+#define MENU_HELMET_EMOTICON_ON_BUTTON 36
+
 
 uint8_t menu_mode = MENU_DEFAULT;
 
@@ -335,6 +347,7 @@ CHSV FFT_Array[16][8];  //keep this separate so suit effects can pull from it
 int FFTdisplayValueMax16[16]; //max vals for normalization over time
 uint8_t FFTdisplayValue16[16]; //max vals for normalization over time
 uint8_t FFTdisplayValue8[8]; //max vals for normalization over time
+uint8_t FFTdisplayValue1;
 
 //Noise Effects from FastLED
 CRGB Noise_Array[16][8];  //normal for shoulders
@@ -358,7 +371,7 @@ uint16_t z_noise_modifier_initial = 128;
 
 Metro FPSdisplay = Metro(1000, 0);  //display and reset stats
 Metro glovedisplayfade = Metro(10, 0);  //when to decay the glove trails
-Metro ScrollSpeed = Metro(40, 0);  //how fast words scroll
+Metro ScrollSpeed = Metro(45, 0);  //how fast words scroll
 Metro GloveSend = Metro(10,0);  //how fast to send data to gloves
 Metro Flow = Metro(40, 0); //how often to update effect flow
 Metro DiscSend3 = Metro(20, 0);
@@ -401,22 +414,26 @@ uint8_t pong_ball_vector = PONG_RIGHT_DOWN;
 #define PONG_MIN_SPEED 200
 Metro pongtime = Metro(PONG_MIN_SPEED, 1);
 
-//emoti
-boolean emot_Array[16][8];  //keep this separate so suit effects can pull from it
-
 //brightness
 boolean brightness_entered = false;
 uint8_t brightness_initial = 255;
 uint8_t current_brightness = 255;
-
-
 boolean supress_helmet = false;
-boolean supress_helmet2 = false;
+
+
+
 boolean disc_turned_off = false;
-
-uint32_t discopenstart = 0;
-
-uint8_t FFTdisplayValue1 = 0;
 
 
 uint8_t smilevalue = 0;
+
+
+#define STARTUP_MODE_COMPLETED 0
+#define STARTUP_MODE_DELAY 1
+#define STARTUP_MODE_OPENING_SOLID 2
+#define STARTUP_MODE_OPENING_ARMS 3
+#define STARTUP_MODE_OPENING_HELMET 4
+uint8_t startup_mode = 0;
+uint32_t startup_time = 0;
+uint8_t startup_mode_masking = 0;
+uint8_t startup_mode_masking_helmet = 0;

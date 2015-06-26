@@ -172,8 +172,8 @@ void loop() {
 							final_color = temp;
 						}
 					}
-					else if (menu_mode == MENU_HELMET_EMOTICON_ON){
-						if (read_emot_Array(x,y)){
+					else if (menu_mode == MENU_HELMET_EMOTICON_ON_SOUND || menu_mode == MENU_HELMET_EMOTICON_ON_MOTION || menu_mode == MENU_HELMET_EMOTICON_ON_BUTTON){
+						if (read_emot_Array(x, y)){
 							CHSV temp = FFT_Array[x][y];
 							temp.v = max(temp.v, SMS_MIN_BRIGHTNESS);
 							final_color = temp;
@@ -189,8 +189,8 @@ void loop() {
 							final_color = Noise_Array_Bright[x][y];;
 						}
 					}
-					else if (menu_mode == MENU_HELMET_EMOTICON_ON){
-						if (emot_Array[x][y]){
+					else if (menu_mode == MENU_HELMET_EMOTICON_ON_SOUND || menu_mode == MENU_HELMET_EMOTICON_ON_MOTION || menu_mode == MENU_HELMET_EMOTICON_ON_BUTTON){
+						if (read_emot_Array(x, y)){
 							final_color = Noise_Array_Bright[x][y];;
 						}
 					}
@@ -211,8 +211,10 @@ void loop() {
 			//determine if row is even or odd abd place pixel
 			if ((y & 0x01) == 1)  tempindex = (y << 4) + 15 - x;  //<< 4 is multiply by 16 pixels per row
 			else                  tempindex = (y << 4) + x; //<< 4 is multiply by 16 pixels per row
-
-			if (!sms_blackout && !supress_helmet && !supress_helmet2){ //flash display for incoming call
+			//flash display for incoming call
+			if (!sms_blackout && !supress_helmet && \
+				(startup_mode == STARTUP_MODE_COMPLETED || \
+				(startup_mode == STARTUP_MODE_OPENING_HELMET && (x > (7 - startup_mode_masking_helmet) && (x < (8 + startup_mode_masking_helmet)))))){
 				actual_output[tempindex] = final_color;
 			}
 			else{
@@ -254,37 +256,81 @@ void loop() {
 	for (uint16_t i = 0; i < 38; i++) {
 
 		//chest strips
-		if (disc0.disc_mode == DISC_MODE_SWIPE){
-			mask_blur_and_output((5 * 130) + ((i + (37 - scale8(disc0.current_index, 38))) % 38), &color1, i, map(disc0.current_mag, 0, 16, 0, 19), 255);
-			mask_blur_and_output((4 * 130) + ((i + (37 - scale8(disc0.current_index, 38))) % 38), &color2, i, map(disc0.current_mag, 0, 16, 0, 19), 255);
+		if (startup_mode == STARTUP_MODE_DELAY){
+			actual_output[(5 * 130) + i] = CRGB(0, 0, 0);
+			actual_output[(4 * 130) + i] = CRGB(0, 0, 0);
+		}
+		else if (startup_mode == STARTUP_MODE_OPENING_SOLID){
+			if (startup_mode_masking > i){
+				mask_blur_and_output((5 * 130) + i, &color1, i, 19, 1);
+				mask_blur_and_output((4 * 130) + i, &color2, i, 19, 1);
+			}
+			else{
+				actual_output[(5 * 130) + i] = CRGB(0, 0, 0);
+				actual_output[(4 * 130) + i] = CRGB(0, 0, 0);
+			}
 		}
 		else{
-			mask_blur_and_output((5 * 130) + i, &stream1[(stream_head + i) % 38], i, 19, 1);
-			mask_blur_and_output((4 * 130) + i, &stream2[(stream_head + i) % 38], i, 19, 1);
+			if (disc0.disc_mode == DISC_MODE_SWIPE){
+				mask_blur_and_output((5 * 130) + ((i + (37 - scale8(disc0.current_index, 38))) % 38), &color1, i, map(disc0.current_mag, 0, 16, 0, 19), 255);
+				mask_blur_and_output((4 * 130) + ((i + (37 - scale8(disc0.current_index, 38))) % 38), &color2, i, map(disc0.current_mag, 0, 16, 0, 19), 255);
+			}
+			else{
+				mask_blur_and_output((5 * 130) + i, &stream1[(stream_head + i) % 38], i, 19, 1);
+				mask_blur_and_output((4 * 130) + i, &stream2[(stream_head + i) % 38], i, 19, 1);
+			}
 		}
 
 		//arm strips
-		if (supress_helmet2){
-
-			mask_blur_and_output((6 * 130) + (37 - i), &stream1[(stream_head + i) % 38], i, 19,255);
-		}
-		else if (glove1.camera_on){
-			blur_cust((6 * 130) + (i), &glove1.cameraflow[(1 + i + glove1.cameraflow_index) % 38], 1);
-		}
-		else{
-			if (background_mode == BACKGROUND_MODE_FFT){
-				actual_output[(6 * 130) + i] = (&FFT_Array[0][0])[38 - i];
+		if (startup_mode == STARTUP_MODE_DELAY) actual_output[(6 * 130) + i] = CRGB(0, 0, 0);
+		else if (startup_mode == STARTUP_MODE_OPENING_SOLID){
+			if (startup_mode_masking > (37 - i)){
+				mask_blur_and_output((6 * 130) + i, &color1, i, 19, 1);
 			}
-			else if (background_mode == BACKGROUND_MODE_NOISE){
+			else{
+				actual_output[(6 * 130) + i] = CRGB(0, 0, 0);
+			}
+
+		}
+		else if (startup_mode == STARTUP_MODE_OPENING_ARMS){
+			if (startup_mode_masking > (37 - i)){
 				actual_output[(6 * 130) + i] = (&Noise_Array[0][0])[i];
 			}
+			else{
+				mask_blur_and_output((6 * 130) + i, &color1, i, 19, 1);
+			}
+		}
+		else{
+			if (glove1.camera_on){
+				blur_cust((6 * 130) + (i), &glove1.cameraflow[(1 + i + glove1.cameraflow_index) % 38], 1);
+			}
+			else{
+				if (background_mode == BACKGROUND_MODE_FFT){
+					actual_output[(6 * 130) + i] = (&FFT_Array[0][0])[38 - i];
+				}
+				else if (background_mode == BACKGROUND_MODE_NOISE){
+					actual_output[(6 * 130) + i] = (&Noise_Array[0][0])[i];
+				}
+			}
 		}
 
-		if (supress_helmet2){
-			mask_blur_and_output((7 * 130) + (37 - i), &stream1[(stream_head + i) % 38], i, 19, 255);
+		if (startup_mode == STARTUP_MODE_DELAY) actual_output[(7 * 130) + i] = CRGB(0, 0, 0);
+		else if (startup_mode == STARTUP_MODE_OPENING_SOLID){
+			if (startup_mode_masking > (37 - i)){
+				mask_blur_and_output((7 * 130) + i, &color2, i, 19, 1);
+			}
+			else{
+				actual_output[(7 * 130) + i] = CRGB(0, 0, 0);
+			}
+
 		}
-		else if (glove0.camera_on){
-			blur_cust((7 * 130) + (i), &glove0.cameraflow[(1 + i + glove0.cameraflow_index) % 38], 1);
+		else if (startup_mode == STARTUP_MODE_OPENING_ARMS){
+			if (startup_mode_masking > (37 - i)){
+				actual_output[(7 * 130) + i] = (&Noise_Array[0][0])[i];
+			}
+			else{
+				mask_blur_and_output((7 * 130) + i, &color2, i, 19, 1);
+			}
 		}
 		else{
 			if (background_mode == BACKGROUND_MODE_FFT){
@@ -358,17 +404,43 @@ void loop() {
 
 
 	//animation on the suit while the disc opens
-	if (disc0.disc_mode == DISC_MODE_OPENING){
-		stream_head = 0;
-		int result = map(millis() - discopenstart, 0, 500, 0, 38);
+	if (startup_mode != STARTUP_MODE_COMPLETED){
+		//initial delay to let the disc go a bit...
+		if (startup_mode == STARTUP_MODE_DELAY){
+			if (millis() - startup_time > 500){
+				startup_mode = STARTUP_MODE_OPENING_SOLID;
+				startup_time = millis();
+				disc0.packet_beam = 0;
+				startup_mode_masking = 0;
+				startup_mode_masking_helmet = 0;
+			}
+		}
+		//fill the jacket in solid here...
+		else if (startup_mode == STARTUP_MODE_OPENING_SOLID){
+			startup_mode_masking = map(millis() - startup_time, 0, 1000, 0, 38);
+			if (startup_mode_masking > 37){
+				startup_mode = STARTUP_MODE_OPENING_ARMS;
+				startup_time = millis();
+				startup_mode_masking = 0;
+				startup_mode_masking_helmet = 0;
+			}
+		}
+		//fill in the arms with noise and sequentially unmask helmet
+		else if (startup_mode == STARTUP_MODE_OPENING_ARMS){
+			startup_mode_masking = map(millis() - startup_time, 0, 1000, 0, 38);
+			//startup_mode_masking_helmet = map(millis() - startup_time, 0, 1000, 0, 8);
+			if (startup_mode_masking > 37)	{
+				startup_mode = STARTUP_MODE_OPENING_HELMET;
+				startup_time = millis();
+			}
+		}
+		else if (startup_mode == STARTUP_MODE_OPENING_HELMET){
+			//startup_mode_masking = map(millis() - startup_time, 0, 1000, 0, 38);
+			startup_mode_masking_helmet = map(millis() - startup_time, 0, 1000, 0, 8);
+			if (startup_mode_masking_helmet >8)	startup_mode = STARTUP_MODE_COMPLETED;
+		}
 
-		if (result < 38){
-			stream1[37 - result] = color1;
-			stream2[37 - result] = color2;
-		}
-		else{
-			supress_helmet2 = false;
-		}
+
 	}
 
 	//controls the streaming of the colors
@@ -414,23 +486,28 @@ void loop() {
 }
 
 
-CHSV map_hsv(uint8_t input, uint8_t in_min, uint8_t in_max, CHSV* out_starting, CHSV* out_ending){
+CHSV map_hsv(uint8_t input, uint8_t in_min, uint8_t in_max, CHSV* out_starting, CHSV* out_ending) {
+
+
+	if (input <= in_min) return CHSV(*out_starting);
+	if (input >= in_max) return CHSV(*out_ending);
 
 	//calculate shortest path between colors
-
 	int16_t shortest_path = out_ending->h; //no rollover
-	if ((((int16_t)out_ending->h) + 255) - ((int16_t)out_starting->h) <= 127) {
-		shortest_path += 255;  //rollover 
+	if ((((int16_t)out_ending->h) + 256) - ((int16_t)out_starting->h) <= 127) {
+		shortest_path += 256;  //rollover
 	}
 	else if ((int16_t)(out_starting->h) - (((int16_t)out_ending->h) - 255) <= 127) {
-		shortest_path -= 255; //rollunder
+		shortest_path -= 256; //rollunder
 	}
 
+
 	return CHSV(
-		(uint8_t)((input - in_min) * (shortest_path - out_starting->h) / (in_max - in_min) + out_starting->h), \
-		(input - in_min) * (out_ending->s - out_starting->s) / (in_max - in_min) + out_starting->s, \
-		(input - in_min) * (out_ending->v - out_starting->v) / (in_max - in_min) + out_starting->v);
+		((input - in_min) * (shortest_path - out_starting->h + 1) / (in_max - in_min + 1) + out_starting->h), \
+		(input - in_min) * (out_ending->s - out_starting->s + 1) / (in_max - in_min + 1) + out_starting->s, \
+		(input - in_min) * (out_ending->v - out_starting->v + 1) / (in_max - in_min + 1) + out_starting->v);
 }
+
 
 // 	int i = (current_pixel + loc_offset) % 38;// wrap around to get actual location
 void mask_blur_and_output(uint16_t i, CHSV* color, uint8_t current_pixel, uint8_t magnitude, uint8_t blur_rate){
@@ -494,18 +571,43 @@ void blur_cust(uint16_t i, CHSV* color, uint8_t blur_rate){
 boolean read_emot_Array(uint8_t x, uint8_t y){
 
 	//draw the ^ ^
-	if (x == 1 && y == 5) return true;
-	if (x == 2 && y == 6) return true;
-	if (x == 3 && y == 7) return true;
-	if (x == 4 && y == 6) return true;
-	if (x == 5 && y == 5) return true;
+	if (glove1.finger1){
+		if (x == 1 && y == 6) return true;
+		if (x == 2 && y == 5) return true;
+		if (x == 3 && y == 5) return true;
+		if (x == 4 && y == 5) return true;
+		if (x == 5 && y == 5) return true;
+
+
+	}
+	else{
+		if (x == 1 && y == 5) return true;
+		if (x == 2 && y == 6) return true;
+		if (x == 3 && y == 7) return true;
+		if (x == 4 && y == 6) return true;
+		if (x == 5 && y == 5) return true;
+	}
+
 	if (x == 10 && y == 5) return true;
 	if (x == 11 && y == 6) return true;
 	if (x == 12 && y == 7) return true;
 	if (x == 13 && y == 6) return true;
 	if (x == 14 && y == 5) return true;
 
-	uint8_t newsmile = qadd8(FFTdisplayValue1, scale8(FFTdisplayValue1, FFTdisplayValue1));
+	uint8_t newsmile = 0;
+
+	if (menu_mode == MENU_HELMET_EMOTICON_ON_SOUND){
+		newsmile = qadd8(FFTdisplayValue1, scale8(FFTdisplayValue1, FFTdisplayValue1));
+	}
+	else if (menu_mode == MENU_HELMET_EMOTICON_ON_MOTION){
+
+		newsmile = glove0.gloveY;
+
+	}
+	else if (menu_mode == MENU_HELMET_EMOTICON_ON_BUTTON){
+		if (glove0.finger1) newsmile = 4;
+		else newsmile = 0;
+	}
 
 	uint8_t smile_open = scale8(newsmile, 4);
 

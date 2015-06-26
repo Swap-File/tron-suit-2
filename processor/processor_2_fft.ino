@@ -122,10 +122,10 @@ inline void fftmath(void){
 void calcfftcolor(CHSV * temp_color, uint8_t input){
 
 	//make the tip of the color be color 2
-	*temp_color = (input > 240) ? map_hsv(constrain(input,240,255), 240, 255, &color1, &color2) : color1;
+	*temp_color = (input > 240) ? map_hsv(input, 240, 255, &color1, &color2) : color1;
 
-	//scale the brightness //what if color2 is dimmer? look into this.
-	temp_color->v = scale8(temp_color->v, input);
+	//ignore brightness, max it.
+	temp_color->v = input;
 	
 	return;
 }
