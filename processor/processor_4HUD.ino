@@ -378,8 +378,6 @@ void menu_map(uint8_t direction){
 		case MENU_SPIN:
 		case MENU_HELMET_NOISE_ON:
 			//dead end menus
-			//supress menu
-			scroll_mode = SCROLL_MODE_COMPLETE;
 			break;
 
 		case MENU_TXT_DISPLAY:
@@ -506,12 +504,10 @@ void menu_map(uint8_t direction){
 			case HAND_DIRECTION_RIGHT:
 				break;
 			case HAND_DIRECTION_UP:
-				//menu_mode = MENU_HELMET_EMOTICON_ON_BUTTON;
 				break;
 			case HAND_DIRECTION_DOWN:
-				//menu_mode = MENU_HELMET_EMOTICON_ON_MOTION;
 				break;
-			case HAND_DIRECTION_SHORT_PRESS:
+			case HAND_SHORT_PRESS_DOUBLE:
 				menu_mode = MENU_HELMET_EMOTICON_ON_MOTION;
 				break;
 			}
@@ -525,32 +521,17 @@ void menu_map(uint8_t direction){
 			case HAND_DIRECTION_RIGHT:
 				break;
 			case HAND_DIRECTION_UP:
-				//menu_mode = MENU_HELMET_EMOTICON_ON_SOUND;
 				break;
 			case HAND_DIRECTION_DOWN:
-				//menu_mode = MENU_HELMET_EMOTICON_ON_BUTTON;
 				break;
-			case HAND_DIRECTION_SHORT_PRESS:
-				menu_mode = MENU_HELMET_EMOTICON_ON_BUTTON;
-				break;
-			}
-			break;
-
-
-		case MENU_HELMET_EMOTICON_ON_BUTTON:
-			switch (direction){
-			case HAND_DIRECTION_LEFT:
-				break;
-			case HAND_DIRECTION_RIGHT:
-				break;
-			case HAND_DIRECTION_UP:
-				menu_mode = MENU_HELMET_EMOTICON_ON_MOTION;
-				break;
-			case HAND_DIRECTION_DOWN:
+			case HAND_SHORT_PRESS_DOUBLE:
 				menu_mode = MENU_HELMET_EMOTICON_ON_SOUND;
 				break;
 			}
 			break;
+
+
+	
 		case MENU_HELMET_PONG:
 			switch (direction){
 			case HAND_DIRECTION_LEFT:
@@ -673,16 +654,16 @@ void menu_map(uint8_t direction){
 			switch (direction){
 			case HAND_DIRECTION_LEFT:
 				color2 = CHSV(HUE_AQUA, 255, 255);
+				//cyan is normal! shut off custom startup.
 				if (disc0.disc_mode == DISC_MODE_OFF){
-					cust_Startup_color = true;
-					color1 = CHSV(HUE_AQUA, 255, 255);
+					cust_Startup_color = false;
 				}
 				break;
 			case HAND_DIRECTION_RIGHT:
 				color1 = CHSV(HUE_AQUA, 255, 255);
+				//cyan is normal! shut off custom startup.
 				if (disc0.disc_mode == DISC_MODE_OFF){
-					cust_Startup_color = true;
-					color2 = CHSV(HUE_AQUA, 255, 255);
+					cust_Startup_color = false;  
 				}
 				break;
 			case HAND_DIRECTION_UP:
@@ -837,9 +818,6 @@ void print_menu_mode(void){
 		break;
 	case MENU_HELMET_EMOTICON_ON_MOTION:
 		display.print("M ^_^");
-		break;
-	case MENU_HELMET_EMOTICON_ON_BUTTON:
-		display.print("B ^_^");
 		break;
 	case MENU_PWR:
 		display.print("PWR");

@@ -161,7 +161,7 @@ void loop() {
 			}
 
 			//no overlay for certain modes
-			if (menu_mode != MENU_HELMET_EMOTICON_ON_SOUND && menu_mode != MENU_HELMET_EMOTICON_ON_MOTION && menu_mode != MENU_HELMET_EMOTICON_ON_BUTTON && menu_mode != MENU_HELMET_PONG_IN){
+			if (menu_mode != MENU_HELMET_EMOTICON_ON_SOUND && menu_mode != MENU_HELMET_EMOTICON_ON_MOTION && menu_mode != MENU_HELMET_PONG_IN){
 				if (gloveindicator[x][7 - y] > 0){ // flip Y for helmet external display by subtracting from 7
 					background_array = CRGB(gloveindicator[x][7 - y], gloveindicator[x][7 - y], gloveindicator[x][7 - y]);
 				}
@@ -171,7 +171,7 @@ void loop() {
 			if (menu_mode == MENU_HELMET_PONG_IN){
 				final_color = Pong_Array[x][y];  //everything else
 			}
-			else if (menu_mode == MENU_HELMET_EMOTICON_ON_SOUND || menu_mode == MENU_HELMET_EMOTICON_ON_MOTION || menu_mode == MENU_HELMET_EMOTICON_ON_BUTTON){
+			else if (menu_mode == MENU_HELMET_EMOTICON_ON_SOUND || menu_mode == MENU_HELMET_EMOTICON_ON_MOTION){
 				if (read_emot_Array(x, y)){
 					final_color = disc0.color1;
 				}
@@ -630,18 +630,10 @@ boolean read_emot_Array(uint8_t x, uint8_t y){
 		}
 	}
 	else if (menu_mode == MENU_HELMET_EMOTICON_ON_MOTION){
-		if ((glove0.finger1 || glove0.finger2) && leading_glove == 0) newsmile = max(-4 + glove0.gloveY, 0) * 30;
-		else if ((glove1.finger1 || glove1.finger2) && leading_glove == 1) newsmile = max(-4 + glove1.gloveY, 0) * 30;
+		if ((glove0.finger1 || glove0.finger2) && leading_glove == 0) newsmile =glove0.gloveY * 30;
+		else if ((glove1.finger1 || glove1.finger2) && leading_glove == 1) newsmile =  glove1.gloveY * 30;
 	}
-	else if (menu_mode == MENU_HELMET_EMOTICON_ON_BUTTON){
-		if (glove0.finger1){
-			newsmile = 0;
-		}
-		else {
-			newsmile = 255;
-		}
-	}
-
+	
 	uint8_t smile_open = scale8(newsmile, 4);
 
 	//bottom row

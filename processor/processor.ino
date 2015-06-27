@@ -24,7 +24,9 @@
 #define HAND_DIRECTION_RIGHT 2
 #define HAND_DIRECTION_UP 3
 #define HAND_DIRECTION_DOWN 4
-#define HAND_DIRECTION_SHORT_PRESS 5
+#define HAND_SHORT_PRESS_SINGLE 5
+#define HAND_SHORT_PRESS_DOUBLE 6
+#define HAND_SHORT_PRESS_TRIPLE 7
 
 #define FFT_MODE_HORZ_BARS_LEFT 0
 #define FFT_MODE_HORZ_BARS_RIGHT 1
@@ -71,7 +73,7 @@ uint8_t fft_mode = FFT_MODE_HORZ_BARS_RIGHT;
 #define MENU_PURPLE 33
 #define MENU_PINK 34
 #define MENU_HELMET_EMOTICON_ON_MOTION 37
-#define MENU_HELMET_EMOTICON_ON_BUTTON 36
+
 
 
 uint8_t menu_mode = MENU_DEFAULT;
@@ -144,6 +146,8 @@ typedef struct {
 	int16_t magnitude; //about 3000 is edges
 
 	uint32_t finger_timer; //differentiate between short and long presses
+	uint32_t finger_timer2; //differentiate between short and long presses
+	uint8_t finger_presses; 
 
 	CHSV cameraflow[38];
 	uint8_t cameraflow_index = 0;

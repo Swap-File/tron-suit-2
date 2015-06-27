@@ -206,7 +206,7 @@ inline void onPacket2(const uint8_t* buffer, size_t size)
 			//upper 4 bits are a counter, lower 4 are data
 			if (disc0.last_requested_mode != disc0.requested_mode){
 
-				if (disc0.disc_mode == DISC_MODE_OFF && (disc0.requested_mode & 0x0F  )== DISC_MODE_OPENING) {
+				if (disc0.disc_mode == DISC_MODE_OFF && (disc0.requested_mode & 0x0F) == DISC_MODE_OPENING) {
 					current_brightness = 255;
 					startup_time = millis();
 					for (uint8_t current_pixel = 0; current_pixel < 38; current_pixel++) {
@@ -226,7 +226,7 @@ inline void onPacket2(const uint8_t* buffer, size_t size)
 
 				disc0.disc_mode = disc0.requested_mode & 0x0F;
 				disc0.last_requested_mode = disc0.requested_mode;
-				
+
 			}
 			//Serial.println(disc0.disc_mode);
 			//read glove
@@ -557,10 +557,10 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 			//calc disc circle location
 			temp_gloveX = map(temp_gloveX_saved, 18000 - GLOVE_DEADZONE, 18000 + GLOVE_DEADZONE, -1024, 1024);
 
-		temp_gloveY = map((current_glove->pitch_compensated), 18000 - GLOVE_DEADZONE, 18000 + GLOVE_DEADZONE, -1024, 1024);
+			temp_gloveY = map((current_glove->pitch_compensated), 18000 - GLOVE_DEADZONE, 18000 + GLOVE_DEADZONE, -1024, 1024);
 
 			//CHECK THIS FOR X Y STUFF
-			int angle = atan2(-(current_glove->pitch_compensated - 18000), -(temp_gloveX_saved-18000))* 180 / PI;
+			int angle = atan2(-(current_glove->pitch_compensated - 18000), -(temp_gloveX_saved - 18000)) * 180 / PI;
 			angle = (angle + 360 + 90) % 360;
 
 			//magnitude for spinning 
@@ -570,8 +570,8 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 			if (current_glove->magnitude > 300){
 				current_glove->disc_offset = constrain(map(angle, 0, 361, 0, 255), 0, 255);
 			}
-			
-			
+
+
 			//y axis only
 			current_glove->y_angle = constrain(map((current_glove->pitch_compensated), 0, 36000, -64, 64), -32, 32);
 
@@ -597,7 +597,7 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 				if (leading_glove == 0)  glove_pwr((void*)&glove0, (void*)&glove1);
 				else 	glove_pwr((void*)&glove1, (void*)&glove0);
 
-				
+
 			}
 
 			if (!current_glove->finger1 &&  !current_glove->finger2 && !current_glove->finger3 && current_glove->gesture_in_progress == true){
@@ -605,10 +605,20 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 				else if (current_glove->gloveY >= 7) menu_map(HAND_DIRECTION_UP);
 				else if (current_glove->gloveX <= 0) menu_map(HAND_DIRECTION_RIGHT);
 				else if (current_glove->gloveX >= 7) menu_map(HAND_DIRECTION_LEFT);
-				else if (millis() - current_glove->finger_timer < 200) menu_map(HAND_DIRECTION_SHORT_PRESS);
+				else {
+					//leading gloves count only
+					if ((current_glove == &glove1 && leading_glove == 1) || (current_glove == &glove0 && leading_glove == 0)){
+						current_glove->finger_timer2 = millis();  //reset the press timer to stop counting
+						if (millis() - current_glove->finger_timer < 200) current_glove->finger_presses++;  //presses under 200ms count
+					}
+				}
+			}
 
-				//disable scroll mode on all other fingers
-				//if (current_glove->gesture_finger != 1) scroll_mode = SCROLL_MODE_COMPLETE;
+			if (millis() - current_glove->finger_timer2 > 300){ //max 300ms between presses then process it
+				if (current_glove->finger_presses == 1)	menu_map(HAND_SHORT_PRESS_SINGLE);
+				else if (current_glove->finger_presses == 2) menu_map(HAND_SHORT_PRESS_DOUBLE);
+				else if (current_glove->finger_presses == 3) menu_map(HAND_SHORT_PRESS_TRIPLE);
+				current_glove->finger_presses = 0;
 			}
 
 			//if a single finger is pressed down....
@@ -757,7 +767,7 @@ void glove_noise(void *  first_glove, void *  second_glove){
 		}
 
 		x_noise_modifier = x_noise_modifier_initial - ((((GLOVE *)first_glove)->pitch_compensated - 18000)) / 10;
-		y_noise_modifier = y_noise_modifier_initial - ((((GLOVE *)first_glove)->yaw_compensated-18000)) / 10;
+		y_noise_modifier = y_noise_modifier_initial - ((((GLOVE *)first_glove)->yaw_compensated - 18000)) / 10;
 		if (((GLOVE *)second_glove)->finger1 || ((GLOVE *)second_glove)->finger2){
 			//map magnitude
 			if (noise_z_entered == false){
@@ -795,7 +805,14 @@ void glove_pwr(void *  first_glove, void *  second_glove){
 			}
 		}
 
-		current_brightness = constrain(brightness_initial + (((GLOVE *)first_glove)->y_angle_noise  ) * 3, 0, 255);
+		if ((((GLOVE *)first_glove)->y_angle_noise) * 3 > 20){
+			current_brightness = constrain(brightness_initial - 20 + (((GLOVE *)first_glove)->y_angle_noise) * 3, 0, 255);
+		}
+		else if ((((GLOVE *)first_glove)->y_angle_noise) * 3 < -20){
+			current_brightness = constrain(brightness_initial + 20 + (((GLOVE *)first_glove)->y_angle_noise) * 3, 0, 255);
+		}
+
+
 
 	}
 	else{
