@@ -437,3 +437,6 @@ uint8_t startup_mode = 0;
 uint32_t startup_time = 0;
 uint8_t startup_mode_masking = 0;
 uint8_t startup_mode_masking_helmet = 0;
+
+boolean cust_Startup_color = false;
+

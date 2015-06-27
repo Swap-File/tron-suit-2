@@ -217,9 +217,11 @@ inline void onPacket2(const uint8_t* buffer, size_t size)
 					startup_mode = STARTUP_MODE_DELAY;
 					background_mode = BACKGROUND_MODE_NOISE;
 					z_noise = 127; //very random background noise
-					color1 = CHSV(HUE_AQUA, 255, 255); // cyan
-					color2 = CHSV(HUE_AQUA, 255, 255);
-
+					if (!cust_Startup_color){
+						color1 = CHSV(HUE_AQUA, 255, 255); // cyan
+						color2 = CHSV(HUE_AQUA, 255, 255);
+					}
+					cust_Startup_color = false;
 				}
 
 				disc0.disc_mode = disc0.requested_mode & 0x0F;
@@ -573,7 +575,7 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 			//y axis only
 			current_glove->y_angle = constrain(map((current_glove->pitch_compensated), 0, 36000, -64, 64), -32, 32);
 
-			current_glove->y_angle_noise = constrain(map((current_glove->pitch_compensated), 0, 36000, -192, 192), -128, 128);
+			current_glove->y_angle_noise = constrain(map((current_glove->pitch_compensated), 0, 36000, -256, 256), -128, 128);
 
 			//pong
 			if (current_glove == &glove1){
@@ -595,7 +597,7 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 				if (leading_glove == 0)  glove_pwr((void*)&glove0, (void*)&glove1);
 				else 	glove_pwr((void*)&glove1, (void*)&glove0);
 
-				LEDS.setBrightness(current_brightness);
+				
 			}
 
 			if (!current_glove->finger1 &&  !current_glove->finger2 && !current_glove->finger3 && current_glove->gesture_in_progress == true){
@@ -793,7 +795,7 @@ void glove_pwr(void *  first_glove, void *  second_glove){
 			}
 		}
 
-		current_brightness = constrain(brightness_initial + (((GLOVE *)first_glove)->y_angle_noise) * 3, 0, 255);
+		current_brightness = constrain(brightness_initial + (((GLOVE *)first_glove)->y_angle_noise  ) * 3, 0, 255);
 
 	}
 	else{

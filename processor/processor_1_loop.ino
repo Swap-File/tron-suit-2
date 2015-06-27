@@ -113,13 +113,11 @@ void loop() {
 		for (int x = 0; x < 16; x++) {
 			for (int y = 0; y < 8; y++) {
 				if (gloveindicator[x][y] > 0){
-					gloveindicator[x][y] = gloveindicator[x][y] - 1;
+					gloveindicator[x][y]--;
 				}
 			}
 		}
 	}
-
-
 
 	//make new trails
 	if (glove0.finger2 == 1){
@@ -133,10 +131,18 @@ void loop() {
 	//check for gestures
 	if (glove1.finger4 == 1 || glove0.finger4 == 1){
 
-		disc0.disc_mode = 2;
+		//force out of swipe mode
+		if (disc0.disc_mode != DISC_MODE_IDLE && disc0.disc_mode != DISC_MODE_OFF)	disc0.disc_mode = DISC_MODE_IDLE;
 
+		//go to root menu
 		menu_mode = MENU_DEFAULT;
+
+		//clear screen
 		scroll_mode = SCROLL_MODE_COMPLETE;
+
+		//reset 
+		if (z_noise_modifier == 0) z_noise_modifier = 127;
+
 	}
 
 	//draw most of hud, last bit will be drawn in external helmet bit
@@ -154,26 +160,27 @@ void loop() {
 				if (read_menu_pixel(x, y))	menu_name = CRGB(180, 180, 180);
 			}
 
-			if (gloveindicator[x][7 - y] > 0){ // flip Y for helmet external display by subtracting from 7
-				background_array = CRGB(gloveindicator[x][7 - y], gloveindicator[x][7 - y], gloveindicator[x][7 - y]);
-			}
+			//no overlay for certain modes
+			if (menu_mode != MENU_HELMET_EMOTICON_ON_SOUND && menu_mode != MENU_HELMET_EMOTICON_ON_MOTION && menu_mode != MENU_HELMET_EMOTICON_ON_BUTTON && menu_mode != MENU_HELMET_PONG_IN){
+				if (gloveindicator[x][7 - y] > 0){ // flip Y for helmet external display by subtracting from 7
+					background_array = CRGB(gloveindicator[x][7 - y], gloveindicator[x][7 - y], gloveindicator[x][7 - y]);
+				}
 
+			}
 			//override modes
 			if (menu_mode == MENU_HELMET_PONG_IN){
 				final_color = Pong_Array[x][y];  //everything else
+			}
+			else if (menu_mode == MENU_HELMET_EMOTICON_ON_SOUND || menu_mode == MENU_HELMET_EMOTICON_ON_MOTION || menu_mode == MENU_HELMET_EMOTICON_ON_BUTTON){
+				if (read_emot_Array(x, y)){
+					final_color = disc0.color1;
+				}
 			}
 			else{
 				//backgrounds
 				if (background_mode == BACKGROUND_MODE_FFT){
 					if (menu_mode == MENU_TXT_ON){
 						if (read_txt_pixel(x, y)){
-							CHSV temp = FFT_Array[x][y];
-							temp.v = max(temp.v, SMS_MIN_BRIGHTNESS);
-							final_color = temp;
-						}
-					}
-					else if (menu_mode == MENU_HELMET_EMOTICON_ON_SOUND || menu_mode == MENU_HELMET_EMOTICON_ON_MOTION || menu_mode == MENU_HELMET_EMOTICON_ON_BUTTON){
-						if (read_emot_Array(x, y)){
 							CHSV temp = FFT_Array[x][y];
 							temp.v = max(temp.v, SMS_MIN_BRIGHTNESS);
 							final_color = temp;
@@ -186,11 +193,6 @@ void loop() {
 				else if (background_mode == BACKGROUND_MODE_NOISE){
 					if (menu_mode == MENU_TXT_ON){
 						if (read_txt_pixel(x, y)){
-							final_color = Noise_Array_Bright[x][y];;
-						}
-					}
-					else if (menu_mode == MENU_HELMET_EMOTICON_ON_SOUND || menu_mode == MENU_HELMET_EMOTICON_ON_MOTION || menu_mode == MENU_HELMET_EMOTICON_ON_BUTTON){
-						if (read_emot_Array(x, y)){
 							final_color = Noise_Array_Bright[x][y];;
 						}
 					}
@@ -223,32 +225,6 @@ void loop() {
 		}
 	}
 
-	//set internal indicators, flip if flipped
-	if (disc0.active_primary){
-		actual_output[128] = color1;
-		actual_output[129] = color2;
-	}
-	else{
-		actual_output[128] = color2;
-		actual_output[129] = color1;
-	}
-	//swap to camera if in cam mode
-	if (glove1.camera_on){
-		actual_output[128] = glove1.output_rgb_led;
-	}
-	if (glove0.camera_on){
-		actual_output[129] = glove0.output_rgb_led;
-	}
-	//blank hud if in a countdown
-	if (millis() - left_timer < 100 || sms_blackout){
-		actual_output[128] = CRGB(0, 0, 0);
-	}
-	if (millis() - right_timer < 100 || sms_blackout){
-		actual_output[129] = CRGB(0, 0, 0);
-	}
-	//dim hud lights
-	actual_output[128] = actual_output[128].nscale8_video(8);
-	actual_output[129] = actual_output[129].nscale8_video(8);
 
 
 
@@ -351,6 +327,58 @@ void loop() {
 		if (actual_output[(6 * 130) + i].getAverageLight() > 32)	display.drawPixel(62, i, WHITE);
 	}
 
+	//we want to use setbrightness so we get dithering
+	//but I need brightness when off for color preview
+	//this blocks out everything excep the preview
+	if (current_brightness != 0){
+		LEDS.setBrightness(current_brightness);
+	}
+	else{
+		LEDS.setBrightness(255);
+		for (int i = 0; i < NUM_STRIPS * NUM_LEDS_PER_STRIP; i++) {
+			actual_output[i] = CRGB(0, 0, 0);
+		}
+	}
+
+	if (current_brightness != 0 || \
+		//this previews colors
+		(current_brightness == 0 && (glove1.finger1 || glove1.finger2 || glove0.finger1 || glove0.finger2)) || \
+		cust_Startup_color){//custom startup preview code
+
+		//set internal indicators, flip if flipped
+		if (disc0.active_primary){
+			actual_output[128] = color1;
+			actual_output[129] = color2;
+		}
+		else{
+			actual_output[128] = color2;
+			actual_output[129] = color1;
+		}
+		if (cust_Startup_color){
+			actual_output[129] = CRGB(0, 0, 0);
+		}
+	}
+
+	//swap to camera if in cam mode
+	if (glove1.camera_on){
+		actual_output[128] = glove1.output_rgb_led;
+	}
+	if (glove0.camera_on){
+		actual_output[129] = glove0.output_rgb_led;
+	}
+	//blank hud if in a countdown
+	if (millis() - left_timer < 100 || sms_blackout){
+		actual_output[128] = CRGB(0, 0, 0);
+	}
+	if (millis() - right_timer < 100 || sms_blackout){
+		actual_output[129] = CRGB(0, 0, 0);
+	}
+
+	//dim hud lights
+	actual_output[128] = actual_output[128].nscale8_video(8);
+	actual_output[129] = actual_output[129].nscale8_video(8);
+
+
 	//advance scrolling if timer reached or stop
 	if (ScrollSpeed.check()){
 		txt_scroll_pos--;
@@ -402,7 +430,6 @@ void loop() {
 		CORE_PIN8_CONFIG = PORT_PCR_DSE | PORT_PCR_SRE | PORT_PCR_MUX(3);
 	}
 
-
 	//animation on the suit while the disc opens
 	if (startup_mode != STARTUP_MODE_COMPLETED){
 		//initial delay to let the disc go a bit...
@@ -437,10 +464,8 @@ void loop() {
 		else if (startup_mode == STARTUP_MODE_OPENING_HELMET){
 			//startup_mode_masking = map(millis() - startup_time, 0, 1000, 0, 38);
 			startup_mode_masking_helmet = map(millis() - startup_time, 0, 1000, 0, 8);
-			if (startup_mode_masking_helmet >8)	startup_mode = STARTUP_MODE_COMPLETED;
+			if (startup_mode_masking_helmet > 8)	startup_mode = STARTUP_MODE_COMPLETED;
 		}
-
-
 	}
 
 	//controls the streaming of the colors
@@ -464,13 +489,8 @@ void loop() {
 			stream1[stream_head] = map_hsv(suitwave, 0, 37, &color1, &color2);
 			stream2[stream_head] = map_hsv(suitwave, 0, 37, &color1, &color2);
 
-
-			if (stream_head == 37){
-				stream_head = 0;
-			}
-			else{
-				stream_head++;
-			}
+			if (stream_head == 37)	stream_head = 0;
+			else					stream_head++;
 		}
 	}
 
@@ -478,7 +498,6 @@ void loop() {
 		fftmath();
 		helmet_backgrounds();
 	}
-
 
 	SerialUpdate();
 
@@ -570,15 +589,13 @@ void blur_cust(uint16_t i, CHSV* color, uint8_t blur_rate){
 
 boolean read_emot_Array(uint8_t x, uint8_t y){
 
-	//draw the ^ ^
-	if (glove1.finger1){
-		if (x == 1 && y == 6) return true;
+	//draw the ^ ^ or ^ - or - ^ for winking
+	if ((glove1.finger1 || glove1.finger2) && leading_glove == 0){
+		if (x == 1 && y == 5) return true;
 		if (x == 2 && y == 5) return true;
 		if (x == 3 && y == 5) return true;
 		if (x == 4 && y == 5) return true;
 		if (x == 5 && y == 5) return true;
-
-
 	}
 	else{
 		if (x == 1 && y == 5) return true;
@@ -588,25 +605,41 @@ boolean read_emot_Array(uint8_t x, uint8_t y){
 		if (x == 5 && y == 5) return true;
 	}
 
-	if (x == 10 && y == 5) return true;
-	if (x == 11 && y == 6) return true;
-	if (x == 12 && y == 7) return true;
-	if (x == 13 && y == 6) return true;
-	if (x == 14 && y == 5) return true;
+	if ((glove0.finger1 || glove0.finger2) && leading_glove == 1){
+		if (x == 10 && y == 5) return true;
+		if (x == 11 && y == 5) return true;
+		if (x == 12 && y == 5) return true;
+		if (x == 13 && y == 5) return true;
+		if (x == 14 && y == 5) return true;
+	}
+	else{
+		if (x == 10 && y == 5) return true;
+		if (x == 11 && y == 6) return true;
+		if (x == 12 && y == 7) return true;
+		if (x == 13 && y == 6) return true;
+		if (x == 14 && y == 5) return true;
+	}
+
 
 	uint8_t newsmile = 0;
 
 	if (menu_mode == MENU_HELMET_EMOTICON_ON_SOUND){
-		newsmile = qadd8(FFTdisplayValue1, scale8(FFTdisplayValue1, FFTdisplayValue1));
+		//unmute on finger press
+		if (glove0.finger1 || glove0.finger2 || glove1.finger1 || glove1.finger2){
+			newsmile = qadd8(FFTdisplayValue1, scale8(FFTdisplayValue1, FFTdisplayValue1));
+		}
 	}
 	else if (menu_mode == MENU_HELMET_EMOTICON_ON_MOTION){
-
-		newsmile = glove0.gloveY;
-
+		if ((glove0.finger1 || glove0.finger2) && leading_glove == 0) newsmile = max(-4 + glove0.gloveY, 0) * 30;
+		else if ((glove1.finger1 || glove1.finger2) && leading_glove == 1) newsmile = max(-4 + glove1.gloveY, 0) * 30;
 	}
 	else if (menu_mode == MENU_HELMET_EMOTICON_ON_BUTTON){
-		if (glove0.finger1) newsmile = 4;
-		else newsmile = 0;
+		if (glove0.finger1){
+			newsmile = 0;
+		}
+		else {
+			newsmile = 255;
+		}
 	}
 
 	uint8_t smile_open = scale8(newsmile, 4);

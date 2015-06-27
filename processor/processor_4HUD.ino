@@ -506,9 +506,12 @@ void menu_map(uint8_t direction){
 			case HAND_DIRECTION_RIGHT:
 				break;
 			case HAND_DIRECTION_UP:
-				menu_mode = MENU_HELMET_EMOTICON_ON_BUTTON;
+				//menu_mode = MENU_HELMET_EMOTICON_ON_BUTTON;
 				break;
 			case HAND_DIRECTION_DOWN:
+				//menu_mode = MENU_HELMET_EMOTICON_ON_MOTION;
+				break;
+			case HAND_DIRECTION_SHORT_PRESS:
 				menu_mode = MENU_HELMET_EMOTICON_ON_MOTION;
 				break;
 			}
@@ -522,9 +525,12 @@ void menu_map(uint8_t direction){
 			case HAND_DIRECTION_RIGHT:
 				break;
 			case HAND_DIRECTION_UP:
-				menu_mode = MENU_HELMET_EMOTICON_ON_SOUND;
+				//menu_mode = MENU_HELMET_EMOTICON_ON_SOUND;
 				break;
 			case HAND_DIRECTION_DOWN:
+				//menu_mode = MENU_HELMET_EMOTICON_ON_BUTTON;
+				break;
+			case HAND_DIRECTION_SHORT_PRESS:
 				menu_mode = MENU_HELMET_EMOTICON_ON_BUTTON;
 				break;
 			}
@@ -567,9 +573,17 @@ void menu_map(uint8_t direction){
 			switch (direction){
 			case HAND_DIRECTION_LEFT:
 				color2 = CHSV(HUE_RED, 255, 255);
+				if (disc0.disc_mode == DISC_MODE_OFF){
+					cust_Startup_color = true;
+					color1 = CHSV(HUE_RED, 255, 255);
+				}
 				break;
 			case HAND_DIRECTION_RIGHT:
 				color1 = CHSV(HUE_RED, 255, 255);
+				if (disc0.disc_mode == DISC_MODE_OFF){
+					cust_Startup_color = true;
+					color2 = CHSV(HUE_RED, 255, 255);
+				}
 				break;
 			case HAND_DIRECTION_UP:
 				menu_mode = MENU_PINK;
@@ -583,10 +597,18 @@ void menu_map(uint8_t direction){
 		case MENU_ORANGE:
 			switch (direction){
 			case HAND_DIRECTION_LEFT:
-				color2 = CHSV(30, 255, 255);
+				color2 = CHSV(HUE_ORANGE, 255, 255);
+				if (disc0.disc_mode == DISC_MODE_OFF){
+					cust_Startup_color = true;
+					color1 = CHSV(HUE_ORANGE, 255, 255);
+				}
 				break;
 			case HAND_DIRECTION_RIGHT:
-				color1 = CHSV(30, 255, 255);
+				color1 = CHSV(HUE_ORANGE, 255, 255);
+				if (disc0.disc_mode == DISC_MODE_OFF){
+					cust_Startup_color = true;
+					color2 = CHSV(HUE_ORANGE, 255, 255);
+				}
 				break;
 			case HAND_DIRECTION_UP:
 				menu_mode = MENU_RED;
@@ -600,9 +622,17 @@ void menu_map(uint8_t direction){
 			switch (direction){
 			case HAND_DIRECTION_LEFT:
 				color2 = CHSV(HUE_YELLOW, 255, 255);
+				if (disc0.disc_mode == DISC_MODE_OFF){
+					cust_Startup_color = true;
+					color1 = CHSV(HUE_YELLOW, 255, 255);
+				}
 				break;
 			case HAND_DIRECTION_RIGHT:
 				color1 = CHSV(HUE_YELLOW, 255, 255);
+				if (disc0.disc_mode == DISC_MODE_OFF){
+					cust_Startup_color = true;
+					color2 = CHSV(HUE_YELLOW, 255, 255);
+				}
 				break;
 			case HAND_DIRECTION_UP:
 				menu_mode = MENU_ORANGE;
@@ -617,9 +647,17 @@ void menu_map(uint8_t direction){
 			switch (direction){
 			case HAND_DIRECTION_LEFT:
 				color2 = CHSV(HUE_GREEN, 255, 255);
+				if (disc0.disc_mode == DISC_MODE_OFF){
+					cust_Startup_color = true;
+					color1 = CHSV(HUE_GREEN, 255, 255);
+				}
 				break;
 			case HAND_DIRECTION_RIGHT:
 				color1 = CHSV(HUE_GREEN, 255, 255);
+				if (disc0.disc_mode == DISC_MODE_OFF){
+					cust_Startup_color = true;
+					color2 = CHSV(HUE_GREEN, 255, 255);
+				}
 				break;
 			case HAND_DIRECTION_UP:
 				menu_mode = MENU_YELLOW;
@@ -635,9 +673,17 @@ void menu_map(uint8_t direction){
 			switch (direction){
 			case HAND_DIRECTION_LEFT:
 				color2 = CHSV(HUE_AQUA, 255, 255);
+				if (disc0.disc_mode == DISC_MODE_OFF){
+					cust_Startup_color = true;
+					color1 = CHSV(HUE_AQUA, 255, 255);
+				}
 				break;
 			case HAND_DIRECTION_RIGHT:
 				color1 = CHSV(HUE_AQUA, 255, 255);
+				if (disc0.disc_mode == DISC_MODE_OFF){
+					cust_Startup_color = true;
+					color2 = CHSV(HUE_AQUA, 255, 255);
+				}
 				break;
 			case HAND_DIRECTION_UP:
 				menu_mode = MENU_GREEN;
@@ -652,9 +698,17 @@ void menu_map(uint8_t direction){
 			switch (direction){
 			case HAND_DIRECTION_LEFT:
 				color2 = CHSV(HUE_BLUE, 255, 255);
+				if (disc0.disc_mode == DISC_MODE_OFF){
+					cust_Startup_color = true;
+					color1 = CHSV(HUE_BLUE, 255, 255);
+				}
 				break;
 			case HAND_DIRECTION_RIGHT:
 				color1 = CHSV(HUE_BLUE, 255, 255);
+				if (disc0.disc_mode == DISC_MODE_OFF){
+					cust_Startup_color = true;
+					color2 = CHSV(HUE_BLUE, 255, 255);
+				}
 				break;
 			case HAND_DIRECTION_UP:
 				menu_mode = MENU_CYAN;
@@ -668,9 +722,17 @@ void menu_map(uint8_t direction){
 			switch (direction){
 			case HAND_DIRECTION_LEFT:
 				color2 = CHSV(HUE_PURPLE, 255, 255);
+				if (disc0.disc_mode == DISC_MODE_OFF){
+					cust_Startup_color = true;
+					color1 = CHSV(HUE_PURPLE, 255, 255);
+				}
 				break;
 			case HAND_DIRECTION_RIGHT:
 				color1 = CHSV(HUE_PURPLE, 255, 255);
+				if (disc0.disc_mode == DISC_MODE_OFF){
+					cust_Startup_color = true;
+					color2 = CHSV(HUE_PURPLE, 255, 255);
+				}
 				break;
 			case HAND_DIRECTION_UP:
 				menu_mode = MENU_BLUE;
@@ -684,9 +746,17 @@ void menu_map(uint8_t direction){
 			switch (direction){
 			case HAND_DIRECTION_LEFT:
 				color2 = CHSV(HUE_PINK, 255, 255);
+				if (disc0.disc_mode == DISC_MODE_OFF){
+					cust_Startup_color = true;
+					color1 = CHSV(HUE_PINK, 255, 255);
+				}
 				break;
 			case HAND_DIRECTION_RIGHT:
 				color1 = CHSV(HUE_PINK, 255, 255);
+				if (disc0.disc_mode == DISC_MODE_OFF){
+					cust_Startup_color = true;
+					color2 = CHSV(HUE_PINK, 255, 255);
+				}
 				break;
 			case HAND_DIRECTION_UP:
 				menu_mode = MENU_PURPLE;
