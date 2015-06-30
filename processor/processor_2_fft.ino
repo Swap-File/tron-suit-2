@@ -1,7 +1,7 @@
 inline void fftmath(void){
 
 	for (uint8_t i = 0; i < 16; i++) {
-		uint16_t n = 1000 * fft256_1.read((i * 2), (i * 2) + 2);
+		int16_t n = 1000 * fft256_1.read((i * 2), (i * 2) + 2);
 
 		//de-emphasize lower frequencies
 		switch (i){

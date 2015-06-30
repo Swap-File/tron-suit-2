@@ -2,7 +2,7 @@
 void setup() {
 
 	display.begin(SSD1306_SWITCHCAPVCC);
-	display.setRotation(2);
+	//display.setRotation(2);
 	display.display();
 
 	//noise init
@@ -51,10 +51,11 @@ void loop() {
 
 	//ringing for incoming calls
 	sms_blackout = false;
-	if (ring_timer + RINGTIMEOUT > millis() || (ring_timer + RINGTIMEOUT * 2 < millis() & ring_timer + RINGTIMEOUT * 3 > millis())){
-		if ((millis() >> 6) & 0x01)	sms_blackout = true;
+	if (ring_timer + RINGTIMEOUT > millis()){
+		if (ring_timer + RINGTIMEOUT * 2 < millis() & ring_timer + RINGTIMEOUT * 3 > millis()){  //sets on/off cycle
+			if ((millis() >> 6) & 0x01)	sms_blackout = true;  //this sets pulsing speed
+		}
 	}
-
 
 
 
@@ -129,21 +130,17 @@ void loop() {
 	}
 
 	//check for gestures
-	if (glove1.finger4 == 1 || glove0.finger4 == 1){
-
+	//if (glove1.finger4 == 1 || glove0.finger4 == 1){
+		//menu_map(HAND_BACK);
 		//force out of swipe mode
-		if (disc0.disc_mode != DISC_MODE_IDLE && disc0.disc_mode != DISC_MODE_OFF)	disc0.disc_mode = DISC_MODE_IDLE;
-
+		//if (disc0.disc_mode != DISC_MODE_IDLE && disc0.disc_mode != DISC_MODE_OFF)	disc0.disc_mode = DISC_MODE_IDLE;
 		//go to root menu
-		menu_mode = MENU_DEFAULT;
-
+		//menu_mode = MENU_DEFAULT;
 		//clear screen
-		scroll_mode = SCROLL_MODE_COMPLETE;
-
+		//scroll_mode = SCROLL_MODE_COMPLETE;
 		//reset 
-		if (z_noise_modifier == 0) z_noise_modifier = 127;
-
-	}
+		//if (z_noise_modifier == 0) z_noise_modifier = 127;
+	//}
 
 	//draw most of hud, last bit will be drawn in external helmet bit
 	draw_HUD();
@@ -361,10 +358,10 @@ void loop() {
 
 	//swap to camera if in cam mode
 	if (glove1.camera_on){
-		actual_output[128] = glove1.output_rgb_led;
+		actual_output[129] = glove1.output_rgb_led;
 	}
 	if (glove0.camera_on){
-		actual_output[129] = glove0.output_rgb_led;
+		actual_output[128] = glove0.output_rgb_led;
 	}
 	//blank hud if in a countdown
 	if (millis() - left_timer < 100 || sms_blackout){
@@ -630,10 +627,10 @@ boolean read_emot_Array(uint8_t x, uint8_t y){
 		}
 	}
 	else if (menu_mode == MENU_HELMET_EMOTICON_ON_MOTION){
-		if ((glove0.finger1 || glove0.finger2) && leading_glove == 0) newsmile =glove0.gloveY * 30;
-		else if ((glove1.finger1 || glove1.finger2) && leading_glove == 1) newsmile =  glove1.gloveY * 30;
+		if ((glove0.finger1 || glove0.finger2) && leading_glove == 0) newsmile = glove0.gloveY * 30;
+		else if ((glove1.finger1 || glove1.finger2) && leading_glove == 1) newsmile = glove1.gloveY * 30;
 	}
-	
+
 	uint8_t smile_open = scale8(newsmile, 4);
 
 	//bottom row

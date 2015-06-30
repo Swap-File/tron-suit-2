@@ -27,6 +27,7 @@
 #define HAND_SHORT_PRESS_SINGLE 5
 #define HAND_SHORT_PRESS_DOUBLE 6
 #define HAND_SHORT_PRESS_TRIPLE 7
+#define HAND_BACK 8
 
 #define FFT_MODE_HORZ_BARS_LEFT 0
 #define FFT_MODE_HORZ_BARS_RIGHT 1
@@ -258,7 +259,7 @@ const uint8_t circle_y[30] = { 0, 0, 0, 1, 1, 2, 3, 4, 5, 6, 7, 8, 8, 9, 9, 9, 9
 #define static_menu_location_x 18
 #define static_menu_location_y 10
 
-#define inner_disc_location_x 1
+#define inner_disc_location_x 10
 #define inner_disc_location_y 30
 
 

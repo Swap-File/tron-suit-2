@@ -206,7 +206,10 @@ inline void onPacket2(const uint8_t* buffer, size_t size)
 			//upper 4 bits are a counter, lower 4 are data
 			if (disc0.last_requested_mode != disc0.requested_mode){
 
-				if (disc0.disc_mode == DISC_MODE_OFF && (disc0.requested_mode & 0x0F) == DISC_MODE_OPENING) {
+				//reset colors if flipped
+				if (disc0.requested_mode == DISC_MODE_IDLE)  disc0.active_primary = true;
+
+				if (disc0.disc_mode == DISC_MODE_OFF && (disc0.requested_mode & 0x0F) == DISC_MODE_OPENING && menu_mode == MENU_PWR_IN) {
 					current_brightness = 255;
 					startup_time = millis();
 					for (uint8_t current_pixel = 0; current_pixel < 38; current_pixel++) {
@@ -239,7 +242,7 @@ inline void onPacket2(const uint8_t* buffer, size_t size)
 
 			uint8_t temp = 29 - scale8(disc0.current_index, 30);
 			//swiping control code
-			if (disc0.disc_mode == DISC_MODE_SWIPE){
+			if (disc0.disc_mode == DISC_MODE_SWIPE && disc0.current_mag < 16){
 
 				if (disc0.last_index != temp){
 					//color spincode ccw
@@ -600,29 +603,37 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 
 			}
 
-			if (!current_glove->finger1 &&  !current_glove->finger2 && !current_glove->finger3 && current_glove->gesture_in_progress == true){
-				if (current_glove->gloveY <= 0)      menu_map(HAND_DIRECTION_DOWN);
+			if (!current_glove->finger1 &&  !current_glove->finger2 && !current_glove->finger3 && !current_glove->finger4 && current_glove->gesture_in_progress == true){
+				
+				if(current_glove->gloveY <= 0)      menu_map(HAND_DIRECTION_DOWN);
 				else if (current_glove->gloveY >= 7) menu_map(HAND_DIRECTION_UP);
 				else if (current_glove->gloveX <= 0) menu_map(HAND_DIRECTION_RIGHT);
 				else if (current_glove->gloveX >= 7) menu_map(HAND_DIRECTION_LEFT);
 				else {
+					if (current_glove->gesture_finger == 4) menu_map(HAND_BACK);
 					//leading gloves count only
 					if ((current_glove == &glove1 && leading_glove == 1) || (current_glove == &glove0 && leading_glove == 0)){
+
 						current_glove->finger_timer2 = millis();  //reset the press timer to stop counting
 						if (millis() - current_glove->finger_timer < 200) current_glove->finger_presses++;  //presses under 200ms count
+						Serial.println(current_glove->finger_presses);
 					}
 				}
 			}
 
 			if (millis() - current_glove->finger_timer2 > 300){ //max 300ms between presses then process it
-				if (current_glove->finger_presses == 1)	menu_map(HAND_SHORT_PRESS_SINGLE);
-				else if (current_glove->finger_presses == 2) menu_map(HAND_SHORT_PRESS_DOUBLE);
-				else if (current_glove->finger_presses == 3) menu_map(HAND_SHORT_PRESS_TRIPLE);
+				if (current_glove->gesture_finger != 4){
+					if (current_glove->finger_presses == 1)	menu_map(HAND_SHORT_PRESS_SINGLE);
+					else if (current_glove->finger_presses == 2) menu_map(HAND_SHORT_PRESS_DOUBLE);
+					else if (current_glove->finger_presses == 3) menu_map(HAND_SHORT_PRESS_TRIPLE);
+				}
+				else{
+					if (current_glove->finger_presses >= 3) Serial.println("Master Reset");
+				}
 				current_glove->finger_presses = 0;
 			}
-
 			//if a single finger is pressed down....
-			if (current_glove->finger1 || current_glove->finger2 || current_glove->finger3){
+			if (current_glove->finger1 || current_glove->finger2 || current_glove->finger3 || current_glove->finger4){
 				if (current_glove->gesture_in_progress == false){
 					current_glove->finger_timer = millis();
 					current_glove->gesture_in_progress = true;

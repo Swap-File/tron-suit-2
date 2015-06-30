@@ -63,7 +63,35 @@ inline void draw_HUD(void){
 	draw_disc(scale8(disc0.current_index, 30), disc0.current_mag, inner_disc_location_x, inner_disc_location_y);
 
 
+	//INDICATORS!
+	display.setCursor(inner_disc_location_x-10, inner_disc_location_y);
+
+	print_glove((void*)&glove0);
+
+	display.setCursor(inner_disc_location_x +15, inner_disc_location_y);
+	print_glove((void*)&glove1);
+
+
+
 }
+
+void print_glove(void *  first_glove){
+	if (((GLOVE *)first_glove)->camera_on)		display.print('C');
+	else if(((GLOVE *)first_glove)->finger1)	finger(first_glove, 1);
+	else if (((GLOVE *)first_glove)->finger2)	finger(first_glove, 2);
+	else if (((GLOVE *)first_glove)->finger3)	finger(first_glove, 3);
+	else if (((GLOVE *)first_glove)->finger4)	finger(first_glove, 4);
+	else										display.print(' ');
+}
+
+void finger(void * glove_f, uint8_t num){
+	if (((GLOVE *)glove_f)->gloveY <= 0)		display.write(25); //ascii arrows
+	else if (((GLOVE *)glove_f)->gloveY >= 7)	display.write(24);
+	else if (((GLOVE *)glove_f)->gloveX <= 0)	display.write(26);
+	else if (((GLOVE *)glove_f)->gloveX >= 7)	display.write(27);
+	else										display.print(num);
+}
+
 
 
 boolean read_menu_pixel(uint8_t x, uint8_t y){
@@ -190,7 +218,7 @@ void menu_map(uint8_t direction){
 			menu_mode = MENU_CAMON;
 			break;
 		case HAND_DIRECTION_DOWN:
-
+			menu_mode = MENU_HELMET_EMOTICON_ON_SOUND;
 			break;
 		}
 	}
@@ -202,6 +230,7 @@ void menu_map(uint8_t direction){
 		case MENU_HELMET_FFT_ON_H:
 			scroll_mode = SCROLL_MODE_COMPLETE;
 			switch (direction){
+			case HAND_BACK: menu_mode = MENU_HELMET_FFT;	break;
 			case HAND_DIRECTION_LEFT:
 				fft_mode = FFT_MODE_HORZ_BARS_LEFT;
 				menu_scroll_end_left();
@@ -226,6 +255,7 @@ void menu_map(uint8_t direction){
 		case MENU_HELMET_FFT_ON_V:
 			scroll_mode = SCROLL_MODE_COMPLETE;
 			switch (direction){
+			case HAND_BACK: menu_mode = MENU_HELMET_FFT;	break;
 			case HAND_DIRECTION_LEFT:
 				menu_mode = MENU_HELMET_FFT_ON_H;
 				fft_mode = FFT_MODE_HORZ_BARS_STATIC;
@@ -250,6 +280,7 @@ void menu_map(uint8_t direction){
 
 		case MENU_HELMET_FFT_ON_H_or_V:
 			switch (direction){
+			case HAND_BACK: menu_mode = MENU_HELMET_FFT;	break;
 			case HAND_DIRECTION_LEFT:
 				fft_mode = FFT_MODE_HORZ_BARS_STATIC;
 				menu_mode = MENU_HELMET_FFT_ON_H; //new menu screen 
@@ -278,12 +309,11 @@ void menu_map(uint8_t direction){
 		case MENU_HELMET:
 			switch (direction){
 			case HAND_DIRECTION_LEFT:
-				break;
 			case HAND_DIRECTION_RIGHT:
 				menu_mode = MENU_HELMET_FFT; // MENU_FFT;
 				break;
 			case HAND_DIRECTION_UP:
-				menu_mode = MENU_PWR; //new menu screen 
+				menu_mode = MENU_COLOR; //new menu screen 
 				break;
 			case HAND_DIRECTION_DOWN:
 				menu_mode = MENU_DISC; //new menu screen 
@@ -295,7 +325,6 @@ void menu_map(uint8_t direction){
 		case MENU_DISC:
 			switch (direction){
 			case HAND_DIRECTION_LEFT:
-				break;
 			case HAND_DIRECTION_RIGHT:
 				menu_mode = MENU_SPIN;
 				break;
@@ -311,7 +340,6 @@ void menu_map(uint8_t direction){
 		case MENU_CAMERA:
 			switch (direction){
 			case HAND_DIRECTION_LEFT:
-				break;
 			case HAND_DIRECTION_RIGHT:
 				menu_mode = MENU_CAMON;
 				break;
@@ -327,7 +355,6 @@ void menu_map(uint8_t direction){
 		case MENU_TXT:
 			switch (direction){
 			case HAND_DIRECTION_LEFT:
-				break;
 			case HAND_DIRECTION_RIGHT:
 				menu_mode = MENU_TXT_DISPLAY;
 				break;
@@ -343,7 +370,6 @@ void menu_map(uint8_t direction){
 		case MENU_PWR:
 			switch (direction){
 			case HAND_DIRECTION_LEFT:
-				break;
 			case HAND_DIRECTION_RIGHT:
 				menu_mode = MENU_PWR_IN;
 				break;
@@ -359,7 +385,6 @@ void menu_map(uint8_t direction){
 		case MENU_COLOR:
 			switch (direction){
 			case HAND_DIRECTION_LEFT:
-				break;
 			case HAND_DIRECTION_RIGHT:
 				menu_mode = MENU_RED;
 				break;
@@ -373,17 +398,30 @@ void menu_map(uint8_t direction){
 			break;
 
 		case MENU_PWR_IN:
+			switch (direction){
+			case HAND_BACK: menu_mode = MENU_PWR;	break;
+			}break;
 		case MENU_TXT_ON:
+			switch (direction){
+			case HAND_BACK: menu_mode = MENU_TXT_DISPLAY;	break;
+			}break;
 		case MENU_CAMON:
+			switch (direction){
+			case HAND_BACK: menu_mode = MENU_CAMERA;	break;
+			}break;
 		case MENU_SPIN:
+			switch (direction){
+			case HAND_BACK: menu_mode = MENU_DISC;	break;
+			}break;
 		case MENU_HELMET_NOISE_ON:
-			//dead end menus
-			break;
+			switch (direction){
+			case HAND_BACK: menu_mode = MENU_HELMET_NOISE;	break;
+			}break;
 
 		case MENU_TXT_DISPLAY:
 			switch (direction){
+			case HAND_BACK: menu_mode = MENU_TXT;	break;
 			case HAND_DIRECTION_LEFT:
-				break;
 			case HAND_DIRECTION_RIGHT:
 				menu_mode = MENU_TXT_ON;
 				break;
@@ -398,8 +436,8 @@ void menu_map(uint8_t direction){
 
 		case MENU_SMS_LOAD:
 			switch (direction){
+			case HAND_BACK: menu_mode = MENU_TXT;	break;
 			case HAND_DIRECTION_LEFT:
-				break;
 			case HAND_DIRECTION_RIGHT:
 				live_txt = front_sms; //load it
 				menu_mode = MENU_TXT_DISPLAY;
@@ -414,8 +452,8 @@ void menu_map(uint8_t direction){
 			break;
 		case MENU_WWW_LOAD:
 			switch (direction){
+			case HAND_BACK: menu_mode = MENU_TXT;	break;
 			case HAND_DIRECTION_LEFT:
-				break;
 			case HAND_DIRECTION_RIGHT:
 				live_txt = www_message; //load it
 				menu_mode = MENU_TXT_DISPLAY;
@@ -431,8 +469,8 @@ void menu_map(uint8_t direction){
 
 		case MENU_STATS_LOAD:
 			switch (direction){
+			case HAND_BACK: menu_mode = MENU_TXT;	break;
 			case HAND_DIRECTION_LEFT:
-				break;
 			case HAND_DIRECTION_RIGHT:
 				live_txt = stats_message; ///load it
 				menu_mode = MENU_TXT_DISPLAY;
@@ -448,8 +486,8 @@ void menu_map(uint8_t direction){
 
 		case MENU_HELMET_FFT:
 			switch (direction){
+			case HAND_BACK: menu_mode = MENU_HELMET;	break;
 			case HAND_DIRECTION_LEFT:
-				break;
 			case HAND_DIRECTION_RIGHT:
 				menu_mode = MENU_HELMET_FFT_ON_H_or_V;
 				background_mode = BACKGROUND_MODE_FFT;
@@ -466,8 +504,8 @@ void menu_map(uint8_t direction){
 
 		case MENU_HELMET_NOISE:
 			switch (direction){
+			case HAND_BACK: menu_mode = MENU_HELMET;	break;
 			case HAND_DIRECTION_LEFT:
-				break;
 			case HAND_DIRECTION_RIGHT:
 				menu_mode = MENU_HELMET_NOISE_ON;
 				background_mode = BACKGROUND_MODE_NOISE;
@@ -483,8 +521,8 @@ void menu_map(uint8_t direction){
 
 		case MENU_HELMET_EMOTICON:
 			switch (direction){
+			case HAND_BACK: menu_mode = MENU_HELMET;	break;
 			case HAND_DIRECTION_LEFT:
-				break;
 			case HAND_DIRECTION_RIGHT:
 				menu_mode = MENU_HELMET_EMOTICON_ON_SOUND;
 				break;
@@ -499,14 +537,7 @@ void menu_map(uint8_t direction){
 
 		case MENU_HELMET_EMOTICON_ON_SOUND:
 			switch (direction){
-			case HAND_DIRECTION_LEFT:
-				break;
-			case HAND_DIRECTION_RIGHT:
-				break;
-			case HAND_DIRECTION_UP:
-				break;
-			case HAND_DIRECTION_DOWN:
-				break;
+			case HAND_BACK: menu_mode = MENU_HELMET_EMOTICON;	break;
 			case HAND_SHORT_PRESS_DOUBLE:
 				menu_mode = MENU_HELMET_EMOTICON_ON_MOTION;
 				break;
@@ -516,14 +547,7 @@ void menu_map(uint8_t direction){
 
 		case MENU_HELMET_EMOTICON_ON_MOTION:
 			switch (direction){
-			case HAND_DIRECTION_LEFT:
-				break;
-			case HAND_DIRECTION_RIGHT:
-				break;
-			case HAND_DIRECTION_UP:
-				break;
-			case HAND_DIRECTION_DOWN:
-				break;
+			case HAND_BACK: menu_mode = MENU_HELMET_EMOTICON;	break;
 			case HAND_SHORT_PRESS_DOUBLE:
 				menu_mode = MENU_HELMET_EMOTICON_ON_SOUND;
 				break;
@@ -531,11 +555,11 @@ void menu_map(uint8_t direction){
 			break;
 
 
-	
+
 		case MENU_HELMET_PONG:
 			switch (direction){
+			case HAND_BACK: menu_mode = MENU_HELMET;	break;
 			case HAND_DIRECTION_LEFT:
-				break;
 			case HAND_DIRECTION_RIGHT:
 				menu_mode = MENU_HELMET_PONG_IN;
 				break;
@@ -552,6 +576,7 @@ void menu_map(uint8_t direction){
 
 		case MENU_RED:
 			switch (direction){
+			case HAND_BACK: menu_mode = MENU_COLOR;	break;
 			case HAND_DIRECTION_LEFT:
 				color2 = CHSV(HUE_RED, 255, 255);
 				if (disc0.disc_mode == DISC_MODE_OFF){
@@ -577,6 +602,7 @@ void menu_map(uint8_t direction){
 
 		case MENU_ORANGE:
 			switch (direction){
+			case HAND_BACK: menu_mode = MENU_COLOR;	break;
 			case HAND_DIRECTION_LEFT:
 				color2 = CHSV(HUE_ORANGE, 255, 255);
 				if (disc0.disc_mode == DISC_MODE_OFF){
@@ -601,6 +627,7 @@ void menu_map(uint8_t direction){
 			break;
 		case MENU_YELLOW:
 			switch (direction){
+			case HAND_BACK: menu_mode = MENU_COLOR;	break;
 			case HAND_DIRECTION_LEFT:
 				color2 = CHSV(HUE_YELLOW, 255, 255);
 				if (disc0.disc_mode == DISC_MODE_OFF){
@@ -626,6 +653,7 @@ void menu_map(uint8_t direction){
 
 		case MENU_GREEN:
 			switch (direction){
+			case HAND_BACK: menu_mode = MENU_COLOR;	break;
 			case HAND_DIRECTION_LEFT:
 				color2 = CHSV(HUE_GREEN, 255, 255);
 				if (disc0.disc_mode == DISC_MODE_OFF){
@@ -652,6 +680,7 @@ void menu_map(uint8_t direction){
 
 		case MENU_CYAN:
 			switch (direction){
+			case HAND_BACK: menu_mode = MENU_COLOR;	break;
 			case HAND_DIRECTION_LEFT:
 				color2 = CHSV(HUE_AQUA, 255, 255);
 				//cyan is normal! shut off custom startup.
@@ -663,7 +692,7 @@ void menu_map(uint8_t direction){
 				color1 = CHSV(HUE_AQUA, 255, 255);
 				//cyan is normal! shut off custom startup.
 				if (disc0.disc_mode == DISC_MODE_OFF){
-					cust_Startup_color = false;  
+					cust_Startup_color = false;
 				}
 				break;
 			case HAND_DIRECTION_UP:
@@ -677,6 +706,7 @@ void menu_map(uint8_t direction){
 
 		case MENU_BLUE:
 			switch (direction){
+			case HAND_BACK: menu_mode = MENU_COLOR;	break;
 			case HAND_DIRECTION_LEFT:
 				color2 = CHSV(HUE_BLUE, 255, 255);
 				if (disc0.disc_mode == DISC_MODE_OFF){
@@ -701,6 +731,7 @@ void menu_map(uint8_t direction){
 			break;
 		case MENU_PURPLE:
 			switch (direction){
+			case HAND_BACK: menu_mode = MENU_COLOR;	break;
 			case HAND_DIRECTION_LEFT:
 				color2 = CHSV(HUE_PURPLE, 255, 255);
 				if (disc0.disc_mode == DISC_MODE_OFF){
@@ -725,6 +756,7 @@ void menu_map(uint8_t direction){
 			break;
 		case MENU_PINK:
 			switch (direction){
+			case HAND_BACK: menu_mode = MENU_COLOR;	break;
 			case HAND_DIRECTION_LEFT:
 				color2 = CHSV(HUE_PINK, 255, 255);
 				if (disc0.disc_mode == DISC_MODE_OFF){

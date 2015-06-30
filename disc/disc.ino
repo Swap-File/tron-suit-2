@@ -23,9 +23,9 @@
 #define OUTER_STRIP_OFFSET 10
 
 //force values
-#define SWIPE_ENTER_FORCE 5000
+#define SWIPE_ENTER_FORCE 9000
 #define SWIPE_MAINTAIN_FORCE 3000
-#define SWIPE_EXIT_Z_FORCE 8000
+#define SWIPE_EXIT_Z_FORCE 9000
 
 MPU6050 mpu;
 
@@ -113,7 +113,7 @@ uint8_t last_packet_sequence_number = 0;
 Metro FPSdisplay = Metro(1000);
 
 uint32_t cooldown = 0;
-
+uint32_t cooldown2 = 0;
 //logging data
 uint8_t cpu_usage = 0;
 uint32_t idle_microseconds = 0;
@@ -340,10 +340,6 @@ void loop() {
 		float xy_accel_magnitude = sqrt(((long)aaReal.x)*((long)aaReal.x) + ((long)aaReal.y)*((long)aaReal.y));
 		xy_accel_magnitude_smoothed = xy_accel_magnitude_smoothed * .8 + xy_accel_magnitude * .2;
 
-		boolean cooldowncomplete = false;
-		if (millis() - cooldown > 250) cooldowncomplete = true;
-
-		
 		//mode changing code here
 
 		if (last_disc_mode != disc_mode && disc_mode == DISC_MODE_IDLE){
@@ -351,11 +347,11 @@ void loop() {
 			inner_magnitude_displayed = 16;  
 		}
 
-		if (disc_mode == DISC_MODE_OFF){
+		if (disc_mode == DISC_MODE_OFF && (millis() - cooldown > 300)){
 			outer_magnitude_displayed = 0;
 			inner_magnitude_displayed = 0;  //blanked
-	
-			if (xy_accel_magnitude > SWIPE_ENTER_FORCE && cooldowncomplete){
+			
+			if (xy_accel_magnitude > SWIPE_ENTER_FORCE ){
 
 				inner_index_displayed = saved_inner_index_acceleration_29 = inner_acceleration_index_29;
 				outer_index_displayed = saved_outer_index_acceleration_29 = outer_acceleration_index_29;
@@ -363,7 +359,7 @@ void loop() {
 				saved_outer_index_displayed_255 = live_acceleration_index_255 + INNER_STRIP_OFFSET;
 
 				requested_disc_mode = DISC_MODE_OPENING;
-				disc_mode = 6;
+				cooldown = millis();
 				fresh_mode++;
 			}
 		}
@@ -371,11 +367,14 @@ void loop() {
 
 
 		if (disc_mode == DISC_MODE_SWIPE || disc_mode == DISC_MODE_IDLE){
-			if (abs(aaReal.z) > SWIPE_EXIT_Z_FORCE && cooldowncomplete){
+
+			Serial.println(abs(aaReal.z));
+
+			if (abs(aaReal.z) > SWIPE_EXIT_Z_FORCE ){
 				requested_disc_mode = DISC_MODE_IDLE;
 				fresh_mode++;
 			}
-			if (xy_accel_magnitude > SWIPE_ENTER_FORCE && cooldowncomplete){
+			if (xy_accel_magnitude > SWIPE_ENTER_FORCE ){
 				saved_inner_index_acceleration_29 = inner_acceleration_index_29;
 				saved_outer_index_acceleration_29 = outer_acceleration_index_29;
 				saved_outer_index_displayed_255 = live_acceleration_index_255 + INNER_STRIP_OFFSET;
@@ -430,7 +429,7 @@ void loop() {
 		if (disc_mode == DISC_MODE_SWIPE){
 			//disable blur
 			blur_rate = 255;
-
+		
 			//stuff the streaming buffers with color data
 			for (uint8_t current_pixel = 0; current_pixel < 16; current_pixel++) {
 				color1_streaming[current_pixel] = color1;
