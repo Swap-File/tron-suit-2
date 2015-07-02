@@ -5,13 +5,13 @@ inline void fftmath(void){
 
 		//de-emphasize lower frequencies
 		switch (i){
-		case 0:  n = max(n - 150, 0); break;
+		case 0:  n = max(n - 100, 0); break;
 		case 1:  n = max(n - 50, 0);  break;
 		case 2:  n = max(n - 15, 0);  break;
 		case 3:  n = max(n - 10, 0);  break;
 		default: n = max(n - 3, 0);   break;
 		}
-
+	
 		//falloff controll
 		FFTdisplayValueMax16[i] = max(max(FFTdisplayValueMax16[i] * .98, n), 4);
 		FFTdisplayValue16[i] = constrain(map(n, 0, FFTdisplayValueMax16[i], 0, 255), 0, 255);

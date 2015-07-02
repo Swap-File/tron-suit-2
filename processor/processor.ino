@@ -28,6 +28,7 @@
 #define HAND_SHORT_PRESS_DOUBLE 6
 #define HAND_SHORT_PRESS_TRIPLE 7
 #define HAND_BACK 8
+#define HAND_SUIT_OFF 9
 
 #define FFT_MODE_HORZ_BARS_LEFT 0
 #define FFT_MODE_HORZ_BARS_RIGHT 1
@@ -38,7 +39,7 @@
 uint8_t fft_mode = FFT_MODE_HORZ_BARS_RIGHT;
 
 
-#define MENU_DEFAULT 1
+#define MENU_LOCKED 1
 
 #define MENU_HELMET_FFT_ON_H_or_V 2
 #define MENU_HELMET_FFT_ON_H 3
@@ -77,7 +78,7 @@ uint8_t fft_mode = FFT_MODE_HORZ_BARS_RIGHT;
 
 
 
-uint8_t menu_mode = MENU_DEFAULT;
+uint8_t menu_mode = MENU_LOCKED;
 
 #define DISC_MODE_SWIPE 3
 #define DISC_MODE_IDLE 2
@@ -267,7 +268,7 @@ CHSV color1 = CHSV(0, 255, 255);
 CHSV color2 = CHSV(64, 255, 255);
 
 int8_t flow_offset = 0;
-
+int8_t flow_offset2 = 0;
 #define GLOVE_DEADZONE 3000  //30 degrees
 #define GLOVE_MAXIMUM 30000 //90 degrees
 
@@ -444,4 +445,4 @@ uint8_t startup_mode_masking = 0;
 uint8_t startup_mode_masking_helmet = 0;
 
 boolean cust_Startup_color = false;
-
+uint8_t newsmile = 0;

@@ -1,6 +1,6 @@
 
 void setup() {
-
+	delay(1000);
 	display.begin(SSD1306_SWITCHCAPVCC);
 	//display.setRotation(2);
 	display.display();
@@ -15,7 +15,9 @@ void setup() {
 	for (int i = 0; i < NUM_STRIPS * NUM_LEDS_PER_STRIP; i++) {
 		actual_output[i] = CRGB(0, 0, 0);
 	}
-
+	for (int i = 0; i < 16; i++) {
+		FFTdisplayValueMax16[i] = 4;
+	}
 	//bump hardwareserial.cpp to 255
 	Serial.begin(115200);   //Debug
 	Serial1.begin(115200);  //Gloves	
@@ -129,18 +131,7 @@ void loop() {
 		gloveindicator[glove1.gloveX][7 - glove1.gloveY] = 100;
 	}
 
-	//check for gestures
-	//if (glove1.finger4 == 1 || glove0.finger4 == 1){
-		//menu_map(HAND_BACK);
-		//force out of swipe mode
-		//if (disc0.disc_mode != DISC_MODE_IDLE && disc0.disc_mode != DISC_MODE_OFF)	disc0.disc_mode = DISC_MODE_IDLE;
-		//go to root menu
-		//menu_mode = MENU_DEFAULT;
-		//clear screen
-		//scroll_mode = SCROLL_MODE_COMPLETE;
-		//reset 
-		//if (z_noise_modifier == 0) z_noise_modifier = 127;
-	//}
+
 
 	//draw most of hud, last bit will be drawn in external helmet bit
 	draw_HUD();
@@ -469,8 +460,9 @@ void loop() {
 	if (Flow.check()){
 
 		uint8_t curoff = quadwave8(flow_offset++);
+		uint8_t curoff2 = quadwave8(flow_offset2 += 2);
 		discwave = scale8(curoff, 16);
-		uint8_t suitwave = scale8(curoff, 38);
+		uint8_t suitwave = scale8(curoff2, 38);
 
 		//calculate current pixels and add to array
 		if (disc0.disc_mode == DISC_MODE_SWIPE){
@@ -483,8 +475,8 @@ void loop() {
 		else if (disc0.disc_mode == DISC_MODE_IDLE){
 
 			//to suit
-			stream1[stream_head] = map_hsv(suitwave, 0, 37, &color1, &color2);
-			stream2[stream_head] = map_hsv(suitwave, 0, 37, &color1, &color2);
+			stream1[stream_head] = map_hsv(curoff2, 0, 255, &color1, &color2);
+			stream2[stream_head] = map_hsv(curoff2, 0, 255, &color1, &color2);
 
 			if (stream_head == 37)	stream_head = 0;
 			else					stream_head++;
@@ -618,7 +610,7 @@ boolean read_emot_Array(uint8_t x, uint8_t y){
 	}
 
 
-	uint8_t newsmile = 0;
+	
 
 	if (menu_mode == MENU_HELMET_EMOTICON_ON_SOUND){
 		//unmute on finger press

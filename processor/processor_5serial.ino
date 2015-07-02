@@ -11,8 +11,8 @@ inline void SerialUpdate(void){
 		}
 		else{
 			if (last_discwave != discwave){
-				disc0.color1 = map_hsv(discwave, 0, 16, &color1, &color2);
-				disc0.color2 = map_hsv(discwave, 0, 16, &color1, &color2);
+				disc0.color1 = map_hsv(discwave, 0, 15, &color1, &color2);
+				disc0.color2 = map_hsv(discwave, 0, 15, &color1, &color2);
 
 				disc0.packet_sequence_number++;
 				last_discwave = discwave;
@@ -209,7 +209,7 @@ inline void onPacket2(const uint8_t* buffer, size_t size)
 				//reset colors if flipped
 				if (disc0.requested_mode == DISC_MODE_IDLE)  disc0.active_primary = true;
 
-				if (disc0.disc_mode == DISC_MODE_OFF && (disc0.requested_mode & 0x0F) == DISC_MODE_OPENING && menu_mode == MENU_PWR_IN) {
+				if (disc0.disc_mode == DISC_MODE_OFF && (disc0.requested_mode & 0x0F) == DISC_MODE_OPENING && menu_mode != MENU_LOCKED) {
 					current_brightness = 255;
 					startup_time = millis();
 					for (uint8_t current_pixel = 0; current_pixel < 38; current_pixel++) {
@@ -628,7 +628,7 @@ inline void onPacket1(const uint8_t* buffer, size_t size)
 					else if (current_glove->finger_presses == 3) menu_map(HAND_SHORT_PRESS_TRIPLE);
 				}
 				else{
-					if (current_glove->finger_presses >= 3) Serial.println("Master Reset");
+					if (current_glove->finger_presses >= 3) menu_map(HAND_SUIT_OFF);
 				}
 				current_glove->finger_presses = 0;
 			}
