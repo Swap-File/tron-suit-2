@@ -455,7 +455,7 @@ void loop() {
 			if (startup_mode_masking_helmet > 8)	startup_mode = STARTUP_MODE_COMPLETED;
 		}
 	}
-
+	 
 	//controls the streaming of the colors
 	if (Flow.check()){
 

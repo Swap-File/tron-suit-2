@@ -256,7 +256,7 @@ const uint8_t circle_y[30] = { 0, 0, 0, 1, 1, 2, 3, 4, 5, 6, 7, 8, 8, 9, 9, 9, 9
 
 #define hand_location_x 35
 #define hand_location_y 1
-
+ 
 #define static_menu_location_x 18
 #define static_menu_location_y 10
 

@@ -232,7 +232,7 @@ void menu_map(uint8_t direction){
 		case HAND_DIRECTION_DOWN:
 			menu_mode = MENU_HELMET_EMOTICON_ON_SOUND;
 			break;
-		}
+		} 
 	}
 	else if ((glove0.gesture_finger == 4 || glove1.gesture_finger == 4) && direction != HAND_BACK){
 		//blackhole these for now

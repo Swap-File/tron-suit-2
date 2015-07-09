@@ -2,7 +2,7 @@ inline void SerialUpdate(void){
 	if (DiscSend3.check()){
 
 		disc0.packet_beam--;
-
+		 
 		//calculate current pixels and add to array
 		if (disc0.disc_mode != DISC_MODE_IDLE){
 			//to disc
