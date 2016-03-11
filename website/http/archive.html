@@ -1,14 +1,14 @@
+<!DOCTYPE html>
 <html>
-
 <head>
-    <meta content="text/html;charset=utf-8" http-equiv="Content-Type">
-    <meta content="utf-8" http-equiv="encoding">
-    <title>Tron Suit 2.0</title>
-    <link rel="stylesheet" type="text/css" href="tronstyle.css">
+<meta content="text/html;charset=utf-8" http-equiv="Content-Type">
+<meta name="viewport" content="initial-scale=1, maximum-scale=1">
+<title>Tron Suit 2.0</title>
+<link rel="stylesheet" type="text/css" href="tronstyle.css">
+<link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
 </head>
-
 <body>
-    <center>
+
         Archived Data
         <br>
         <select id="selected_table" onchange="resetandload()">
@@ -21,14 +21,11 @@
         Record:
         <input id="lowerlimit" type="number" min="0" value="0" style="width:50px;" onchange="updatelimit(this);"> to
         <span id="upperlimit"></span>
-        <input id="buttonload" type="button" onclick="loaddata2();"  style="width:175px;"></input>
+        <input id="buttonload" type="button" onclick="loaddata2();" value="0" style="width:175px;">
         <div id="archive_div"></div>
-    </center>
+
     <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
     <script src="http://code.highcharts.com/highcharts.js"></script>
-</body>
-
-</html>
 
 <script>
     internal_val = 1;
@@ -95,3 +92,5 @@
     resetandload();
 	
 </script>
+</body>
+</html>

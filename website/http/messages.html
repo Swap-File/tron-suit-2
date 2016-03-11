@@ -1,32 +1,31 @@
+<!DOCTYPE html>
 <html>
-
 <head>
-    <meta content="text/html;charset=utf-8" http-equiv="Content-Type">
-    <meta content="utf-8" http-equiv="encoding">
-    <title>Tron Suit 2.0</title>
-    <link rel="stylesheet" type="text/css" href="tronstyle.css">
+<meta content="text/html;charset=utf-8" http-equiv="Content-Type">
+<meta name="viewport" content="initial-scale=1, maximum-scale=1">
+<title>Tron Suit 2.0</title>
+<link rel="stylesheet" type="text/css" href="tronstyle.css">
+<link rel="shortcut icon" href="favicon.ico" type="image/x-icon">
 </head>
 
 <body>
-    <center>
         Last Requested Colors
         <div class="gradient" id="old_gradient"></div>
         <br>Request a Color
         <br>
         <div class="gradient" id="new_gradient">
             <div>
-                <span style="float: left;">
+                <div style="float: left;">
 		 <div id="leftclick" style="padding-LEFT: 10px; PADDING-TOP: 3px" >
 		Pick Color 1 Here
 		</div>
- 		</span>
-                <span style="float: right;"> 
+ 		</div>
+                <div style="float: right;"> 
 		 <div id="rightclick" style="padding-RIGHT: 10px; PADDING-TOP: 3px" >
   		Pick Color 2 Here
 		</div>
-		</span>
-            </div>
-
+		</div>
+        </div>
         </div>
         <div>
             <span style="float: left;">
@@ -37,16 +36,16 @@
   		<input readonly  style="width:75px" id="myColor2">
 		</span>
         </div>
-        <center>
+
             <input type="button" value="Submit Color" id="sendbutton1" class="subbutton" onclick="submit(this)" />
-        </center>
+
         <br> Send a Message
         <br>
         <input class="text_input" type="text" id="new_text" maxlength="160" value="Compose Message Here" onClick="document.getElementById('new_text').value= '';">
         <br>
-        <center>
+
             <input type="button" value="Submit Message" id="sendbutton2" class="subbutton" onclick="submit(this)" />
-        </center>
+
         <br>Last Sent Message:
         <br>
         <input readonly class="text_input" type="text" id="old_text" value="Loading...">
@@ -54,13 +53,11 @@
 
         <br>
         <div id="Blame"></div>
+		<a href="https://github.com/Swap-File/tron-suit-2" target="_top">View Code</a>
+		
         <script type="text/javascript" src="jscolor/jscolor.js"></script>
         <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
         <script type='text/javascript' src='tinycolor.js'></script>
-    </center>
-</body>
-
-</html>
 
 <script>
     refresh_rate = 2000;
@@ -248,3 +245,5 @@
         return ((x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min);
     }
 </script>
+</body>
+</html>

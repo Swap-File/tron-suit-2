@@ -20,7 +20,7 @@ try {
 	$stmt->execute();
 	$rowarray = $stmt->fetchAll();
  
-print "<table>\n";  
+print "<table id='returndata'>\n";  
 
 foreach ($rowarray as $row) {
 	
